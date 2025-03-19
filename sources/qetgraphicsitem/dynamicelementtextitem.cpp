@@ -546,8 +546,8 @@ void DynamicElementTextItem::mousePressEvent(QGraphicsSceneMouseEvent *event)
 			m_slave_Xref_item->setDefaultTextColor(Qt::black);
 	}
 
-	// Shift or no parent initiates movement of dynamic text, otherwise movement of parent element
-	if((event->modifiers() & Qt::ShiftModifier) || !m_parent_element)
+	// Shift or Shift+Alt or no parent initiates movement of dynamic text, otherwise movement of parent element
+	if((event->modifiers() & Qt::ShiftModifier) || (event->modifiers() & Qt::ShiftModifier && event->modifiers() & Qt::AltModifier) || !m_parent_element)
 	{
 		m_move_parent = false;
 		DiagramTextItem::mousePressEvent(event);
@@ -584,10 +584,24 @@ void DynamicElementTextItem::mouseMoveEvent(QGraphicsSceneMouseEvent *event)
 			current_parent_pos = mapToParent(mapFromScene(event->scenePos()));
 			button_down_parent_pos = mapToParent(mapFromScene(event->buttonDownScenePos(Qt::LeftButton)));
 			
-			int diffx = qRound(current_parent_pos.x() - button_down_parent_pos.x());
-			int diffy = qRound(current_parent_pos.y() - button_down_parent_pos.y());
-			QPointF new_pos = m_initial_position + QPointF(diffx, diffy);
-			setPos(new_pos);
+			if (event->modifiers() & Qt::ShiftModifier && event->modifiers() & Qt::AltModifier){
+				//moving little steps
+				int diffx = qRound(current_parent_pos.x() - button_down_parent_pos.x());
+				int diffy = qRound(current_parent_pos.y() - button_down_parent_pos.y());
+				QPointF new_pos = m_initial_position + QPointF(diffx, diffy);
+				setPos(new_pos);
+			}
+			else {
+				// moving on grid
+				QSettings settings;
+				int grid_x = settings.value(QStringLiteral("diagrameditor/Xgrid"),Diagram::xGrid).toInt();
+				int grid_y = settings.value(QStringLiteral("diagrameditor/Ygrid"),Diagram::yGrid).toInt();
+
+				int diffx = qRound((current_parent_pos.x() - button_down_parent_pos.x())/grid_x)*grid_x;
+				int diffy = qRound((current_parent_pos.y() - button_down_parent_pos.y())/grid_y)*grid_y;
+				QPointF grid_pos = m_initial_position + QPointF(diffx, diffy);
+				setPos(grid_pos);
+			}
 
 			if(diagram())
 				diagram()->elementTextsMover().continueMovement(event);
