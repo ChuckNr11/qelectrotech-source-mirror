@@ -1198,7 +1198,13 @@ bool QETDiagramEditor::addProject(QETProject *project, bool update_panel)
 		if (currentDiagramView() != nullptr)
 		m_autonumbering_dock->setProject(project, project_view);
 	}
-
+	// Achim project erstes Blatt
+	// Wenn ich ein neues Blatt(Diagram) einfüge, wird der Zeichnungsrahmen in das
+	// aktuelle Fenster eingepasst. Bei einem neuen Projekt wird das erste Blatt
+	// nicht eingepasst, sondern deutlich kleiner eingefügt.
+	// Deshalb machen wir hier ein zoom_fit, um das Diagram einzupassen
+	DiagramView *dv = currentDiagramView();
+	dv->zoomFit();
 	return(true);
 }
 
