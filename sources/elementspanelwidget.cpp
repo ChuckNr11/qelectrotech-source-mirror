@@ -480,28 +480,43 @@ void ElementsPanelWidget::keyPressEvent   (QKeyEvent *e) {
 					break;
 					case Qt::Key_F3:
 					if (Diagram *selected_diagram = elements_panel -> selectedDiagram()) {
+							// Achim fix_syncProjTreeViewTabView
+							// siehe: "genericPanel::setSelectedItem"
+						elements_panel->setSelectedItem(elements_panel->getItemForDiagram(selected_diagram));
 						emit(requestForDiagramMoveUp(selected_diagram));
 					}
 					break;
 					case Qt::Key_F4:
 					if (Diagram *selected_diagram = elements_panel -> selectedDiagram()) {
+							// Achim fix_syncProjTreeViewTabView
+							// siehe: "genericPanel::setSelectedItem"
+						elements_panel->setSelectedItem(elements_panel->getItemForDiagram(selected_diagram));
 						emit(requestForDiagramMoveDown(selected_diagram));
 					}
 					break;
 					case Qt::Key_F5:
 					if (Diagram *selected_diagram = elements_panel -> selectedDiagram()) {
+							// Achim fix_syncProjTreeViewTabView
+							// siehe: "genericPanel::setSelectedItem"
+						elements_panel->setSelectedItem(elements_panel->getItemForDiagram(selected_diagram));
 						emit(requestForDiagramMoveUpTop(selected_diagram));
 					}
 					
 					break;
 					case Qt::Key_F6:
 					if (Diagram *selected_diagram = elements_panel -> selectedDiagram()) {
+							// Achim fix_syncProjTreeViewTabView
+							// siehe: "genericPanel::setSelectedItem"
+						elements_panel->setSelectedItem(elements_panel->getItemForDiagram(selected_diagram));
 						emit(requestForDiagramMoveDownx10(selected_diagram));
 					}
 					
 					break;
 					case Qt::Key_F7:
 					if (Diagram *selected_diagram = elements_panel -> selectedDiagram()) {
+							// Achim fix_syncProjTreeViewTabView
+							// siehe: "genericPanel::setSelectedItem"
+						elements_panel->setSelectedItem(elements_panel->getItemForDiagram(selected_diagram));
 						emit(requestForDiagramMoveDownx100(selected_diagram));
 					}
 					
@@ -509,12 +524,18 @@ void ElementsPanelWidget::keyPressEvent   (QKeyEvent *e) {
 					break;
 					case Qt::Key_F8:
 					if (Diagram *selected_diagram = elements_panel -> selectedDiagram()) {
+							// Achim fix_syncProjTreeViewTabView
+							// siehe: "genericPanel::setSelectedItem"
+						elements_panel->setSelectedItem(elements_panel->getItemForDiagram(selected_diagram));
 						emit(requestForDiagramMoveUpx10(selected_diagram));
 					}					
 					
 					break;
 					case Qt::Key_F9:
 					if (Diagram *selected_diagram = elements_panel -> selectedDiagram()) {
+							// Achim fix_syncProjTreeViewTabView
+							// siehe: "genericPanel::setSelectedItem"
+						elements_panel->setSelectedItem(elements_panel->getItemForDiagram(selected_diagram));
 						emit(requestForDiagramMoveUpx100(selected_diagram));
 					}
 					break;

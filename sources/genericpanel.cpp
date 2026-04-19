@@ -764,7 +764,16 @@ void GenericPanel::projectDiagramsOrderChanged(QETProject *project,
 	// get the item representing the moved diagram
 	QTreeWidgetItem *moved_qtwi_diagram = qtwi_project -> child(from);
 	if (!moved_qtwi_diagram) return;
-	
+
+	/*
+		siehe "GenericPanel::setSelectedItem"
+		Hier geschah/geschiet die Auswertung ob das Item beim Tastendruck
+		von zB. F3 selktiert ist. Da die Selektion durch die Synchronisation
+		verloren geht, kann "was_selected" auch nicht true werden
+	*/
+	// remove the QTWI then insert it back at the adequate location
+	// bool was_selected = moved_qtwi_diagram -> isSelected();
+
 	// remove the QTWI then insert it back at the adequate location
 	qtwi_project -> removeChild (moved_qtwi_diagram);
 	qtwi_project -> insertChild (to, moved_qtwi_diagram);
@@ -779,10 +788,29 @@ void GenericPanel::projectDiagramsOrderChanged(QETProject *project,
 		if (diagram)
 			updateDiagramItem(qtwi_diagram, diagram);
 	}
-	
-		// select the moved diagram
-	setCurrentItem(qtwi_project -> child(from));
+	/*
+		der 'if'-Teil kommt bei den Tastaturbefehlen zu tragen,
+		der 'else'-Teil beim verschieben der DiagramTabs mit der Maus
+	*/
+	if(m_selected_item)
+		setCurrentItem(moved_qtwi_diagram);
+	else
+		/*
+			Eine Sache ist mir aufgefallen und habe ich auch nicht verstanden:
+			Eigentlich müsste es nach meinem Verständnis unten ->child(to) heißen,
+			denn ich verschiebe ja von 'from' nach 'to' und 'to' ist ja dann das neue Item.
+			Aber die beiden Argumente 'from' und 'to' kommen gefühlt vertauscht rein.
 
+			Bsp: ich verschiebe in einem Projekt mit der Maus den DiagramTab
+			der Seite3 auf die Position Seite4: dann kommen 'from = 3' und 'to = 2'
+			(index basiert -> start mit 0) und umgekehrt beim verschieben von Seite4 nach Seite3
+			ist es genauso, die Variablen liefern dann 'from = 2'  und 'to = 3'.
+
+			Auf jeden Fall funktioniert es mit '->child(from).
+		*/
+		setCurrentItem(qtwi_project -> child(from));
+
+	m_selected_item = nullptr;
 	emit(panelContentChanged());
 }
 
@@ -1039,4 +1067,32 @@ bool GenericPanel::event(QEvent *event) {
 void GenericPanel::emitFirstActivated()
 {
 	emit(firstActivated());
+}
+
+// Achim fix_syncProjTreeViewTabView
+
+/*
+	Nach den von mir gemachten  Änderungen (Merge #448: sync ProjetView und DiagramTabBar)
+	funktionierten die Befehle  F3, F4 usw aus dem KontextMenü der ProjektView
+	nicht mehr ordnungsgemäß.
+	Ursache: Beim Aufruf von Z.B. F3 ist das DiagramItem in der ProjView selektiert.
+	Durch die Synchronisation geht aber die Selektion verloren. Diese Selection wird aber
+	in "GenericPanel::projectDiagramsOrderChanged" ausgewertet(siehe dort).
+	Deshalb habe ich hier "m_selected_item" eingeführt.
+	"m_selcted_item" wird beim Aufruf von z.B. Funktionstaste F3 gesetzt und steht
+	dann sozusagen als StartItem zur Verfügung
+
+	Den Code hier in GenericPanel hatte ich geändert damit die Synchronisation auch
+	beim Verschieben der DiagramTabs mit der Maus funktioniert.
+	Die Funktionstasten aus dem KontextMenü der ProjectView hatte ich danach glaube ich
+	gar nicht mehr getestet.
+*/
+
+/**
+	@brief GenericPanel::setSelectedItem
+	@param selectedItem
+*/
+void GenericPanel::setSelectedItem(QTreeWidgetItem *selectedItem)
+{
+	m_selected_item = selectedItem;
 }

@@ -171,6 +171,9 @@ class GenericPanel : public QTreeWidget {
 					 const QString &);
 	
 	// various other methods
+	public:	// Achim fix_syncProjTreeViewTabView
+	void setSelectedItem(QTreeWidgetItem *selectedItem);	// Achim fix_syncProjTreeViewTabView
+
 	protected:
 	virtual QString defaultText(QET::ItemType);
 	virtual QIcon   defaultIcon(QET::ItemType);
@@ -200,6 +203,8 @@ class GenericPanel : public QTreeWidget {
 	void emitFirstActivated();
 	
 	private:
+		// Achim fix_syncProjTreeViewTabView
+	QTreeWidgetItem *m_selected_item = nullptr;
 	/**
 		@brief first_activation_
 		boolean used to track the first time this widget is
