@@ -52,6 +52,7 @@ class GeneralConfigurationPage : public ConfigPage
 		void on_ElementEditor_Grid_PointSize_min_sb_valueChanged(int value);
 
 		void on_m_hdpi_round_cb_clicked(bool checked);
+		void on_m_custom_proj_path_cb_currentIndexChanged(int index);  // Achim customProjDir
 
 	private:
 		void fillLang();

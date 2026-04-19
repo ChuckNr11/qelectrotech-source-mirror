@@ -1015,6 +1015,15 @@ bool QETDiagramEditor::openRecentFile(const QString &filepath)
 */
 bool QETDiagramEditor::openProject()
 {
+		// use default or custom project dir
+	QSettings settings;
+	if (settings.value("diagrameditor/custom-project-path","default") == "default"){
+		open_dialog_dir.setPath(QETApp::documentDir());
+	}
+	else{
+		open_dialog_dir.setPath(settings.value("diagrameditor/custom-project-path","default").toString());
+	}
+
 	// demande un chemin de fichier a ouvrir a l'utilisateur
 	QString filepath = QFileDialog::getOpenFileName(
 		this,

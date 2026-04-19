@@ -176,7 +176,17 @@ GeneralConfigurationPage::GeneralConfigurationPage(QWidget *parent) :
 		ui->m_custom_tbt_path_cb->setItemData(1, path, Qt::DisplayRole);
 		ui->m_custom_tbt_path_cb->blockSignals(false);
 	}
-	
+
+	// Achim customProjDir
+		// ComboBox initialisieren
+	path = settings.value("diagrameditor/custom-project-path", "default").toString();
+	if (path != "default")
+	{
+		ui->m_custom_proj_path_cb->blockSignals(true);
+		ui->m_custom_proj_path_cb->setCurrentIndex(1);
+		ui->m_custom_proj_path_cb->setItemData(1, path, Qt::DisplayRole);
+		ui->m_custom_proj_path_cb->blockSignals(false);
+	}
 	fillLang();	
 }
 
@@ -320,6 +330,19 @@ void GeneralConfigurationPage::applyConf()
 	}
 	if (path != settings.value("elements-collections/custom-tbt-path").toString()) {
 		QETApp::resetCollectionsPath();
+	}
+
+	// Achim customProjDir
+		// Änderung aus dem config-Dialog übernehmen und anwenden
+	path = settings.value("diagrameditor/custom-project-path").toString();
+	if (ui->m_custom_proj_path_cb->currentIndex() == 1){
+		QString path = ui->m_custom_proj_path_cb->currentText();
+																 // path ist Text -> umwandeln nach QDir("QDirPfad" für dir-exists)
+		QDir dir(path);
+		settings.setValue("diagrameditor/custom-project-path",dir.exists() ? path : "default");
+	}
+	else {
+		settings.setValue("diagrameditor/custom-project-path", "default");
 	}
 }
 
@@ -588,3 +611,25 @@ void GeneralConfigurationPage::on_m_hdpi_round_cb_clicked(bool checked)
 	ui->m_hdpi_round_policy_cb->setEnabled(checked);
 }
 
+// Achim customProjDir
+	// Slot der comboBox: wird ausgeführt wenn ein anderer Eintrag(Index)
+	// in der Liste gewählt wird
+/**
+   @brief GeneralConfigurationPage::on_m_custom_proj_path_cb_currentIndexChanged
+   @param index
+*/
+void GeneralConfigurationPage::on_m_custom_proj_path_cb_currentIndexChanged(int index)
+{
+	if (index == 1)
+	{
+		QString path = QFileDialog::getExistingDirectory(this, tr("Chemin des projet utilisateur"), QDir::homePath());
+			//den aus dem Dialog zurückgegebennen Pfad in die ComboBox an Pos.2(Index1) schreiben
+			// DisplayRole ist der Container für die Listeneinträge
+		if (!path.isEmpty()) {
+			ui->m_custom_proj_path_cb->setItemData(1, path, Qt::DisplayRole);
+		}
+		else {
+			ui->m_custom_proj_path_cb->setCurrentIndex(0);
+		}
+	}
+}
