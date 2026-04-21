@@ -56,3 +56,13 @@ void DiagramEventAddText::mousePressEvent(QGraphicsSceneMouseEvent *event)
 		event->setAccepted(true);
 	}
 }
+
+// Achim DiagramEditor helpCross
+/**
+	@brief DiagramEventAddText::mouseMoveEvent
+	@param event
+*/
+void DiagramEventAddText::mouseMoveEvent(QGraphicsSceneMouseEvent *event)
+{
+	updateHelpCross(event->scenePos()); // Achim DiagramEditor helpCross
+}

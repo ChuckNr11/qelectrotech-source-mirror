@@ -29,9 +29,7 @@
 DiagramEventAddShape::DiagramEventAddShape(Diagram *diagram, QetShapeItem::ShapeType shape_type) :
 	DiagramEventInterface(diagram),
 	m_shape_type (shape_type),
-	m_shape_item (nullptr),
-	m_help_horiz (nullptr),
-	m_help_verti (nullptr)
+	m_shape_item (nullptr)
 {
 	m_running = true;
 	init();
@@ -47,8 +45,6 @@ DiagramEventAddShape::~DiagramEventAddShape()
 		m_diagram->removeItem(m_shape_item);
 		delete m_shape_item;
 	}
-	delete m_help_horiz;
-	delete m_help_verti;
 
 	foreach (QGraphicsView *v, m_diagram->views())
 		v->setContextMenuPolicy(Qt::DefaultContextMenu);
@@ -204,41 +200,3 @@ void DiagramEventAddShape::init()
 		v->setContextMenuPolicy(Qt::NoContextMenu);
 }
 
-/**
-	@brief DiagramEventAddShape::updateHelpCross
-	Create and update the position of the cross to help user for draw new shape
-	@param p : the center of the cross
-*/
-void DiagramEventAddShape::updateHelpCross(const QPointF &p)
-{
-		//If line isn't created yet, we create it.
-	if (!m_help_horiz || !m_help_verti)
-	{
-		QPen pen;
-		pen.setWidthF(0.4);
-		pen.setCosmetic(true);
-		pen.setColor(Diagram::background_color == Qt::darkGray ? Qt::lightGray : Qt::darkGray);
-
-		QRectF rect = m_diagram->border_and_titleblock.insideBorderRect();
-
-		if (!m_help_horiz)
-		{
-			m_help_horiz = new QGraphicsLineItem(rect.topLeft().x(), 0, rect.topRight().x(), 0);
-			m_help_horiz->setPen(pen);
-			m_diagram->addItem(m_help_horiz);
-		}
-
-		if (!m_help_verti)
-		{
-			m_help_verti = new QGraphicsLineItem(0, rect.topLeft().y(), 0, rect.bottomLeft().y());
-			m_help_verti->setPen(pen);
-			m_diagram->addItem(m_help_verti);
-		}
-	}
-
-		//Update the position of the cross
-	QPointF point = Diagram::snapToGrid(p);
-
-	m_help_horiz->setY(point.y());
-	m_help_verti->setX(point.x());
-}

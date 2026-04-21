@@ -24,13 +24,18 @@
 
 DiagramEventInterface::DiagramEventInterface(Diagram *diagram) :
 	QObject{diagram},
-	m_diagram{diagram}
+	m_diagram{diagram},
+	m_help_horiz (nullptr), // Achim DiagramEditor helpCross
+	m_help_verti (nullptr)	// Achim DiagramEditor helpCross
 {
 	m_diagram -> clearSelection();
 }
 
 DiagramEventInterface::~DiagramEventInterface()
-{}
+{
+	delete m_help_horiz;	// Achim DiagramEditor helpCross
+	delete m_help_verti;	// Achim DiagramEditor helpCross
+}
 
 void DiagramEventInterface::mouseDoubleClickEvent(QGraphicsSceneMouseEvent *event) {
 	Q_UNUSED (event);
@@ -79,3 +84,48 @@ bool DiagramEventInterface::isRunning() const
 
 void DiagramEventInterface::init()
 {}
+
+// Achim DiagramEditor helpCross
+/*
+	Deklaration und Definition von updateHelpCross
+	in das DiagramEventInterface verlegt, damit alle
+	abgeleiteten Klassen das HelpCross nutzen können
+*/
+/**
+	@brief DiagramEventInterface::updateHelpCross
+	Create and update the position of the cross to help user for draw new shape
+	@param p : the center of the cross
+*/
+void DiagramEventInterface::updateHelpCross(const QPointF &p)
+{
+  //If line isn't created yet, we create it.
+	if (!m_help_horiz || !m_help_verti)
+	{
+		QPen pen;
+		pen.setWidthF(0.4);
+		pen.setCosmetic(true);
+		pen.setColor(Diagram::background_color == Qt::darkGray ? Qt::lightGray : Qt::darkGray);
+
+		QRectF rect = m_diagram->border_and_titleblock.insideBorderRect();
+
+		if (!m_help_horiz)
+		{
+			m_help_horiz = new QGraphicsLineItem(rect.topLeft().x(), 0, rect.topRight().x(), 0);
+			m_help_horiz->setPen(pen);
+			m_diagram->addItem(m_help_horiz);
+		}
+
+		if (!m_help_verti)
+		{
+			m_help_verti = new QGraphicsLineItem(0, rect.topLeft().y(), 0, rect.bottomLeft().y());
+			m_help_verti->setPen(pen);
+			m_diagram->addItem(m_help_verti);
+		}
+	}
+
+		   //Update the position of the cross
+	QPointF point = Diagram::snapToGrid(p);
+
+	m_help_horiz->setY(point.y());
+	m_help_verti->setX(point.x());
+}

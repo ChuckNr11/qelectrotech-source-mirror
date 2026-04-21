@@ -87,6 +87,7 @@ void DiagramEventAddImage::mousePressEvent(QGraphicsSceneMouseEvent *event)
 */
 void DiagramEventAddImage::mouseMoveEvent(QGraphicsSceneMouseEvent *event)
 {
+	updateHelpCross(event->scenePos()); // Achim DiagramEditor helpCross
 	if (!m_image || event->buttons() != Qt::NoButton) {
 		return;
 	}
@@ -102,8 +103,11 @@ void DiagramEventAddImage::mouseMoveEvent(QGraphicsSceneMouseEvent *event)
 		m_diagram->addItem(m_image);
 		m_is_added = true;
 	}
-	
-	m_image->setPos(pos - m_image->boundingRect().center());
+	// Achim DiagramEditor helpCross
+	//m_image->setPos(pos - m_image->boundingRect().center());
+		// image mit der linken oberen Ecke am HelpCross führen
+		// fühlt sich deutlich besser an
+	m_image->setPos(pos - m_image->boundingRect().topLeft());
 	event->setAccepted(true);
 }
 

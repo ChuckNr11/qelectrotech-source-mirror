@@ -83,6 +83,7 @@ DiagramEventAddElement::~DiagramEventAddElement()
 
 	for (auto view : m_diagram->views())
 		view -> setContextMenuPolicy(Qt::DefaultContextMenu);
+
 }
 
 /**
@@ -93,6 +94,7 @@ DiagramEventAddElement::~DiagramEventAddElement()
 */
 void DiagramEventAddElement::mouseMoveEvent(QGraphicsSceneMouseEvent *event)
 {
+	updateHelpCross(event->scenePos());	// Achim DiagramEditor helpCross
 	if (m_element)
 	{
 		const auto pos_{Diagram::snapToGrid(event->scenePos())};

@@ -35,6 +35,7 @@ class DiagramEventAddText : public DiagramEventInterface
 		~DiagramEventAddText() override;
 
 		void mousePressEvent (QGraphicsSceneMouseEvent *event) override;
+		void mouseMoveEvent (QGraphicsSceneMouseEvent *event) override;	// Achim DiagramEditor helpCross
 };
 
 #endif // DIAGRAMEVENTADDTEXT_H

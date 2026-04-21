@@ -39,13 +39,9 @@ class DiagramEventAddShape : public DiagramEventInterface
 		void mouseDoubleClickEvent (QGraphicsSceneMouseEvent *event) override;
 		void init() override;
 
-	private:
-		void updateHelpCross (const QPointF &p);
-
 	protected:
 		QetShapeItem::ShapeType  m_shape_type;
 		QetShapeItem            *m_shape_item;
-		QGraphicsLineItem       *m_help_horiz, *m_help_verti;
 };
 
 #endif // DIAGRAMEVENTADDSHAPE_H
