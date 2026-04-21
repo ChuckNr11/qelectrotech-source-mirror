@@ -157,6 +157,11 @@ Diagram::~Diagram()
 		removeItem(item);
 		delete item;
 	}
+		// Hilfs-CrossCursor löschen
+	if(m_help_horiz)
+		delete m_help_horiz;	// Achim DiagramEditor helpCross
+	if(m_help_verti)
+		delete m_help_verti;	// Achim DiagramEditor helpCross
 }
 
 /**
@@ -2633,5 +2638,70 @@ void Diagram::restoreText(Element* elmt)
 				deti->setPlainText(deti->text());
 			}
 		}
+	}
+}
+
+// Achim DiagramEditor helpCross
+/*
+	HelpCross für elementsText- und elementsMover.
+
+	Wahrscheinlich währe es auch Sinnvoll diese Definition
+	des HelpCross auch in den diagramEvent-Klassen zu nutzen.
+	dort hat das DiagramEventInterface ein eigenes HelpCross.
+ */
+/**
+	@brief Diagram::updateHelpCross
+	Create and update the position of the cross to help user for draw new shape
+	@param p : the center of the cross
+*/
+void Diagram::updateHelpCross(const QPointF &p)
+{
+  //If line isn't created yet, we create it.
+	if (!m_help_horiz || !m_help_verti)
+	{
+		QPen pen;
+		pen.setWidthF(0.4);
+		pen.setCosmetic(true);
+		pen.setColor(Diagram::background_color == Qt::darkGray ? Qt::lightGray : Qt::darkGray);
+
+		QRectF rect = border_and_titleblock.insideBorderRect();
+
+		if (!m_help_horiz)
+		{
+			m_help_horiz = new QGraphicsLineItem(rect.topLeft().x(), 0, rect.topRight().x(), 0);
+			m_help_horiz->setPen(pen);
+			addItem(m_help_horiz);
+		}
+
+		if (!m_help_verti)
+		{
+			m_help_verti = new QGraphicsLineItem(0, rect.topLeft().y(), 0, rect.bottomLeft().y());
+			m_help_verti->setPen(pen);
+			addItem(m_help_verti);
+		}
+	}
+
+		   //Update the position of the cross
+	QPointF point = Diagram::snapToGrid(p);
+
+	m_help_horiz->setY(point.y());
+	m_help_verti->setX(point.x());
+}
+
+// Achim DiagramEditor helpCross
+/**
+	@brief Diagram::deleteHelpCross
+*/
+void Diagram::deleteHelpCross()
+{
+		// die linien nach gebrauch löschen
+	if(m_help_horiz){
+		delete m_help_horiz;
+			// initialisiern, sonst Absturz
+		m_help_horiz=nullptr;
+	}
+	if(m_help_verti){
+		delete m_help_verti;
+		m_help_verti=nullptr;
 	}
 }

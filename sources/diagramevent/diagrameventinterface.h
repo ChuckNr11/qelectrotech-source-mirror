@@ -20,6 +20,7 @@
 
 #include <QObject>
 #include <QPointer>
+#include "qgraphicsitem.h"	// Achim DiagramEditor helpCross
 
 class QGraphicsSceneMouseEvent;
 class QGraphicsSceneWheelEvent;
@@ -60,6 +61,11 @@ class DiagramEventInterface : public QObject
 		virtual bool isRunning () const;
 		virtual void init();
 
+	protected:	// Achim DiagramEditor helpCross
+		void updateHelpCross (const QPointF &p);	// Achim DiagramEditor helpCross
+
+
+
 	signals:
 		void finish(); //Emitted when the interface finishes its job.
 
@@ -67,6 +73,9 @@ class DiagramEventInterface : public QObject
 		QPointer<Diagram> m_diagram;
 		bool m_running{false};
 		bool m_abort{false};
+		QGraphicsLineItem
+			*m_help_horiz,	// Achim DiagramEditor helpCross
+			*m_help_verti;	// Achim DiagramEditor helpCross
 };
 
 #endif // DIAGRAMEVENTINTERFACE_H

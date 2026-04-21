@@ -88,6 +88,9 @@ void ElementTextsMover::continueMovement(QGraphicsSceneMouseEvent *event)
 	if(!m_movement_running)
 		return;
 
+		// Hilfs-CrossCursor einblenden
+	m_diagram->updateHelpCross(m_movement_driver->scenePos());
+
 	for(QGraphicsItem *qgi : m_items_hash.keys())
 	{
 		if(qgi == m_movement_driver)
@@ -109,7 +112,10 @@ void ElementTextsMover::continueMovement(QGraphicsSceneMouseEvent *event)
 	Finish the movement by pushing an undo command to the parent diagram of text item
 */
 void ElementTextsMover::endMovement()
-{	
+{
+		// Hifslinien wieder löschen
+	m_diagram->deleteHelpCross();
+
 		//No movement or no items to move
 	if(!m_movement_running || m_items_hash.isEmpty())
 		return;

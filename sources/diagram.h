@@ -128,6 +128,10 @@ class Diagram : public QGraphicsScene
 		bool m_freeze_new_elements;
 		bool m_freeze_new_conductors_;
 		QUuid m_uuid = QUuid::createUuid();
+			// Linien für das HelpCross
+		QGraphicsLineItem
+			*m_help_horiz = nullptr,	// Achim DiagramEditor helpCross
+			*m_help_verti = nullptr;	// Achim DiagramEditor helpCross
 	
 	// METHODS
 	protected:
@@ -144,7 +148,7 @@ class Diagram : public QGraphicsScene
 		void keyReleaseEvent (QKeyEvent *) override;
 		void correctTextPos(Element* elmt);
 		void restoreText(Element* elmt);
-	
+
 	public:
 		QUuid uuid();
 		void setEventInterface (DiagramEventInterface *event_interface);
@@ -258,6 +262,9 @@ class Diagram : public QGraphicsScene
 				       const QString& title, const QString& seq,
 				       NumerotationContext *nc);
 		void changeZValue(QET::DepthOption option);
+
+		void updateHelpCross (const QPointF &p);	// Achim DiagramEditor helpCross
+		void deleteHelpCross();	// Achim DiagramEditor helpCross
 
 	public slots:
 		void adjustSceneRect ();

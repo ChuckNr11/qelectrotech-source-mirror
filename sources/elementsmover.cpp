@@ -39,7 +39,10 @@ ElementsMover::ElementsMover(){}
 /**
 	@brief ElementsMover::~ElementsMover Destructor
 */
-ElementsMover::~ElementsMover(){}
+ElementsMover::~ElementsMover()
+{
+
+}
 
 /**
 	@brief ElementsMover::isReady
@@ -117,6 +120,9 @@ void ElementsMover::continueMovement(const QPointF &movement)
 {
 	if (!m_movement_running || movement.isNull()) return;
 
+		// Hilfs-CrossCursor einblenden
+	m_diagram->updateHelpCross(m_movement_driver->scenePos());
+
 	m_current_movement += movement;
 
 		//Move every movable item, except conductor
@@ -166,6 +172,8 @@ void ElementsMover::continueMovement(const QPointF &movement)
 */
 void ElementsMover::endMovement()
 {
+		// Hifslinien wieder löschen
+	m_diagram->deleteHelpCross();
 		// A movement must be inited
 	if (!m_movement_running) return;
 
