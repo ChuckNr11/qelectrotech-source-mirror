@@ -372,6 +372,15 @@ ElementContent ElementView::pasteWithOffset(const QDomDocument &xml_document) {
 */
 void ElementView::mousePressEvent(QMouseEvent* e)
 {
+		// Achim ElmtEditor Rotation
+	if (e->button() == Qt::LeftButton){
+		m_pos.setX(round(e -> pos().x()));
+		m_pos.setX(round(e -> pos().x()));
+		m_left_mouse_button_press=true;
+	}
+	else
+		m_left_mouse_button_press=false;
+
 #if QT_VERSION < QT_VERSION_CHECK(5, 15, 1) // ### Qt 6: remove
 	if (e->button() == Qt::MidButton)
 #else

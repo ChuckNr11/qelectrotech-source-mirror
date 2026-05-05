@@ -88,5 +88,6 @@ class PartArc : public AbstractPartEllipse
 		QPointF m_span_point;
 		QVector<QetGraphicsHandlerItem *> m_handler_vector;
 		qreal m_rot = 0;
+		QPointF m_handler_pos;
 };
 #endif

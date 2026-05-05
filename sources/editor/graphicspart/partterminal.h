@@ -75,7 +75,7 @@ class PartTerminal : public CustomElementGraphicPart
 		void setOrientation(Qet::Orientation ori);
 
 		void  setRotation(qreal angle);
-		qreal rotation() const;
+		qreal rotation() const;	// Achim ElmtEditor Rotation
 		void  flip();
 		void  mirror();
                 void nextOrientation();

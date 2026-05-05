@@ -163,7 +163,7 @@ QPainterPath PartArc::shadowShape() const
 	return (pps.createStroke(shape));
 }
 
-
+/*
 void PartArc::setRotation(qreal angle) {
 	qreal diffAngle = qRound((angle - rotation()) * 100.0) / 100.0;
 	m_rot = QET::correctAngle(angle, true);
@@ -191,7 +191,71 @@ void PartArc::setRotation(qreal angle) {
 	prepareGeometryChange();
 	adjustHandlerPos();
 	emit rectChanged();
+}*/
+
+
+// Achim ElmtEditor Rotation
+/**
+	@brief PartArc::setRotation
+	Redefines setRotation
+	dreht das Item um den Winkel angle um den Mittelpunkt des Item
+	 @param angle Rotationswinkel
+*/
+void PartArc::setRotation(qreal angle)
+{
+  // Winkel auf 0-360 normiern und runden
+	qreal rotateAngle = qRound((QET::correctAngle(angle, true)) * 100.0) / 100.0;
+
+	QPointF point;
+	if(m_handler_mouse_press){
+		// einer der Anfasserpunkte des Polygons wird der Drehpunkt
+		point = m_handler_pos;
+	}
+	else{
+	  // der Mittelpunkt des boundingRect wird der Drehpunkt
+		point =boundingRect().center();
+	}
+
+	prepareGeometryChange();
+		// Rotation durchführen: das Polygon wird nach point verschoben,
+		// gedreht und anschließend wieder zurück verschoben.
+		// Alternativ müsste man anstatt translate vor rotate den Befehl
+		// setTransformOriginPoint(point) ausführen
+
+	QTransform rotation;
+	rotation.translate(point.x(),point.y());
+	rotation.rotate(rotateAngle-m_rot);
+	rotation.translate(-point.x(),-point.y());
+
+		// den neuen rotation setzen
+	m_rot=rotateAngle;
+
+		// rotation.map(m_polygon):
+		// die neuen Koordinaten des gedrehten Polygons
+		// werden auf m_polygon gemapt
+	//setPolygon(rotation.map(m_polygon));
 }
+	// vorherige Variante
+/*		// Drehpunkt = center vom Bounding Rechteck des items
+	QPointF centerPos = boundingRect().center();
+		// Drehwinkel = neuerWinkel - aktuellerWinkel, Nachkommastellen entfernen
+	qreal diffAngle = qRound((angle - rotation()) * 100.0) / 100.0;
+		// Winkel auf 0-360 normiern
+	m_rot = QET::correctAngle(angle, true);
+		// den Rotationswinkel setzen
+	QGraphicsObject::setRotation(m_rot);
+		// Basispunkt für die Transform setzen
+	setTransformOriginPoint(centerPos);
+		// rotieren
+	QTransform().rotate(diffAngle);
+
+		// Bereitet das Objekt auf eine Geometrieänderung vor. Rufen Sie diese
+		// Funktion auf, bevor Sie das Begrenzungsrechteck eines Objekts ändern,
+		// um den Index von QGraphicsScene aktuell zu halten.
+	prepareGeometryChange();
+	adjustHandlerPos();
+	emit rectChanged();
+}*/
 
 qreal PartArc::rotation() const {
 	return qRound(m_rot * 100.0) / 100.0;
@@ -280,6 +344,9 @@ QVariant PartArc::itemChange(QGraphicsItem::GraphicsItemChange change, const QVa
 */
 bool PartArc::sceneEventFilter(QGraphicsItem *watched, QEvent *event)
 {
+	if (event->type() == QEvent::GraphicsSceneMouseRelease)
+		m_handler_mouse_press=false;	// Achim ElmtEditor Rotation
+
 		//Watched must be an handler
 	if(watched->type() == QetGraphicsHandlerItem::Type)
 	{
@@ -381,6 +448,9 @@ void PartArc::handlerMousePressEvent(QetGraphicsHandlerItem *qghi, QGraphicsScen
 	Q_UNUSED(qghi)
 	Q_UNUSED(event)
 
+	m_handler_pos = qghi->pos();	// Achim ElmtEditor Rotation
+	m_handler_mouse_press = true;	// Achim ElmtEditor Rotation
+
 	if (m_resize_mode == 3) //Resize angle
 	{
 		if (m_vector_index == 0)
@@ -453,6 +523,8 @@ void PartArc::handlerMouseReleaseEvent(QetGraphicsHandlerItem *qghi, QGraphicsSc
 {
 	Q_UNUSED(qghi)
 	Q_UNUSED(event)
+
+	m_handler_mouse_press=false;	// Achim ElmtEditor Rotation
 
 	if (m_resize_mode == 3)
 	{

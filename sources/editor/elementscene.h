@@ -177,6 +177,10 @@ class ElementScene : public QGraphicsScene
 		/// Signal emitted when need zoomFit
 		void needZoomFit();
 		void elementInfoChanged();
+
+	  public:
+		QPointF m_pos;		// Achim ElmtEditor Rotation
+		bool m_left_mouse_button_press  ;	// Achim ElmtEditor Rotation
 };
 
 Q_DECLARE_OPERATORS_FOR_FLAGS(ElementScene::ItemOptions)

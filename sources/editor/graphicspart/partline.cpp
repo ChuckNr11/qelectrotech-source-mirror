@@ -175,6 +175,9 @@ QVariant PartLine::itemChange(QGraphicsItem::GraphicsItemChange change, const QV
 */
 bool PartLine::sceneEventFilter(QGraphicsItem *watched, QEvent *event)
 {
+	if (event->type() == QEvent::GraphicsSceneMouseRelease)
+		m_handler_mouse_press=false;	// Achim ElmtEditor Rotation
+
 	//Watched must be an handler
 	if(watched->type() == QetGraphicsHandlerItem::Type)
 	{
@@ -237,6 +240,9 @@ void PartLine::handlerMousePressEvent(QetGraphicsHandlerItem *qghi, QGraphicsSce
 	Q_UNUSED(qghi)
 	Q_UNUSED(event)
 
+	m_handler_pos = qghi->pos();	// Achim ElmtEditor Rotation
+	m_handler_mouse_press = true;	// Achim ElmtEditor Rotation
+
 	m_undo_command = new QPropertyUndoCommand(this, "line", QVariant(m_line));
 	m_undo_command->setText(tr("Modifier une ligne"));
 	m_undo_command->enableAnimation();
@@ -277,6 +283,8 @@ void PartLine::handlerMouseReleaseEvent(QetGraphicsHandlerItem *qghi, QGraphicsS
 {
 	Q_UNUSED(qghi)
 	Q_UNUSED(event)
+
+	m_handler_mouse_press=false;	// Achim ElmtEditor Rotation
 
 	m_undo_command->setNewValue(QVariant(m_line));
 	elementScene()->undoStack().push(m_undo_command);
@@ -571,6 +579,7 @@ void PartLine::setSecondEndLength(const qreal &l)
 	emit secondEndLengthChanged();
 }
 
+/*
 void PartLine::setRotation(qreal angle) {
 	qreal diffAngle = qRound((angle - rotation()) * 100.0) / 100.0;
 	m_rot = QET::correctAngle(angle, true);
@@ -584,7 +593,74 @@ void PartLine::setRotation(qreal angle) {
 	setLine(m_line);
 	adjustHandlerPos();
 	emit lineChanged();
+}*/
+
+// Achim ElmtEditor Rotation
+/**
+	@brief PartLine::setRotation
+	Redefines setRotation
+	dreht das Item um den Winkel angle um den Mittelpunkt des Item
+	 @param angle Rotationswinkel
+*/
+void PartLine::setRotation(qreal angle)
+{
+  // Winkel auf 0-360 normiern und runden
+	qreal rotateAngle = qRound((QET::correctAngle(angle, true)) * 100.0) / 100.0;
+
+	QPointF point;
+	if(m_handler_mouse_press){
+		// einer der Anfasserpunkte des Polygons wird der Drehpunkt
+		point = m_handler_pos;
+	}
+	else{
+		// der Mittelpunkt des boundingRect wird der Drehpunkt
+		point =boundingRect().center();
+	}
+
+	prepareGeometryChange();
+		// Rotation durchführen: das Polygon wird nach point verschoben,
+		// gedreht und anschließend wieder zurück verschoben.
+		// Alternativ müsste man anstatt translate vor rotate den Befehl
+		// setTransformOriginPoint(point) ausführen
+	QTransform rotation;
+	rotation.translate(point.x(),point.y());
+	rotation.rotate(rotateAngle-m_rot);
+	rotation.translate(-point.x(),-point.y());
+
+		// den neuen rotation setzen
+	m_rot=rotateAngle;
+		// rotation.map(m_polygon):
+		// die neuen Koordinaten des gedrehten Polygons
+		// werden auf m_polygon gemapt
+	setLine(rotation.map(m_line));
 }
+/*	QPointF rotatePos;
+	bool mouseButton = elementScene()->m_left_mouse_button_press;
+	if(mouseButton)
+		rotatePos = elementScene()->m_pos;
+	else
+		rotatePos = boundingRect().center();
+		// center Position des Textes() vom vom Bounding Rechteck
+		//QPointF centerPos = boundingRect().center();
+		// Drehwinkel = neuerWinkel - aktuellerWinkel, Nachkommastellen entfernen
+	qreal diffAngle = qRound((angle - rotation()) * 100.0) / 100.0;
+		// Winkel auf 0-360 normiern
+	m_rot = QET::correctAngle(angle, true);
+	QGraphicsObject::setRotation(QET::correctAngle(angle, true));
+		// Basispunkt für die Transform setzen
+		//setTransformOriginPoint(centerPos);
+	setTransformOriginPoint(rotatePos);
+		// rotieren
+	QTransform().rotate(diffAngle);
+
+		// Bereitet das Objekt auf eine Geometrieänderung vor. Rufen Sie diese
+		// Funktion auf, bevor Sie das Begrenzungsrechteck eines Objekts ändern,
+		// um den Index von QGraphicsScene aktuell zu halten.
+	prepareGeometryChange();
+	setLine(m_line);
+	adjustHandlerPos();
+	emit lineChanged();
+}*/
 
 qreal PartLine::rotation() const {
 	return qRound(m_rot * 100.0) / 100.0;

@@ -50,6 +50,7 @@ class EllipseEditor : public ElementItemEditor
 		void on_m_y_sb_editingFinished();
 		void on_m_horizontal_diameter_sb_editingFinished();
 		void on_m_vertical_diameter_sb_editingFinished();
+		void on_m_rotation_sb_editingFinished();	// Achim ElmtEditor Rotation
 
 	private:
 		void updateRect();

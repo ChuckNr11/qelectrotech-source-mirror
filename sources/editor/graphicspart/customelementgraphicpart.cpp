@@ -45,6 +45,8 @@ CustomElementGraphicPart::CustomElementGraphicPart(QETElementEditor *editor,
 		 | QGraphicsItem::ItemIsMovable
 		 | QGraphicsItem::ItemSendsGeometryChanges);
 	setAcceptHoverEvents(true);
+	connect(elementScene(), &QGraphicsScene::selectionChanged,
+			this,[this]{if(!this->isSelected()) m_handler_mouse_press=false;});	// Achim ElmtEditor Rotation
 }
 
 /**
@@ -1356,6 +1358,7 @@ void CustomElementGraphicPart::mouseMoveEvent(QGraphicsSceneMouseEvent *event)
 
 void CustomElementGraphicPart::mouseReleaseEvent(QGraphicsSceneMouseEvent *event)
 {
+	m_handler_mouse_press=false;	// Achim ElmtEditor Rotation
 	if((event->button() & Qt::LeftButton) && (flags() & QGraphicsItem::ItemIsMovable) && m_origin_pos != pos())
 	{
 		QPropertyUndoCommand *undo = new QPropertyUndoCommand(this, "pos", QVariant(m_origin_pos), QVariant(pos()));

@@ -123,12 +123,14 @@ void EllipseEditor::updateForm()
 	ui->m_y_sb->setValue(m_part->mapToScene(rect.topLeft()).y() + (rect.height()/2));
 	ui->m_horizontal_diameter_sb->setValue(rect.width());
 	ui->m_vertical_diameter_sb->setValue(rect.height());
+	//ui->m_rotation_sb->setValue(QET::correctAngle( m_part-> rotation()));	// Achim ElmtEditor Rotation
 }
 
 void EllipseEditor::on_m_x_sb_editingFinished()                   { updateRect(); }
 void EllipseEditor::on_m_y_sb_editingFinished()                   { updateRect(); }
 void EllipseEditor::on_m_horizontal_diameter_sb_editingFinished() { updateRect(); }
 void EllipseEditor::on_m_vertical_diameter_sb_editingFinished()   { updateRect(); }
+void EllipseEditor::on_m_rotation_sb_editingFinished()			  { updateRect(); }	// Achim ElmtEditor Rotation
 
 /**
  * @brief EllipseEditor::updateRect
@@ -164,6 +166,8 @@ void EllipseEditor::setUpChangeConnections()
 	m_change_connections << connect(m_part, &PartEllipse::xChanged, this, &EllipseEditor::updateForm);
 	m_change_connections << connect(m_part, &PartEllipse::yChanged, this, &EllipseEditor::updateForm);
 	m_change_connections << connect(m_part, &PartEllipse::rectChanged, this, &EllipseEditor::updateForm);
+		// Achim ElmtEditor Rotation
+	//m_change_connections << connect(m_part, &PartEllipse::rotationChanged, this, &EllipseEditor::updateForm);
 }
 
 /**

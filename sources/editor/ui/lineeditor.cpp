@@ -214,6 +214,7 @@ void LineEditor::setUpChangeConnections()
 	m_change_connections << connect(m_part, &PartLine::firstEndLengthChanged,  this, &LineEditor::updateForm);
 	m_change_connections << connect(m_part, &PartLine::secondEndTypeChanged,   this, &LineEditor::updateForm);
 	m_change_connections << connect(m_part, &PartLine::secondEndLengthChanged, this, &LineEditor::updateForm);
+	m_change_connections << connect(m_part, &PartLine::rotationChanged,	       this, &LineEditor::updateForm);	// Achim ElmtEditor Rotation
 }
 
 /**
@@ -247,7 +248,10 @@ void LineEditor::activeConnection(bool active)
 		connect(ui->m_end2_cb, static_cast<void (QComboBox::*)(int)>(&QComboBox::currentIndexChanged), this, &LineEditor::secondEndEdited);
 		connect(ui->m_lenght1_sb, &QDoubleSpinBox::editingFinished, this, &LineEditor::firstEndLenghtEdited);
 		connect(ui->m_lenght2_sb, &QDoubleSpinBox::editingFinished, this, &LineEditor::secondEndLenghtEdited);
-	}
+		//connect(ui->m_rotation_sb, &QDoubleSpinBox::valueChanged, this, &LineEditor::lineRotationChanged);// Achim ElmtEditor Rotation
+		//connect(ui->m_rotation_sb, &QDoubleSpinBox::valueChanged,   // Achim ElmtEditor Rotation
+		//[this]() {this->elementScene() -> undoStack().push(new RotateElementsCommand(this->elementScene()));});
+		}
 	else
 	{
 		disconnect(ui->m_x1_sb, &QDoubleSpinBox::editingFinished, this, &LineEditor::lineEdited);
@@ -258,6 +262,7 @@ void LineEditor::activeConnection(bool active)
 		disconnect(ui->m_end2_cb, static_cast<void (QComboBox::*)(int)>(&QComboBox::currentIndexChanged), this, &LineEditor::secondEndEdited);
 		disconnect(ui->m_lenght1_sb, &QDoubleSpinBox::editingFinished, this, &LineEditor::firstEndLenghtEdited);
 		disconnect(ui->m_lenght2_sb, &QDoubleSpinBox::editingFinished, this, &LineEditor::secondEndLenghtEdited);
+		//disconnect(ui->m_rotation_sb, &QDoubleSpinBox::valueChanged, this, &LineEditor::lineRotationChanged);// Achim ElmtEditor Rotation
 	}
 }
 
@@ -274,6 +279,7 @@ void LineEditor::lineEdited()
 
 	QPointF p1(ui->m_x1_sb->value(), ui->m_y1_sb->value());
 	QPointF p2(ui->m_x2_sb->value(), ui->m_y2_sb->value());
+	//qreal   angle(ui->m_rotation_sb->value());	// Achim ElmtEditor Rotation
 	QLineF line(m_part->mapFromScene(p1), m_part->mapFromScene(p2));
 
 	if (line != m_part->line()) {

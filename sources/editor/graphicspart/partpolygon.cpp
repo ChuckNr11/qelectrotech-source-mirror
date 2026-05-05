@@ -41,6 +41,11 @@ PartPolygon::PartPolygon(QETElementEditor *editor, QGraphicsItem *parent) :
 	m_remove_point = new QAction(tr("Supprimer ce point"), this);
 	m_remove_point->setIcon(QET::Icons::Remove);
 	connect(m_remove_point, &QAction::triggered, this, &PartPolygon::removePoint);
+		// wenn das Polygon seine Selektion verliert, wird ist eine Rotieren des Polygons auf jeden
+		// Fall beendet, und m_handler_mouse_press wird zurückgesetzt.
+		// Das zurücksetzen von m_handler_mouse_press in den Events (PartPolygon::handlerMouseReleaseEvent und CustomElementGraphicPart::mouseReleaseEvent)
+		// ist nicht ausreichend, da die Events während der Rotation den Fokkus verlieren können und nicht mehr ausgeführt werden.
+	connect(elementScene(), &QGraphicsScene::selectionChanged, this,[this]{if(!this->isSelected()) m_handler_mouse_press=false;});	// Achim ElmtEditor Rotation
 }
 
 /**
@@ -288,7 +293,7 @@ void PartPolygon::resetAllHandlerColor()
 	}
 }
 
-
+/*
 void PartPolygon::setRotation(qreal angle) {
 	qreal diffAngle = qRound((angle - rotation()) * 100.0) / 100.0;
 	m_rot = QET::correctAngle(angle, true);
@@ -301,10 +306,88 @@ void PartPolygon::setRotation(qreal angle) {
 	prepareGeometryChange();
 	adjustHandlerPos();
 	emit polygonChanged();
-}
+}*/
 
-qreal PartPolygon::rotation() const {
-	return qRound(m_rot * 100.0) / 100.0;
+// Achim ElmtEditor Rotation
+/**
+	@brief PartPolygon::setRotation
+	Redefines setRotation
+	dreht das Item um den Winkel angle um den Mittelpunkt des Item
+	 @param angle Rotationswinkel
+*/
+void PartPolygon::setRotation(qreal angle)
+{
+		// Winkel auf 0-360 normiern und runden
+	qreal rotateAngle = qRound((QET::correctAngle(angle, true)) * 100.0) / 100.0;
+
+	QPointF rotatePos;
+
+	if(elementScene()->m_left_mouse_button_press)
+		rotatePos = elementScene()->m_pos;
+	rotatePos =boundingRect().center();
+
+	/*#########################################
+	   Das
+	###########################################*/
+	/*if(m_handler_mouse_press){
+			// einer der Anfasserpunkte des Polygons wird der Drehpunkt
+		rotPos = m_handler_pos;
+	}
+	else{
+			// der Mittelpunkt des boundingRect wird der Drehpunkt
+		rotPos =boundingRect().center();
+	}*/
+
+	prepareGeometryChange();
+		// Rotation durchführen: das Polygon wird nach rotPos verschoben,
+		// gedreht und anschließend wieder zurück verschoben.
+		// Alternativ müsste man anstatt translate vor rotate den Befehl
+		// setTransformOriginrotPos(rotPos) ausführen
+	QTransform rotation;
+	rotation.translate(rotatePos.x(),rotatePos.y());
+	rotation.rotate(rotateAngle-m_rot);
+	rotation.translate(-rotatePos.x(),-rotatePos.y());
+	m_rot=rotateAngle;	// den neuen rotation setzen
+		// rotation.map(m_polygon):
+		// die neuen Koordinaten des gedrehten Polygons
+		// werden auf m_polygon gemapt
+	setPolygon(rotation.map(m_polygon));
+}
+/*
+void PartPolygon::setRotation(qreal angle) {
+	QPointF rotatePos;
+	if(elementScene()->m_left_mouse_button_press)
+		rotatePos = elementScene()->m_pos;
+	else
+		rotatePos = boundingRect().center();
+		// center Position des Textes() vom vom Bounding Rechteck
+	//QPointF centerPos = boundingRect().center();
+		// Drehwinkel = neuerWinkel - aktuellerWinkel, Nachkommastellen entfernen
+	qreal diffAngle = qRound((angle - rotation()) * 100.0) / 100.0;
+		// Winkel auf 0-360 normiern (true->positiv)
+	m_rot = QET::correctAngle(angle, true);
+		// den Rotationswinkel setzen
+	QGraphicsObject::setRotation(QET::correctAngle(angle, true));
+		// Basispunkt für die Transform setzen
+		//setTransformOriginPoint(centerPos);
+	setTransformOriginPoint(rotatePos);
+		// rotieren
+	QTransform().rotate(diffAngle);
+
+	 // Bereitet das Objekt auf eine Geometrieänderung vor. Rufen Sie diese
+	 // Funktion auf, bevor Sie das Begrenzungsrechteck eines Objekts ändern,
+	 // um den Index von QGraphicsScene aktuell zu halten.
+ setPolygon(m_polygon);
+ prepareGeometryChange();
+ adjustHandlerPos();
+*/
+
+/**
+	@brief PartPolygon::rotation
+	@return liefertr den aktuellen Rotationswinkel zurück
+*/
+qreal PartPolygon::rotation() const {	// Achim ElmtEditor Rotation
+	return qRound(m_rot * 100.0) / 100.0;		// Name geänert(rotation -> rotation)
 }
 
 void PartPolygon::flip() {
@@ -360,6 +443,8 @@ QVariant PartPolygon::itemChange(QGraphicsItem::GraphicsItemChange change, const
 */
 bool PartPolygon::sceneEventFilter(QGraphicsItem *watched, QEvent *event)
 {
+	if (event->type() == QEvent::GraphicsSceneMouseRelease)
+		m_handler_mouse_press=false;	// Achim ElmtEditor Rotation
 		//Watched must be an handler
 	if(watched->type() == QetGraphicsHandlerItem::Type)
 	{
@@ -448,6 +533,8 @@ void PartPolygon::handlerMousePressEvent(QetGraphicsHandlerItem *qghi, QGraphics
 	Q_UNUSED(qghi);
 	Q_UNUSED(event);
 
+	m_handler_pos = qghi->pos();	// Achim ElmtEditor Rotation
+	m_handler_mouse_press = true;	// Achim ElmtEditor Rotation
 	m_undo_command = new QPropertyUndoCommand(this, "polygon", QVariant(m_polygon));
 	m_undo_command->setText(tr("Modifier un polygone"));
 }
@@ -482,6 +569,7 @@ void PartPolygon::handlerMouseReleaseEvent(QetGraphicsHandlerItem *qghi, QGraphi
 	Q_UNUSED(qghi);
 	Q_UNUSED(event);
 
+	m_handler_mouse_press=false;	// Achim ElmtEditor Rotation
 	m_undo_command->setNewValue(QVariant(m_polygon));
 	elementScene()->undoStack().push(m_undo_command);
 	m_undo_command = nullptr;
