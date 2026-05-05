@@ -167,10 +167,17 @@ class DynamicElementTextItem : public DiagramTextItem
 		CrossRefItem *m_Xref_item = nullptr;
 		QGraphicsTextItem *m_slave_Xref_item = nullptr;
 		qreal m_text_width = -1;
-		QPointF m_initial_position;
+			// Achim deti movement
+		QPointF
+			m_initial_position,
+			m_button_down_parent_pos,	// Variante 2 + 3
+			m_new_initial_pos;			// Variante 2 + 3
 		bool m_keep_visual_rotation = true;
 		qreal m_visual_rotation_ref = 0;
-		bool m_move_parent = true;
+			// Achim deti movement
+		bool
+			m_move_parent = true,		// Variante 1
+			m_ctrl = false;				// Variante 2 + 3
 };
 
 #endif // DYNAMICELEMENTTEXTITEM_H

@@ -79,12 +79,24 @@ int ElementTextsMover::beginMovement(Diagram *diagram, QGraphicsItem *driver_ite
 		return -1;
 	
 	m_movement_running = true;
+	m_first = true;	// Achim deti movement
 	
 	return m_items_hash.size();
 }
 
 void ElementTextsMover::continueMovement(QGraphicsSceneMouseEvent *event)
 {
+		// Achim deti movement
+	/*######################################
+		Variante 0 Qet0.9
+		Variante 1 elevatormind  ( aktuelle Variante )
+		Variante 2 Achim: bewegen in Rasterschritten mit shift-Taste
+		Variante 3 Achim: bewegen in Rasterschritten
+			- Rasterschritt
+			- 1 Pixel Schritt
+			- undo/redo bei jedem Wechsel des schrittmaßes
+	//######################################*/
+	/*
 	if(!m_movement_running)
 		return;
 
@@ -101,6 +113,66 @@ void ElementTextsMover::continueMovement(QGraphicsSceneMouseEvent *event)
 		
 		QPointF new_pos = m_items_hash.value(qgi) + current_parent_pos - button_down_parent_pos;
 		event->modifiers() == Qt::ControlModifier ? qgi->setPos(new_pos) : qgi->setPos(Diagram::snapToGrid(new_pos));
+	}
+	*/
+	if(!m_movement_running)
+		return;
+
+	for(QGraphicsItem *qgi : m_items_hash.keys())
+	{
+		if(qgi == m_movement_driver)
+			continue;
+
+		if(m_first){
+			m_button_down_parent_pos = qgi->mapToParent(qgi->mapFromScene(event->buttonDownScenePos(Qt::LeftButton)));
+			m_first	= false;
+		}
+
+		QPointF new_pos;
+		QPointF current_pos = qgi->mapToParent(qgi->mapFromScene(event->scenePos()));
+																					  // Nur einmal nachdem die Ctrl-Taste losgelassen wurde
+		if(!(event->modifiers() == Qt::ControlModifier) && m_ctrl){
+			m_button_down_parent_pos = current_pos;
+			m_ctrl = false;
+		}
+
+			   // Nur einmal nachdem die Ctrl-Taste gedrückt wurde
+		if((event->modifiers() == Qt::ControlModifier) && !m_ctrl)
+			m_button_down_parent_pos = current_pos;
+
+			   // Position bei kleinen Schritten
+		if(event->modifiers() == Qt::ControlModifier){
+			new_pos = m_items_hash.value(qgi) + current_pos - m_button_down_parent_pos;
+			qgi->setPos(qRound(new_pos.x()),qRound(new_pos.y()));
+			m_ctrl = true;
+
+				   // new-pos nur für qDebug unten
+			//new_pos.setX(qRound(new_pos.x()));
+			//new_pos.setY(qRound(new_pos.y()));
+		}
+
+			   // Position bei großen Rasterschritten
+		else{
+			QSettings settings;
+			int grid_x = settings.value(QStringLiteral("diagrameditor/Xgrid"), Diagram::xGrid).toInt();
+			int grid_y = settings.value(QStringLiteral("diagrameditor/Ygrid"), Diagram::yGrid).toInt();
+
+				   // Differnz der neuen zur alten Position berechnen
+			int p_x = qRound((current_pos.x()-m_button_down_parent_pos.x())/grid_x);
+			int p_y = qRound((current_pos.y()-m_button_down_parent_pos.y())/grid_y);
+																						 // Neue Position in großen Schritten
+			qgi->setPos(m_items_hash.value(qgi).x() + p_x*grid_x, m_items_hash.value(qgi).y() + p_y*grid_y);
+																												 // new-pos nur für qDebug unten
+			//new_pos.setX(m_items_hash.value(qgi).x() + p_x*grid_x);
+			//new_pos.setY(m_items_hash.value(qgi).y() + p_y*grid_y);
+		}
+		  // Nur für qDebug
+		//QPointF item_pos = m_items_hash.value(qgi);
+		//qDebug() << "mover"
+		//		 << "item_pos" <<item_pos
+		//		 << "current_pos" <<current_pos
+		//		 << "button_down" <<m_button_down_parent_pos
+		//		 << "new_pos" << new_pos;
 	}
 }
 

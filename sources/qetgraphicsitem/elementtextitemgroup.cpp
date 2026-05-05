@@ -602,7 +602,17 @@ void ElementTextItemGroup::setPos(qreal x, qreal y)
 	@param event
 */
 void ElementTextItemGroup::mousePressEvent(QGraphicsSceneMouseEvent *event)
-{	
+{
+		// Achim deti movement
+
+	/*######################################
+		Variante 0 Qet0.9
+		Variante 1 elevatormind  ( aktuelle Variante )
+		Variante 2 Achim: bewegen in Rasterschritten mit shift-Taste
+
+		 für Variante 1+2 müsste das mousePressEvent sicher noch angepasst werden
+	 //######################################*/
+	/*
 	if(event->button() == Qt::LeftButton)
 	{
 		m_first_move = true;
@@ -611,6 +621,23 @@ void ElementTextItemGroup::mousePressEvent(QGraphicsSceneMouseEvent *event)
 	}
 	
 	QGraphicsItemGroup::mousePressEvent(event);
+		*/
+
+		/*######################################
+			Variante 3 Achim: bewegen in Rasterschritten
+				- Rasterschritt
+				- 1 Pixel Schritt
+				- undo/redo bei jedem Wechsel des schrittmaßes
+		//######################################*/
+
+			   // weitere Texte markieren oder wieder demarkieren
+		if (event->modifiers() & Qt::ControlModifier && (event->button() == Qt::LeftButton))
+		{
+			setSelected(!isSelected());
+		}
+
+		m_first_move = true;
+		QGraphicsItemGroup::mousePressEvent(event);
 }
 
 /**
@@ -619,6 +646,14 @@ void ElementTextItemGroup::mousePressEvent(QGraphicsSceneMouseEvent *event)
 */
 void ElementTextItemGroup::mouseMoveEvent(QGraphicsSceneMouseEvent *event)
 {
+		// Achim deti movement
+
+	/*######################################
+		Variante 0 Qet0.9
+		Variante 1 elevatormind  ( aktuelle Variante )
+		Variante 2 Achim: bewegen in Rasterschritten mit shift-Taste
+	//######################################*/
+/*
 	if((event->buttons() & Qt::LeftButton) && (flags() & ItemIsMovable))
 	{
 		if(diagram() && m_first_move)
@@ -648,6 +683,107 @@ void ElementTextItemGroup::mouseMoveEvent(QGraphicsSceneMouseEvent *event)
 	
 	if(m_first_move)
 		m_first_move = false;
+*/
+
+		/*######################################
+			Variante 3 Achim: bewegen in Rasterschritten
+				- Rasterschritt
+				- 1 Pixel Schritt
+				- undo/redo bei jedem Wechsel des schrittmaßes
+		//######################################*/
+
+		if((event->buttons() & Qt::LeftButton) && (flags() & ItemIsMovable)){
+
+			if(diagram() && m_first_move)
+				diagram()->elementTextsMover().beginMovement(diagram(), this);
+
+			if(m_first_move)
+			{
+				m_initial_position = pos();
+				if(parentElement())
+					parentElement()->setHighlighted(true);
+
+					   // Position des Elterm-Elements beim drücken der Maustaste  in Parent Koordinaten
+				m_button_down_parent_pos = mapToParent(mapFromScene(event->buttonDownScenePos(Qt::LeftButton)));
+			}
+
+				   // aktuelle Position der Maus in parent-Koordinaten
+			QPointF current_pos =mapToParent(mapFromScene(event->scenePos()));
+			QPointF new_pos;
+							 // Nur einmal nachdem die Ctrl-Taste losgelassen wurde
+			if(!(event->modifiers() == Qt::ControlModifier) && m_ctrl){
+
+				  // Movement muss beendet und neu gestartet werden,
+				  // um undo/redo Punkt zu setzen
+				if(diagram() && !m_first_move){
+					diagram()->elementTextsMover().endMovement();
+					diagram()->elementTextsMover().beginMovement(diagram(), this);
+				}
+				  // Variablen neu setzen
+				m_initial_position = m_new_initial_pos;
+				m_button_down_parent_pos = current_pos;
+				m_ctrl = false;
+			}
+
+				   // Nur einmal nachdem die Ctrl-Taste gedrückt wurde
+				   // Movement muss beendet und neu gestartet werden,
+				   // um undo/redo Punkt zu setzen
+			if((event->modifiers() == Qt::ControlModifier) && !m_ctrl){
+				if(diagram() && !m_first_move){
+					diagram()->elementTextsMover().endMovement();
+					diagram()->elementTextsMover().beginMovement(diagram(), this);
+				}
+				if(!m_first_move){
+					m_initial_position = m_new_initial_pos;
+					m_button_down_parent_pos = current_pos;
+				}
+			}
+
+				   //Wenn Ctrl dann kleine Schritte, sonst Grid-Schritte
+			if(event->modifiers() == Qt::ControlModifier){
+				// neue Position mit kleinen Schritten
+				new_pos = m_initial_position + current_pos - m_button_down_parent_pos;
+																					   // new_pos für qDebug weiter unten
+				//new_pos.setX(qRound(new_pos.x()));
+				//new_pos.setY(qRound(new_pos.y()));
+				setPos(qRound(new_pos.x()),qRound(new_pos.y()));
+																  // wenn die Control-Taste losgelassen wird brauchen wir die
+																  // 'new_pos' als neue m_initial_position, damit eine eventuelle
+																  // weitere Bewegung flüssig weiter läuft
+				m_new_initial_pos = new_pos;
+											 // Ctrl-Taste ist gedrückt
+				m_ctrl=true;
+			}
+			else{
+				//
+				QSettings settings;
+				int grid_x = settings.value(QStringLiteral("diagrameditor/Xgrid"), Diagram::xGrid).toInt();
+				int grid_y = settings.value(QStringLiteral("diagrameditor/Ygrid"), Diagram::yGrid).toInt();
+
+					   // Differnz der neuen zur alten Position berechnen
+				int p_x = qRound((current_pos.x()-m_button_down_parent_pos.x())/grid_x);
+				int p_y = qRound((current_pos.y()-m_button_down_parent_pos.y())/grid_y);
+																							 // Neue Position in großen Schritten
+				setPos(m_initial_position.x() + p_x*grid_x, m_initial_position.y() + p_y*grid_y);
+																									  // new_pos für qDebug weiter unten
+				//new_pos.setX(m_initial_position.x() + p_x*grid_x);
+				//new_pos.setY(m_initial_position.y() + p_y*grid_y);
+				m_new_initial_pos = this -> pos();
+			}
+
+				   //qDebug() << "dynamic"
+				   //		 << "item_pos" << m_initial_position
+				   //		 << "current_pos" << current_pos
+				   //		 << "button_down" << m_button_down_parent_pos
+				   //		 << "new_pos" << new_pos;
+
+			if(diagram())
+				diagram()->elementTextsMover().continueMovement(event);
+		}
+
+		if(m_first_move)
+			m_first_move = false;
+
 }
 
 /**

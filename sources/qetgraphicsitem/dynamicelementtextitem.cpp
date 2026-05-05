@@ -530,6 +530,39 @@ QUuid DynamicElementTextItem::uuid() const
 	return m_uuid;
 }
 
+// Achim deti movement
+/*#######################################
+
+Das DynamicElementTextItem(deti) hatte ursprünglich die unangenehme Eigenschaft,
+das wenn es nicht auf dem Raster platziert war und man es angeclickt hat,
+es zum nächsten Rasterpunkt gesprungen ist. Ursächlich hierfür war die Funktion
+snapToGrid im mouseMoveEvent des deti. Ich hatte schon zu Anfang die Idee das deti
+nicht auf dem Raster zu bewegen sondern in Rasterschritten. Das hatte ich zu Anfang
+auch schon mal umgesetzt und war letzlich die Basis für Variante 3.
+
+Variante 1
+war von elevatormind. Er hatte die Idee zum bewegen des deti zusätzlich eine (Shift)Taste zu drücken.
+Toller Nebeneffekt war, daß es einfacher war kleine Elemente mit deti zu markieren und zu verschieben.
+Nachteil war das die Bewegung nur in kleinen Schritten erfolgte.
+ElementTextItemGroup und ElementTextsMover wurden gar nicht berücksichtigt.
+
+Variante 2
+ist der Versuch von mir, die Variante 2 um die Bewegung in Rasterschritten zu ergänzen.
+Zusätzlich habe ich versucht weiterhin eine Möglichkeit gesucht, für das Bewegen in kleinen
+Schritten weiterhin die Taste CTRL zu benutzen (SHIFT+CTRL geht nicht).
+
+Mit den Lösungen in Variante 3 sollte es auch möglich Variante 2 als brauchbare Alternative fertig zu stellen.
+
+Variante 3
+- Grid Schritte(kein snapToGrid)
+- kleine  Schritte mit Ctrl-Modifier
+- undo/redo bei jedem Wechsel der Schrittweite
+- Selektion angepasst
+- ElementTextItemGroup angepasst
+- ElementTextsMover angepasst
+
+##########################################*/
+
 /**
 	@brief DynamicElementTextItem::mousePressEvent
 	@param event
@@ -546,6 +579,18 @@ void DynamicElementTextItem::mousePressEvent(QGraphicsSceneMouseEvent *event)
 			m_slave_Xref_item->setDefaultTextColor(Qt::black);
 	}
 
+	// Achim deti movement
+
+	/*######################################
+		Variante 0 Qet0.9
+	//######################################*/
+	/*DiagramTextItem::mousePressEvent(event);*/
+
+	/*######################################
+		Variante 1 elevatormind
+	//######################################*/
+	/*
+
 	// Shift or no parent initiates movement of dynamic text, otherwise movement of parent element
 	if((event->modifiers() & Qt::ShiftModifier) || !m_parent_element)
 	{
@@ -556,13 +601,88 @@ void DynamicElementTextItem::mousePressEvent(QGraphicsSceneMouseEvent *event)
 		parentElement()->mousePressEvent(event);
 	}
 }
+	*/
 
+	/*######################################
+		Variante 2 Achim: bewegen in Rasterschritten mit shift-Taste
+	//######################################*/
+
+		   // ist der Text markiert, dann ist bereits eine Mausbewegung aktiv
+		   // und nachfolgender code soll nicht ausgeführt werden
+
+	/*if(!this->isSelected()){
+		// Shift or no parent initiates movement of dynamic text, otherwise movement of parent element
+		if((event->modifiers() & Qt::ShiftModifier) || !m_parent_element)
+		{
+			m_move_parent = false;
+			DiagramTextItem::mousePressEvent(event);
+		} else {
+			m_move_parent = true;
+			parentElement()->mousePressEvent(event);
+		}
+	}
+	*/
+
+	/*######################################
+		Variante 3 Achim: bewegen in Rasterschritten
+	//######################################*/
+
+		   // weitere Texte markieren oder wieder demarkieren
+	if (event->modifiers() & Qt::ControlModifier && (event->button() == Qt::LeftButton))
+	{
+		setSelected(!isSelected());
+	}
+
+	DiagramTextItem::mousePressEvent(event);
+
+}
 /**
 	@brief DynamicElementTextItem::mouseMoveEvent
 	@param event
 */
 void DynamicElementTextItem::mouseMoveEvent(QGraphicsSceneMouseEvent *event)
-{	
+{
+	// Achim deti movement
+
+	/*######################################
+		Variante 0 Qet0.9
+	//######################################*/
+	/*
+	if((event->buttons() & Qt::LeftButton) && (flags() & ItemIsMovable))
+	{
+		if(diagram() && m_first_move)
+			diagram()->elementTextsMover().beginMovement(diagram(), this);
+
+		 if(m_first_move)
+		 {
+			 m_initial_position = pos();
+			 if(parentElement())
+			  parentElement()->setHighlighted(true);
+		 }
+
+		  QPointF current_pos;
+		  QPointF button_down_parent_pos;
+		  current_pos = mapToParent(mapFromScene(event->scenePos()));
+		  button_down_parent_pos = mapToParent(mapFromScene(event->buttonDownScenePos(Qt::LeftButton)));
+
+		 QPointF new_pos = m_initial_position + current_pos - button_down_parent_pos;
+		 event->modifiers() == Qt::ControlModifier ? setPos(new_pos) : setPos(Diagram::snapToGrid(new_pos));
+
+		  if(diagram())
+		  diagram()->elementTextsMover().continueMovement(event);
+	  } else {
+		  event->ignore();
+	  }
+
+	 if(m_first_move)
+		 m_first_move = false;
+	 */
+
+	/*######################################
+		Variante 1 elevatormind  ( aktuelle Variante )
+	//######################################*/
+
+	/*
 	if((event->buttons() & Qt::LeftButton) && (flags() & ItemIsMovable))
 	{
 		if(m_move_parent)
@@ -571,31 +691,210 @@ void DynamicElementTextItem::mouseMoveEvent(QGraphicsSceneMouseEvent *event)
 		} else {
 			if(diagram() && m_first_move)
 				diagram()->elementTextsMover().beginMovement(diagram(), this);
-			
-			if(m_first_move)
-			{
-				m_initial_position = pos();
-				if(parentElement())
-					parentElement()->setHighlighted(true);
-			}
-			
-			QPointF current_parent_pos;
-			QPointF button_down_parent_pos;
-			current_parent_pos = mapToParent(mapFromScene(event->scenePos()));
-			button_down_parent_pos = mapToParent(mapFromScene(event->buttonDownScenePos(Qt::LeftButton)));
-			
-			int diffx = qRound(current_parent_pos.x() - button_down_parent_pos.x());
-			int diffy = qRound(current_parent_pos.y() - button_down_parent_pos.y());
-			QPointF new_pos = m_initial_position + QPointF(diffx, diffy);
-			setPos(new_pos);
 
-			if(diagram())
-				diagram()->elementTextsMover().continueMovement(event);
+ if(m_first_move)
+ {
+	 m_initial_position = pos();
+	 if(parentElement())
+		 parentElement()->setHighlighted(true);
+ }
+
+  QPointF current_pos;
+  QPointF button_down_parent_pos;
+  current_pos = mapToParent(mapFromScene(event->scenePos()));
+  button_down_parent_pos = mapToParent(mapFromScene(event->buttonDownScenePos(Qt::LeftButton)));
+
+ int diffx = qRound(current_pos.x() - button_down_parent_pos.x());
+ int diffy = qRound(current_pos.y() - button_down_parent_pos.y());
+ QPointF new_pos = m_initial_position + QPointF(diffx, diffy);
+ setPos(new_pos);
+
+			 if(diagram())
+				 diagram()->elementTextsMover().continueMovement(event);
+		 }
+	 } else {
+		 event->ignore();
+	 }
+
+ if(m_first_move)
+	 m_first_move = false;
+ */
+
+	/*######################################
+		Variante 2 Achim: bewegen in Rasterschritten mit shift-Taste
+	//######################################*/
+
+	/*
+	if((event->buttons() & Qt::LeftButton) && (flags() & ItemIsMovable))
+	{
+		if(m_move_parent)
+		{
+			parentElement()->mouseMoveEvent(event);
+		} else {
+			if(diagram() && m_first_move)
+				diagram()->elementTextsMover().beginMovement(diagram(), this);
+
+			 if(m_first_move)
+			 {
+				 m_initial_position = pos();
+				 QPointF iniPos = m_initial_position;
+				 if(parentElement())
+					 parentElement()->setHighlighted(true);
+				 // Position des Elterm-Elements beim drücken der Maustaste  in Parent Koordinaten
+				 m_button_down_parent_pos = mapToParent(mapFromScene(event->buttonDownScenePos(Qt::LeftButton)));
+			 }
+
+			  QPointF current_pos =mapToParent(mapFromScene(event->scenePos()));
+
+				// Nur einmal nachdem die Ctrl-Taste losgelassen wurde
+				//
+			 if(!(event->modifiers() == Qt::ControlModifier) && m_ctrl){
+				 m_initial_position = m_new_initial_pos;
+				 m_button_down_parent_pos = current_pos;
+				 m_ctrl = false;
+			 }
+
+			  QSettings settings;
+			  int grid_x = settings.value(QStringLiteral("diagrameditor/Xgrid"),
+										Diagram::xGrid).toInt();
+			  int grid_y = settings.value(QStringLiteral("diagrameditor/Ygrid"),
+									  Diagram::yGrid).toInt();
+
+				// Differnz der neuen zur alten Position berechnen
+			 int p_x = qRound((current_pos.x()-m_button_down_parent_pos.x())/grid_x);
+			 int p_y = qRound((current_pos.y()-m_button_down_parent_pos.y())/grid_y);
+
+				 // Neue Position in großen Schritten
+			  QPointF grid_pos(m_initial_position.x() + p_x*grid_x, m_initial_position.y() + p_y*grid_y);
+
+				// Neue Position in kleinen Schritten
+			 QPointF new_pos = m_initial_position + current_pos - m_button_down_parent_pos;
+
+				 // Der Text lässt sich bewegen wenn er markiert ist oder wenn er markiert+Shift ist
+			  if(this->isSelected() || (this->isSelected() && event->modifiers() == Qt::ShiftModifier)){
+				  //Wenn Ctrl dann kleine Schritte, sonst Grid-Schritte
+			  if(event->modifiers() == Qt::ControlModifier){
+				  setPos(new_pos);
+					  // wenn die Control-Taste losgelassen wird brauchen wir die
+					  // letzte position als neue m_initial_position, damit eine eventuelle
+					  // weitere Bewegung flüssig weiter läuft
+				  m_new_initial_pos=new_pos;
+					  // Ctrl-Taste ist gedrückt
+				  m_ctrl=true;
+			  }
+			  else
+			  {
+				  setPos(grid_pos);
+			  }
+		  }
+
+		 if(diagram())
+			 diagram()->elementTextsMover().continueMovement(event);
+	 }
+	 } else {
+		 event->ignore();
+	 }
+
+	  if(m_first_move)
+		  m_first_move = false;
+	  */
+
+	/*######################################
+		Variante 3 Achim: bewegen in Rasterschritten
+			- Rasterschritt
+			- 1 Pixel Schritt
+			- undo/redo bei jedem Wechsel des schrittmaßes
+	//######################################*/
+
+	if((event->buttons() & Qt::LeftButton) && (flags() & ItemIsMovable)){
+
+		if(diagram() && m_first_move)
+			diagram()->elementTextsMover().beginMovement(diagram(), this);
+
+		if(m_first_move)
+		{
+			m_initial_position = pos();
+			if(parentElement())
+				parentElement()->setHighlighted(true);
+
+				   // Position des Elterm-Elements beim drücken der Maustaste  in Parent Koordinaten
+			m_button_down_parent_pos = mapToParent(mapFromScene(event->buttonDownScenePos(Qt::LeftButton)));
 		}
-	} else {
-		event->ignore();
+
+			   // aktuelle Position der Maus in parent-Koordinaten
+		QPointF current_pos =mapToParent(mapFromScene(event->scenePos()));
+		QPointF new_pos;
+						 // Nur einmal nachdem die Ctrl-Taste losgelassen wurde
+		if(!(event->modifiers() == Qt::ControlModifier) && m_ctrl){
+
+			  // Movement muss beendet und neu gestartet werden,
+			  // um undo/redo Punkt zu setzen
+			if(diagram() && !m_first_move){
+				diagram()->elementTextsMover().endMovement();
+				diagram()->elementTextsMover().beginMovement(diagram(), this);
+			}
+			  // Variablen neu setzen
+			m_initial_position = m_new_initial_pos;
+			m_button_down_parent_pos = current_pos;
+			m_ctrl = false;
+		}
+
+			   // Nur einmal nachdem die Ctrl-Taste gedrückt wurde
+			   // Movement muss beendet und neu gestartet werden,
+			   // um undo/redo Punkt zu setzen
+		if((event->modifiers() == Qt::ControlModifier) && !m_ctrl){
+			if(diagram() && !m_first_move){
+				diagram()->elementTextsMover().endMovement();
+				diagram()->elementTextsMover().beginMovement(diagram(), this);
+			}
+			if(!m_first_move){
+				m_initial_position = m_new_initial_pos;
+				m_button_down_parent_pos = current_pos;
+			}
+		}
+
+			   //Wenn Ctrl dann kleine Schritte, sonst Grid-Schritte
+		if(event->modifiers() == Qt::ControlModifier){
+			// neue Position mit kleinen Schritten
+			new_pos = m_initial_position + current_pos - m_button_down_parent_pos;
+																				   // new_pos für qDebug weiter unten
+			//new_pos.setX(qRound(new_pos.x()));
+			//new_pos.setY(qRound(new_pos.y()));
+			setPos(qRound(new_pos.x()),qRound(new_pos.y()));
+															  // wenn die Control-Taste losgelassen wird brauchen wir die
+															  // 'new_pos' als neue m_initial_position, damit eine eventuelle
+															  // weitere Bewegung flüssig weiter läuft
+			m_new_initial_pos = new_pos;
+										 // Ctrl-Taste ist gedrückt
+			m_ctrl=true;
+		}
+		else{
+		  //
+			QSettings settings;
+			int grid_x = settings.value(QStringLiteral("diagrameditor/Xgrid"), Diagram::xGrid).toInt();
+			int grid_y = settings.value(QStringLiteral("diagrameditor/Ygrid"), Diagram::yGrid).toInt();
+
+				   // Differnz der neuen zur alten Position berechnen
+			int p_x = qRound((current_pos.x()-m_button_down_parent_pos.x())/grid_x);
+			int p_y = qRound((current_pos.y()-m_button_down_parent_pos.y())/grid_y);
+																						 // Neue Position in großen Schritten
+			setPos(m_initial_position.x() + p_x*grid_x, m_initial_position.y() + p_y*grid_y);
+																								  // new_pos für qDebug weiter unten
+			//new_pos.setX(m_initial_position.x() + p_x*grid_x);
+			//new_pos.setY(m_initial_position.y() + p_y*grid_y);
+			m_new_initial_pos = this -> pos();
+		}
+
+			   //qDebug() << "dynamic"
+			   //		 << "item_pos" << m_initial_position
+			   //		 << "current_pos" << current_pos
+			   //		 << "button_down" << m_button_down_parent_pos
+			   //		 << "new_pos" << new_pos;
+
+		if(diagram())
+			diagram()->elementTextsMover().continueMovement(event);
 	}
-	
+
 	if(m_first_move)
 		m_first_move = false;
 }
@@ -606,19 +905,74 @@ void DynamicElementTextItem::mouseMoveEvent(QGraphicsSceneMouseEvent *event)
 */
 void DynamicElementTextItem::mouseReleaseEvent(QGraphicsSceneMouseEvent *event)
 {
+	// Achim deti movement
+
+	/*######################################
+		Variante 0 Qet0.9
+	//######################################*/
+	/*
+	if (m_parent_element)
+		m_parent_element->setHighlighted(false);
+
+	 if(m_parent_element && m_parent_element->diagram())
+	  m_parent_element.data()->diagram()->elementTextsMover().endMovement();
+
+	  if(!(event->modifiers() & Qt::ControlModifier))
+		  QGraphicsTextItem::mouseReleaseEvent(event);
+	  */
+
+	/*######################################
+		Variante 1 elevatormind  ( aktuelle Variante )
+	//######################################*/
+	/*
 	if(m_move_parent)
 	{
 		parentElement()->mouseReleaseEvent(event);
 	} else {
 		if (m_parent_element)
 			m_parent_element->setHighlighted(false);
-	
-		if(m_parent_element && m_parent_element->diagram())
-			m_parent_element.data()->diagram()->elementTextsMover().endMovement();
-		
-		if(!(event->modifiers() & Qt::ControlModifier))
-			QGraphicsTextItem::mouseReleaseEvent(event);
-	}
+
+	 if(m_parent_element && m_parent_element->diagram())
+		 m_parent_element.data()->diagram()->elementTextsMover().endMovement();
+
+ if(!(event->modifiers() & Qt::ControlModifier))
+	 QGraphicsTextItem::mouseReleaseEvent(event);
+}
+*/
+
+	/*######################################
+		Variante 2 Achim: bewegen in Rasterschritten mit shift-Taste
+	//######################################*/
+
+	/*
+	if(m_move_parent)
+	{
+		parentElement()->mouseReleaseEvent(event);
+	} else {
+		if (m_parent_element)
+			m_parent_element->setHighlighted(false);
+
+	 if(m_parent_element && m_parent_element->diagram())
+		 m_parent_element.data()->diagram()->elementTextsMover().endMovement();
+
+	  if(!(event->modifiers() & Qt::ControlModifier))
+		  QGraphicsTextItem::mouseReleaseEvent(event);
+	  }
+	  */
+
+	/*######################################
+		Variante 3 Achim: bewegen in Rasterschritten und kleinen schritten
+	//######################################*/
+
+
+	if (m_parent_element)
+		m_parent_element->setHighlighted(false);
+
+	if(m_parent_element && m_parent_element->diagram())
+		m_parent_element.data()->diagram()->elementTextsMover().endMovement();
+
+	if(!(event->modifiers() & Qt::ControlModifier))
+		QGraphicsTextItem::mouseReleaseEvent(event);
 }
 
 /**

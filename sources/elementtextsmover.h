@@ -49,7 +49,10 @@ class ElementTextsMover
 		QString undoText() const;
 
 	private:
-		bool m_movement_running = false;
+		bool
+			m_movement_running = false,
+			m_ctrl = false,		// Achim deti movement
+			m_first = false;	// Achim deti movement
 		Diagram *m_diagram = nullptr;
 		QGraphicsItem *m_movement_driver = nullptr;
 		QHash <DiagramTextItem *, QPointF> m_texts_hash;
@@ -57,5 +60,6 @@ class ElementTextsMover
 		QHash <QGraphicsItem *, QPointF> m_items_hash;
 		int m_text_count = 0,
 			m_group_count = 0;
+		QPointF m_button_down_parent_pos;	// Achim deti movement
 };
 #endif
