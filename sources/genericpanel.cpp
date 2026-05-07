@@ -785,7 +785,7 @@ void GenericPanel::projectDiagramsOrderChanged(QETProject *project,
 	if(m_selected_item){
 		setCurrentItem(moved_qtwi_diagram);
 	}
-		// diagramtab was moved with mouse
+		// diagram tab was moved with mouse
 	else{
 		setCurrentItem(qtwi_project -> child(from));
 	}

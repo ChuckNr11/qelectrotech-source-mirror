@@ -258,7 +258,7 @@ void ElementsPanelWidget::deleteDiagram()
 void ElementsPanelWidget::moveDiagramUpTop()
 {
 	if (Diagram *selected_diagram = elements_panel -> selectedDiagram()) {
-		elements_panel->setSelectedItem(elements_panel->getItemForDiagram(selected_diagram));
+		elements_panel->setSelectedItem(elements_panel->getItemForDiagram(selected_diagram));	// Achim fix wrong selection
 		emit(requestForDiagramMoveUpTop(selected_diagram));
 	}
 }
@@ -271,7 +271,7 @@ void ElementsPanelWidget::moveDiagramUpTop()
 void ElementsPanelWidget::moveDiagramUp()
 {
 	if (Diagram *selected_diagram = elements_panel -> selectedDiagram()) {
-		elements_panel->setSelectedItem(elements_panel->getItemForDiagram(selected_diagram));
+		elements_panel->setSelectedItem(elements_panel->getItemForDiagram(selected_diagram));	// Achim fix wrong selection
 		emit(requestForDiagramMoveUp(selected_diagram));
 	}
 }
@@ -282,7 +282,7 @@ void ElementsPanelWidget::moveDiagramUp()
 void ElementsPanelWidget::moveDiagramDown()
 {
 	if (Diagram *selected_diagram = elements_panel -> selectedDiagram()) {
-		elements_panel->setSelectedItem(elements_panel->getItemForDiagram(selected_diagram));
+		elements_panel->setSelectedItem(elements_panel->getItemForDiagram(selected_diagram));	// Achim fix wrong selection
 		emit(requestForDiagramMoveDown(selected_diagram));
 	}
 }
@@ -293,7 +293,7 @@ void ElementsPanelWidget::moveDiagramDown()
 void ElementsPanelWidget::moveDiagramUpx10()
 {
 	if (Diagram *selected_diagram = elements_panel -> selectedDiagram()) {
-		elements_panel->setSelectedItem(elements_panel->getItemForDiagram(selected_diagram));
+		elements_panel->setSelectedItem(elements_panel->getItemForDiagram(selected_diagram));	// Achim fix wrong selection
 		emit(requestForDiagramMoveUpx10(selected_diagram));
 	}
 }
@@ -304,7 +304,7 @@ void ElementsPanelWidget::moveDiagramUpx10()
 void ElementsPanelWidget::moveDiagramUpx100()
 {
 	if (Diagram *selected_diagram = elements_panel -> selectedDiagram()) {
-		elements_panel->setSelectedItem(elements_panel->getItemForDiagram(selected_diagram));
+		elements_panel->setSelectedItem(elements_panel->getItemForDiagram(selected_diagram));	// Achim fix wrong selection
 		emit(requestForDiagramMoveUpx100(selected_diagram));
 	}
 }
@@ -315,7 +315,7 @@ void ElementsPanelWidget::moveDiagramUpx100()
 void ElementsPanelWidget::moveDiagramDownx10()
 {
 	if (Diagram *selected_diagram = elements_panel -> selectedDiagram()) {
-		elements_panel->setSelectedItem(elements_panel->getItemForDiagram(selected_diagram));
+		elements_panel->setSelectedItem(elements_panel->getItemForDiagram(selected_diagram));	// Achim fix wrong selection
 		emit(requestForDiagramMoveDownx10(selected_diagram));
 	}
 }
@@ -326,7 +326,7 @@ void ElementsPanelWidget::moveDiagramDownx10()
 void ElementsPanelWidget::moveDiagramDownx100()
 {
 	if (Diagram *selected_diagram = elements_panel -> selectedDiagram()) {
-		elements_panel->setSelectedItem(elements_panel->getItemForDiagram(selected_diagram));
+		elements_panel->setSelectedItem(elements_panel->getItemForDiagram(selected_diagram));	// Achim fix wrong selection
 		emit(requestForDiagramMoveDownx100(selected_diagram));
 	}
 }
