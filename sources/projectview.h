@@ -122,6 +122,10 @@ class ProjectView : public QWidget
 		void moveDiagramUpx10(Diagram *);
 		void moveDiagramDownx10(DiagramView *);
 		void moveDiagramDownx10(Diagram *);
+		void moveDiagramUpx100(DiagramView *);	// Achim moveDiagram Up/Down x100
+		void moveDiagramUpx100(Diagram *);		// Achim moveDiagram Up/Down x100
+		void moveDiagramDownx100(DiagramView *);// Achim moveDiagram Up/Down x100
+		void moveDiagramDownx100(Diagram *);	// Achim moveDiagram Up/Down x100
 		void exportProject();
 		QETResult save();
 		QETResult saveAs();

@@ -578,6 +578,52 @@ void ProjectView::moveDiagramDownx10(Diagram *diagram) {
 	moveDiagramDownx10(findDiagram(diagram));
 }
 
+// Achim moveDiagram Up/Down x100
+/**
+	Move the schema diagram view up / left by 100
+*/
+void ProjectView::moveDiagramUpx100(DiagramView *diagram_view) {
+	if (!diagram_view) return;
+
+	int diagram_view_position = m_diagram_ids.key(diagram_view);
+	if (!diagram_view_position) {
+		// le schema est le premier du projet
+		return;
+	}
+	m_tab -> tabBar() -> moveTab(diagram_view_position, diagram_view_position - 100);
+}
+
+// Achim moveDiagram Up/Down x100
+/**
+	Move the schema diagram view up / left by 100
+*/
+void ProjectView::moveDiagramUpx100(Diagram *diagram) {
+	moveDiagramUpx100(findDiagram(diagram));
+}
+
+// Achim moveDiagram Up/Down x100
+/**
+	Move the schema diagram view down / to the right by 100
+*/
+void ProjectView::moveDiagramDownx100(DiagramView *diagram_view) {
+	if (!diagram_view) return;
+
+	int diagram_view_position = m_diagram_ids.key(diagram_view);
+	if (diagram_view_position + 1 == m_diagram_ids.count()) {
+		// le schema est le dernier du projet
+		return;
+	}
+	m_tab -> tabBar() -> moveTab(diagram_view_position, diagram_view_position + 100);
+}
+
+// Achim moveDiagram Up/Down x100
+/**
+	Move the schema diagram view down / to the right by 100
+*/
+void ProjectView::moveDiagramDownx100(Diagram *diagram) {
+	moveDiagramDownx100(findDiagram(diagram));
+}
+
 /**
 	Exporte le schema.
 */

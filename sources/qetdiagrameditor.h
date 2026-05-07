@@ -143,7 +143,9 @@ class QETDiagramEditor : public QETMainWindow
 		void moveDiagramDown(Diagram *);
 		void moveDiagramUpTop(Diagram *);
 		void moveDiagramUpx10(Diagram *);
-		void moveDiagramDownx10(Diagram *);
+		void moveDiagramDownx10(Diagram *);	// Achim moveDiagram Up/Down x100
+		void moveDiagramUpx100(Diagram *);	// Achim moveDiagram Up/Down x100
+		void moveDiagramDownx100(Diagram *);
 		void reloadOldElementPanel();
 		void diagramWasAdded(DiagramView *);
 		void findElementInPanel(const ElementsLocation &);

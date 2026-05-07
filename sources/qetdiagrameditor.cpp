@@ -182,6 +182,8 @@ void QETDiagramEditor::setUpElementsPanel()
 	connect(pa, SIGNAL(requestForDiagramMoveUpTop         (Diagram *)), this, SLOT(moveDiagramUpTop(Diagram *)));
 	connect(pa, SIGNAL(requestForDiagramMoveUpx10         (Diagram *)), this, SLOT(moveDiagramUpx10(Diagram *)));
 	connect(pa, SIGNAL(requestForDiagramMoveDownx10       (Diagram *)), this, SLOT(moveDiagramDownx10(Diagram *)));
+	connect(pa, SIGNAL(requestForDiagramMoveUpx100         (Diagram *)), this, SLOT(moveDiagramUpx100(Diagram *)));		// Achim moveDiagram Up/Down x100
+	connect(pa, SIGNAL(requestForDiagramMoveDownx100       (Diagram *)), this, SLOT(moveDiagramDownx100(Diagram *)));	// Achim moveDiagram Up/Down x100
 }
 
 /**
@@ -2287,6 +2289,7 @@ void QETDiagramEditor::moveDiagramUpx10(Diagram *diagram)
 	}
 }
 
+// Achim moveDiagram Up/Down x100
 /**
 	Change l'ordre des schemas d'un projet, en decalant le schema vers le bas /
 	la droite x10
@@ -2303,6 +2306,50 @@ void QETDiagramEditor::moveDiagramDownx10(Diagram *diagram)
 		// recupere la vue sur ce projet
 		if (ProjectView *project_view = findProject(diagram_project)) {
 			project_view -> moveDiagramDownx10(diagram);
+		}
+	}
+}
+
+// Achim moveDiagram Up/Down x100
+/**
+	@brief QETDiagramEditor::moveDiagramUpx100
+	Changes the order of a project's schematics by shifting the schematic down /
+	to the right 100 times.
+	@param Diagram to be shifted
+*/
+void QETDiagramEditor::moveDiagramUpx100(Diagram *diagram)
+{
+	if (!diagram) return;
+
+		   // recupere le projet contenant le schema
+	if (QETProject *diagram_project = diagram -> project()) {
+		if (diagram_project -> isReadOnly()) return;
+
+			   // recupere la vue sur ce projet
+		if (ProjectView *project_view = findProject(diagram_project)) {
+			project_view -> moveDiagramUpx100(diagram);
+		}
+	}
+}
+
+// Achim moveDiagram Up/Down x100
+/**
+	@brief QETDiagramEditor::moveDiagramDownx100
+	Changes the order of a project's schematics by shifting the schematic down /
+	to the right 100 times.
+	@param Diagram to be shifted
+*/
+void QETDiagramEditor::moveDiagramDownx100(Diagram *diagram)
+{
+	if (!diagram) return;
+
+		   // recupere le projet contenant le schema
+	if (QETProject *diagram_project = diagram -> project()) {
+		if (diagram_project -> isReadOnly()) return;
+
+			   // recupere la vue sur ce projet
+		if (ProjectView *project_view = findProject(diagram_project)) {
+			project_view -> moveDiagramDownx100(diagram);
 		}
 	}
 }
