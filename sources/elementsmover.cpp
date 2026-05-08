@@ -132,6 +132,13 @@ void ElementsMover::continueMovement(const QPointF &movement)
 			continue;
 		qgi->setPos(qgi->pos() + movement);
 	}
+	// Achim DiagramEditor helpCross
+	//DiagramContent dc(this);
+	//QList<QGraphicsItem *> items = dc.items(DiagramContent::SelectedOnly
+	// Hilfs-CrossCursor einblenden
+	//m_diagram->updateHelpCross(rect.topLeft()); // Achim
+	//m_diagram->updateHelpCross(m_movement_driver->scenePos()+m_current_movement); // Achim
+	m_diagram->updateHelpCross(m_movement_driver->scenePos()); // Achim DiagramEditor helpCross
 
 	QVector<Conductor *>list_conductors;
 	for(auto *con : m_moved_content.m_conductors_to_move){
@@ -240,6 +247,9 @@ void ElementsMover::endMovement()
 		// There is no movement in progress now
 	m_movement_running = false;
 	m_moved_content.clear();
+
+		// helpCross löschen
+	m_diagram->deleteHelpCross();	// Achim DiagramEditor helpCross
 
 	if (m_status_bar) {
 		m_status_bar->clearMessage();

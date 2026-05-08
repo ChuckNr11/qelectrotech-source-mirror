@@ -71,7 +71,9 @@ Diagram::Diagram(QETProject *project) :
 	draw_colored_conductors_ (true),
 	m_event_interface        (nullptr),
 	m_freeze_new_elements    (false),
-	m_freeze_new_conductors_ (false)
+	m_freeze_new_conductors_ (false),
+	m_help_horiz			 (nullptr),	// Achim DiagramEditor helpCross
+	m_help_verti			 (nullptr)	// Achim DiagramEditor helpCross
 {
 	setItemIndexMethod(QGraphicsScene::NoIndex);
 	/* Set to no index,
@@ -157,6 +159,11 @@ Diagram::~Diagram()
 		removeItem(item);
 		delete item;
 	}
+	  // Hilfs-CrossCursor löschen
+	if(m_help_horiz)
+		delete m_help_horiz;	// Achim DiagramEditor helpCross
+	if(m_help_verti)
+		delete m_help_verti;	// Achim DiagramEditor helpCross
 }
 
 /**
@@ -426,7 +433,9 @@ void Diagram::keyPressEvent(QKeyEvent *event)
 
 		if (!movement.isNull() && !focusItem())
 		{
-			m_elements_mover.beginMovement(this);
+				// Das erste item der selection wird an elementsmover übergeben(driver-item)
+			QList<QGraphicsItem *> items = dc.items(DiagramContent::SelectedOnly);	// Achim DiagramEditor helpCross
+			m_elements_mover.beginMovement(this,items.first());	// Achim DiagramEditor helpCross
 			m_elements_mover.continueMovement(movement);
 			event->accept();
 			return;
@@ -2633,5 +2642,91 @@ void Diagram::restoreText(Element* elmt)
 				deti->setPlainText(deti->text());
 			}
 		}
+	}
+}
+
+// Achim DiagramEditor helpCross
+/*
+	HelpCross für elementsText- und elementsMover.
+
+helpCrosses wurden nur bei den DiagramEvents eingeblendet, aber auch
+nicht bei jedem Event.
+Ich denke das helpCros einzubleneden macht bei allen Element-Aktionen sinn
+Wahrscheinlich währe es auch Sinnvoll diese Definition
+des HelpCross auch in den diagramEvent-Klassen zu nutzen.
+dort hat das DiagramEventInterface ein eigenes HelpCross.
+*/
+/**
+	@brief Diagram::updateHelpCross
+	Create and update the position of the cross to help user for draw new shape
+	@param p : the center of the cross
+*/
+QPointF Diagram::updateHelpCross(const QPointF &p)
+{
+	QRectF rect = border_and_titleblock.insideBorderRect();
+
+		   // mouseCursor ausblenden
+	if(m_views.isEmpty() && rect.contains(p)){
+		m_views = this->views();
+		m_saved_cursor = m_views.first()->viewport()->cursor().shape();
+		m_views.first()->viewport()->setCursor(Qt::BlankCursor);
+	}
+
+		   //	QApplication::focusWidget()->setCursor(Qt::BlankCursor);
+		   //QApplication::setOverrideCursor(Qt::BlankCursor);
+
+		   //initialize the position of the cross
+	QPointF position = Diagram::snapToGrid(p);
+
+		   //If line isn't created yet, we create it.
+	if (!m_help_horiz || !m_help_verti)
+	{
+		QPen pen;
+		pen.setWidthF(0.6);
+		pen.setCosmetic(true);
+		pen.setColor(Diagram::background_color == Qt::darkGray ? Qt::lightGray : Qt::darkGray);
+		//pen.setColor(Qt::red);
+
+		if (!m_help_horiz)
+		{
+			m_help_horiz = new QGraphicsLineItem(rect.topLeft().x(), 0, rect.topRight().x(), 0);
+			m_help_horiz->setZValue(1000);
+			m_help_horiz->setPen(pen);
+			addItem(m_help_horiz);
+		}
+
+		if (!m_help_verti)
+		{
+			m_help_verti = new QGraphicsLineItem(0, rect.topLeft().y(), 0, rect.bottomLeft().y());
+			m_help_verti->setZValue(1000);
+			m_help_verti->setPen(pen);
+			addItem(m_help_verti);
+		}
+	}
+
+	m_help_horiz->setY(position.y());
+	m_help_verti->setX(position.x());
+	return(position);
+}
+
+// Achim DiagramEditor helpCross
+/**
+	@brief Diagram::deleteHelpCross
+*/
+void Diagram::deleteHelpCross()
+{
+  // die linien nach gebrauch löschen
+	if(m_help_horiz){
+		delete m_help_horiz;
+							 // initialisiern, sonst Absturz
+		m_help_horiz=nullptr;
+	}
+	if(m_help_verti){
+		delete m_help_verti;
+		m_help_verti=nullptr;
+	}
+	if(!m_views.isEmpty()){
+		m_views.first()->viewport()->setCursor(m_saved_cursor);
+		m_views.clear();
 	}
 }
