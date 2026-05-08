@@ -29,9 +29,11 @@
 DiagramEventAddShape::DiagramEventAddShape(Diagram *diagram, QetShapeItem::ShapeType shape_type) :
 	DiagramEventInterface(diagram),
 	m_shape_type (shape_type),
-	m_shape_item (nullptr),
-	m_help_horiz (nullptr),
-	m_help_verti (nullptr)
+	m_shape_item (nullptr)
+	// Achim DiagramEditor helpCross
+	// Helpcross wurde neu implementiert
+	//m_help_horiz (nullptr),
+	//m_help_verti (nullptr)
 {
 	m_running = true;
 	init();
@@ -47,8 +49,12 @@ DiagramEventAddShape::~DiagramEventAddShape()
 		m_diagram->removeItem(m_shape_item);
 		delete m_shape_item;
 	}
-	delete m_help_horiz;
-	delete m_help_verti;
+	//delete m_help_horiz;
+	//delete m_help_verti;
+
+	// Hilfs-CrossCursor löschen
+	m_diagram->deleteHelpCross();	// Achim DiagramEditor helpCross
+
 
 	foreach (QGraphicsView *v, m_diagram->views())
 		v->setContextMenuPolicy(Qt::DefaultContextMenu);
@@ -114,7 +120,9 @@ void DiagramEventAddShape::mousePressEvent(QGraphicsSceneMouseEvent *event)
 */
 void DiagramEventAddShape::mouseMoveEvent(QGraphicsSceneMouseEvent *event)
 {
-	updateHelpCross(event->scenePos());
+		// HelpCreoss aufrufen
+	//updateHelpCross(event->scenePos()); // altes helpCross
+	m_diagram->updateHelpCross(event->scenePos());	// Achim DiagramEditor helpCross
 
 	if (m_shape_item && event->buttons() == Qt::NoButton)
 	{
@@ -204,11 +212,17 @@ void DiagramEventAddShape::init()
 		v->setContextMenuPolicy(Qt::NoContextMenu);
 }
 
-/**
+
+// Achim DiagramEditor helpCross
+// UpdateHelpCross wurde anders implementiert und wird hier nicht mehr gebraucht
+
+/*/**
 	@brief DiagramEventAddShape::updateHelpCross
 	Create and update the position of the cross to help user for draw new shape
 	@param p : the center of the cross
 */
+
+/*
 void DiagramEventAddShape::updateHelpCross(const QPointF &p)
 {
 		//If line isn't created yet, we create it.
@@ -242,3 +256,4 @@ void DiagramEventAddShape::updateHelpCross(const QPointF &p)
 	m_help_horiz->setY(point.y());
 	m_help_verti->setX(point.x());
 }
+*/

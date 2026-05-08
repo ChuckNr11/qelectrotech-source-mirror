@@ -19,6 +19,7 @@
 #define DIAGRAMEVENTADDIMAGE_H
 
 #include "diagrameventinterface.h"
+#include "qpoint.h"
 
 class Diagram;
 class DiagramImageItem;
@@ -46,6 +47,7 @@ class DiagramEventAddImage : public DiagramEventInterface
 
 		DiagramImageItem *m_image;
 		bool m_is_added;
+		QPointF m_pos;
 };
 
 #endif // DIAGRAMEVENTADDIMAGE_H

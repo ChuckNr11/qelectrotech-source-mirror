@@ -49,6 +49,9 @@ DiagramEventAddImage::~DiagramEventAddImage()
 
 	foreach (QGraphicsView *view, m_diagram->views())
 		view->setContextMenuPolicy((Qt::DefaultContextMenu));
+
+		// Hilfs-CrossCursor löschen
+	m_diagram->deleteHelpCross();	// Achim DiagramEditor helpCross
 }
 
 /**
@@ -60,10 +63,14 @@ void DiagramEventAddImage::mousePressEvent(QGraphicsSceneMouseEvent *event)
 {
 	if (m_image && event -> button() == Qt::LeftButton)
 	{
-		QPointF pos = event->scenePos();
+		// Achim DiagramEditor helpCross
+		/*QPointF pos = event->scenePos();
 		pos.rx() -= m_image->boundingRect().width()/2;
 		pos.ry() -= m_image->boundingRect().height()/2;
-		m_diagram -> undoStack().push (new AddGraphicsObjectCommand(m_image, m_diagram, pos));
+		m_diagram -> undoStack().push (new AddGraphicsObjectCommand(m_image, m_diagram, pos));*/
+		m_pos.rx() -= m_image->boundingRect().left();	// Achim DiagramEditor helpCross
+		m_pos.ry() -= m_image->boundingRect().top();	// Achim DiagramEditor helpCross
+		m_diagram -> undoStack().push (new AddGraphicsObjectCommand(m_image, m_diagram, m_pos));	// Achim DiagramEditor helpCross
 		
 		for (QGraphicsView *view : m_diagram->views()) {
 			view->setContextMenuPolicy((Qt::DefaultContextMenu));
@@ -91,6 +98,9 @@ void DiagramEventAddImage::mouseMoveEvent(QGraphicsSceneMouseEvent *event)
 		return;
 	}
 	
+		// HelpCreoss aufrufen
+	m_pos = m_diagram->updateHelpCross(event->scenePos());	// Achim DiagramEditor helpCross
+
 	QPointF pos = event->scenePos();
 	
 	if (!m_is_added)
@@ -103,7 +113,11 @@ void DiagramEventAddImage::mouseMoveEvent(QGraphicsSceneMouseEvent *event)
 		m_is_added = true;
 	}
 	
-	m_image->setPos(pos - m_image->boundingRect().center());
+		// Achim DiagramEditor helpCross
+		// image mit der linken oberen Ecke am HelpCross führen
+		// fühlt sich deutlich besser an
+	// m_image->setPos(pos - m_image->boundingRect().center());
+	m_image->setPos(pos - m_image->boundingRect().topLeft());
 	event->setAccepted(true);
 }
 

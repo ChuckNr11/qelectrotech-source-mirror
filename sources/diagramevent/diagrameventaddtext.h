@@ -19,8 +19,10 @@
 #define DIAGRAMEVENTADDTEXT_H
 
 #include "diagrameventinterface.h"
+#include "qpoint.h"
 
 class Diagram;
+class IndependentTextItem;
 
 /**
 	@brief The DiagramEventAddText class
@@ -30,11 +32,17 @@ class DiagramEventAddText : public DiagramEventInterface
 {
 		Q_OBJECT
 
-		public:
+	public:
 		DiagramEventAddText(Diagram *diagram);
 		~DiagramEventAddText() override;
 
 		void mousePressEvent (QGraphicsSceneMouseEvent *event) override;
+		void mouseMoveEvent (QGraphicsSceneMouseEvent *event) override;	// Achim DiagramEditor helpCross
+
+	private:
+		IndependentTextItem *m_text_item;
+		QPointF m_pos;
+		bool m_text_is_added;
 };
 
 #endif // DIAGRAMEVENTADDTEXT_H

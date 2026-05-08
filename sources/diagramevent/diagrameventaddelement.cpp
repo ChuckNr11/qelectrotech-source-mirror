@@ -83,6 +83,9 @@ DiagramEventAddElement::~DiagramEventAddElement()
 
 	for (auto view : m_diagram->views())
 		view -> setContextMenuPolicy(Qt::DefaultContextMenu);
+
+		// Hilfs-CrossCursor löschen
+	m_diagram->deleteHelpCross();	// Achim DiagramEditor helpCross
 }
 
 /**
@@ -93,6 +96,9 @@ DiagramEventAddElement::~DiagramEventAddElement()
 */
 void DiagramEventAddElement::mouseMoveEvent(QGraphicsSceneMouseEvent *event)
 {
+		// HelpCreoss aufrufen
+	m_diagram->updateHelpCross(event->scenePos());	// Achim DiagramEditor helpCross
+
 	if (m_element)
 	{
 		const auto pos_{Diagram::snapToGrid(event->scenePos())};
