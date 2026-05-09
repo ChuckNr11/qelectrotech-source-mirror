@@ -38,6 +38,8 @@ namespace QET {
 		extern QIcon ArrowRightDouble;
 		extern QIcon Autoconnect;
 		extern QIcon BringForward;
+		extern QIcon Cable;
+		extern QIcon CableShield;
 		extern QIcon Cancel;
 		extern QIcon Company;
 		extern QIcon Conductor;

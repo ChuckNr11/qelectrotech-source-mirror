@@ -23,6 +23,7 @@
 
 class QGraphicsSceneMouseEvent;
 class QGraphicsSceneWheelEvent;
+class QGraphicsSceneHoverEvent;
 class QKeyEvent;
 class Diagram;
 
@@ -49,12 +50,14 @@ class DiagramEventInterface : public QObject
 
 	public:
 		DiagramEventInterface(Diagram *diagram);
-		~DiagramEventInterface() override = 0;
+		~DiagramEventInterface() override;
 		virtual void mouseDoubleClickEvent (QGraphicsSceneMouseEvent *event);
 		virtual void mousePressEvent       (QGraphicsSceneMouseEvent *event);
 		virtual void mouseMoveEvent        (QGraphicsSceneMouseEvent *event);
 		virtual void mouseReleaseEvent     (QGraphicsSceneMouseEvent *event);
 		virtual void wheelEvent            (QGraphicsSceneWheelEvent *event);
+		virtual void hoverEnterEvent       (QGraphicsSceneHoverEvent *event);	// Achim cable
+		virtual void hoverLeaveEvent       (QGraphicsSceneHoverEvent *event);	// Achim cable
 		virtual void keyPressEvent         (QKeyEvent *event);
 		virtual void keyReleaseEvent       (QKeyEvent *event);
 		virtual bool isRunning () const;

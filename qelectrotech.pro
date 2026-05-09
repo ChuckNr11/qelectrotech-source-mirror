@@ -171,7 +171,10 @@ HEADERS += $$files(sources/*.h) \
            $$files(sources/xml/*.h) \
            $$files(sources/dxf/*.h) \
            $$files(sources/qet_elementscaler/*.h) \
-           $$files(sources/svg/*.h)
+           $$files(sources/svg/*.h) \
+           sources/cable_assist/diagramevent/diagrameventaddcable.h \        # Achim cable
+           sources/cable_assist/ui/cablepropertiesdialog.h \
+           sources/cable_assist/ui/cablepropertieswidget.h
 
 SOURCES += $$files(sources/*.cpp) \
            $$files(sources/editor/*.cpp) \
@@ -215,7 +218,10 @@ SOURCES += $$files(sources/*.cpp) \
            $$files(sources/xml/*.cpp) \
            $$files(sources/dxf/*.cpp) \
            $$files(sources/qet_elementscaler/*.cpp) \
-           $$files(sources/svg/*.cpp)
+           $$files(sources/svg/*.cpp) \
+           sources/cable_assist/diagramevent/diagrameventaddcable.cpp \      # Achim cable
+           sources/cable_assist/ui/cablepropertiesdialog.cpp \
+           sources/cable_assist/ui/cablepropertieswidget.cpp
 
 # Needed for use promote QTreeWidget in terminalstripeditor.ui
 INCLUDEPATH += sources/TerminalStrip/ui
@@ -246,7 +252,9 @@ FORMS += $$files(sources/richtext/*.ui) \
          $$files(sources/factory/ui/*.ui) \
          $$files(sources/print/*.ui) \
          $$files(sources/TerminalStrip/ui/*.ui) \
-         $$files(sources/TerminalStrip/ui/ConfigPage/*.ui)
+         $$files(sources/TerminalStrip/ui/ConfigPage/*.ui) \
+         sources/cable_assist/ui/cablepropertiesdialog.ui \       # Achim cable
+         sources/cable_assist/ui/cablepropertieswidget.ui
 
 UI_SOURCES_DIR = sources/ui/
 UI_HEADERS_DIR = sources/ui/

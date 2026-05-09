@@ -52,6 +52,16 @@ void DiagramEventInterface::wheelEvent(QGraphicsSceneWheelEvent *event) {
 	Q_UNUSED (event);
 }
 
+// Achim cable
+void DiagramEventInterface::hoverEnterEvent(QGraphicsSceneHoverEvent *event) {
+	Q_UNUSED (event);
+}
+
+// Achim cable
+void DiagramEventInterface::hoverLeaveEvent(QGraphicsSceneHoverEvent *event) {
+	Q_UNUSED (event);
+}
+
 /**
 	@brief DiagramEventInterface::keyPressEvent
 	By default, press escape key abort the current action

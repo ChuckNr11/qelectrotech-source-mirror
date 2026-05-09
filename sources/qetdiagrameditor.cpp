@@ -25,6 +25,7 @@
 #include "diagramevent/diagrameventaddimage.h"
 #include "diagramevent/diagrameventaddshape.h"
 #include "diagramevent/diagrameventaddtext.h"
+#include "cable_assist/diagramevent/diagrameventaddcable.h"
 #include "diagramview.h"
 #include "elementspanelwidget.h"
 #include "factory/qetgraphicstablefactory.h"
@@ -682,6 +683,7 @@ void QETDiagramEditor::setUpActions()
 	QAction *add_ellipse   = m_add_item_actions_group.addAction(QET::Icons::PartEllipse,   tr("Ajouter une ellipse"));
 	QAction *add_polyline  = m_add_item_actions_group.addAction(QET::Icons::PartPolygon,   tr("Ajouter une polyligne"));
 	QAction *add_terminal_strip = m_add_item_actions_group.addAction(QET::Icons::TerminalStrip, tr("Ajouter un plan de bornes"));
+	QAction *add_cable	   = m_add_item_actions_group.addAction(QET::Icons::Cable, tr("Ajouter un câble"));    // Achim ToDo Translate  Füge ein Kabel hinzu   Add a cable
 
 	add_text     ->setStatusTip(tr("Ajoute un champ de texte sur le folio actuel"));
 	add_image    ->setStatusTip(tr("Ajoute une image sur le folio actuel"));
@@ -690,6 +692,7 @@ void QETDiagramEditor::setUpActions()
 	add_ellipse  ->setStatusTip(tr("Ajoute une ellipse sur le folio actuel"));
 	add_polyline ->setStatusTip(tr("Ajoute une polyligne sur le folio actuel"));
 	add_terminal_strip->setStatusTip(tr("Ajoute un plan de bornier sur le folio actuel"));
+	add_cable    ->setStatusTip(tr("Ajouter un câble à la feuille actuelle."));   // Achim ToDo Translate  deutsch: Kabel zur aktuellen Seite hinzufügen  english: Add a cable to the current sheet.
 
 	add_text     ->setData(QStringLiteral("text"));
 	add_image    ->setData(QStringLiteral("image"));
@@ -698,12 +701,14 @@ void QETDiagramEditor::setUpActions()
 	add_ellipse  ->setData(QStringLiteral("ellipse"));
 	add_polyline ->setData(QStringLiteral("polyline"));
 	add_terminal_strip->setData(QStringLiteral("terminal_strip"));
+	add_cable    ->setData(QStringLiteral("cable"));
 
 	add_text->setCheckable(true);
 	add_line->setCheckable(true);
 	add_rectangle->setCheckable(true);
 	add_ellipse->setCheckable(true);
 	add_polyline->setCheckable(true);
+	add_cable->setCheckable(true);		// Achim cable
 
 	connect(&m_add_item_actions_group, &QActionGroup::triggered, this, &QETDiagramEditor::addItemGroupTriggered);
 
@@ -1464,6 +1469,12 @@ void QETDiagramEditor::addItemGroupTriggered(QAction *action)
 		{
 			AddTerminalStripItemDialog::openDialog(diagram_view->diagram(), this);
 		}
+	}
+
+	else if (value == "cable"){
+
+		diagram_event = new DiagramEventAddCable(d);
+
 	}
 
 	if (diagram_event)
