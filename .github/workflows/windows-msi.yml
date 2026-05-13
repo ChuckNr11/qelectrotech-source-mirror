@@ -1,0 +1,275 @@
+name: Windows MSI (WiX v7)
+
+on:
+  workflow_dispatch:
+    inputs:
+      run_id:
+        description: "Run ID of 'Windows Build' (leave empty for the latest successful run)"
+        required: false
+        default: ""
+
+jobs:
+  build-msi:
+    name: Build MSI with WiX v7
+    runs-on: windows-latest
+
+    steps:
+      # ----------------------------------------------------------------
+      # 1. Checkout (to retrieve QElectroTech.wxs and sources)
+      # ----------------------------------------------------------------
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      # ----------------------------------------------------------------
+      # 2. Download the portable artifact from the main build
+      #    Requires windows-build.yml to upload an artifact named
+      #    "qelectrotech-windows-portable" (fixed name)
+      # ----------------------------------------------------------------
+      - name: Download portable artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: qelectrotech-windows-portable
+          path: artifact\files
+          run-id: ${{ github.event.inputs.run_id || github.run_id }}
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          repository: ${{ github.repository }}
+
+      # ----------------------------------------------------------------
+      # 3. Extract version from sources
+      # ----------------------------------------------------------------
+      - name: Extract version
+        id: version
+        shell: pwsh
+        run: |
+          # Version from qetversion.cpp (same logic as windows-build.yml)
+          $src = Get-Content "sources\qetversion.cpp" -Raw -ErrorAction SilentlyContinue
+          if ($src -match 'return QVersionNumber\{([^}]+)\}') {
+            $ver = $Matches[1] -replace '\s','' -replace ',','.'
+          } else {
+            # Fallback: CMakeLists.txt
+            $cmake = Get-Content "CMakeLists.txt" -Raw
+            if ($cmake -match 'project\s*\([^)]*VERSION\s+([\d]+\.[\d]+\.[\d]+)') {
+              $ver = $Matches[1]
+            } else {
+              $ver = "0.0.0"
+            }
+          }
+
+          # Numeric MSI version: 4 digits required (e.g. 0.100.1.0)
+          $verMsi = "$ver.0"
+
+          # Short SHA for the display version
+          $sha = git rev-parse --short HEAD 2>$null
+          if (-not $sha) { $sha = "unknown" }
+
+          # Cumulative revision number (same calculation as windows-build.yml)
+          $count = git rev-list HEAD --count 2>$null
+          $rev = [int]$count + 473
+
+          $verDisplay = "${ver}-r${rev}-${sha}_x86_64-win64"
+
+          echo "VERSION_MSI=$verMsi"          >> $env:GITHUB_OUTPUT
+          echo "VERSION_DISPLAY=$verDisplay"  >> $env:GITHUB_OUTPUT
+          Write-Host "Version MSI     : $verMsi"
+          Write-Host "Version display : $verDisplay"
+
+      # ----------------------------------------------------------------
+      # 4. Install WiX v7, accept EULA and install WixUI extension
+      #    All done in one step: PATH is updated within the same step
+      #    so wix is immediately available for eula and extension commands
+      # ----------------------------------------------------------------
+      - name: Install WiX v7
+        shell: pwsh
+        run: |
+          dotnet tool install --global wix --version 7.0.0
+          # Update PATH immediately for the rest of this step
+          $toolsPath = [System.IO.Path]::Combine($env:USERPROFILE, '.dotnet', 'tools')
+          $env:PATH = "$toolsPath;$env:PATH"
+          # Also export for subsequent steps
+          echo $toolsPath >> $env:GITHUB_PATH
+          # Accept OSMF EULA (official CI/CD method: writes a sentinel file)
+          wix eula accept wix7
+          # Install WixUI extension
+          wix extension add WixToolset.UI.wixext/7.0.0
+          Write-Host "WiX v7 installed, EULA accepted, UI extension added."
+
+      # ----------------------------------------------------------------
+      # 5. Check that the WXS file exists in the repository
+      # ----------------------------------------------------------------
+      - name: Check WXS file
+        shell: pwsh
+        run: |
+          $wxs = "build-aux\windows\QElectroTech.wxs"
+          if (-not (Test-Path $wxs)) {
+            Write-Error "WXS file not found: $wxs"
+            Write-Host "Contents of build-aux\windows\ :"
+            Get-ChildItem "build-aux\windows\" -ErrorAction SilentlyContinue
+            exit 1
+          }
+          Write-Host "WXS found: $wxs"
+
+      # ----------------------------------------------------------------
+      # 6. Check the artifact structure and locate files/
+      # ----------------------------------------------------------------
+      - name: Check artifact structure
+        shell: pwsh
+        run: |
+          Write-Host "=== Contents of artifact\files (2 levels) ==="
+          Get-ChildItem -Path "artifact\files" -Depth 2 |
+            Select-Object FullName | Format-Table -AutoSize
+
+          # Search for qelectrotech.exe in the artifact
+          $exe = Get-ChildItem -Path "artifact\files" -Filter "qelectrotech.exe" -Recurse | Select-Object -First 1
+          if (-not $exe) {
+            Write-Error "qelectrotech.exe not found in artifact"
+            exit 1
+          }
+          Write-Host "Executable: $($exe.FullName) ($([math]::Round($exe.Length/1MB,1)) MB)"
+
+          # FilesDir = folder containing bin\
+          $binDir   = $exe.Directory.FullName
+          $filesDir = Split-Path $binDir -Parent
+
+          echo "FILES_DIR=$filesDir" >> $env:GITHUB_ENV
+          Write-Host "FILES_DIR: $filesDir"
+
+      # ----------------------------------------------------------------
+      # 7. Convert LICENSE (GPL-2) to RTF for the WixUI licence screen
+      #    RTF is the only format accepted by Windows Installer.
+      #    The conversion wraps plain text lines in basic RTF markup.
+      # ----------------------------------------------------------------
+      - name: Convert LICENSE to RTF
+        shell: pwsh
+        run: |
+          $licSrc  = "LICENSE"
+          $licRtf  = "$env:TEMP\License.rtf"
+
+          if (-not (Test-Path $licSrc)) {
+            Write-Error "LICENSE file not found in repository root"
+            exit 1
+          }
+
+          $lines = Get-Content $licSrc -Encoding UTF8
+
+          # RTF header — Courier New, 9pt, black
+          $rtf = New-Object System.Text.StringBuilder
+          [void]$rtf.AppendLine('{\rtf1\ansi\ansicpg1252\deff0')
+          [void]$rtf.AppendLine('{\fonttbl{\f0\fmodern\fprq1\fcharset0 Courier New;}}')
+          [void]$rtf.AppendLine('{\colortbl;\red0\green0\blue0;}')
+          [void]$rtf.AppendLine('\f0\fs18\cf1')
+
+          foreach ($line in $lines) {
+            # Escape RTF special characters
+            $escaped = $line `
+              -replace '\\', '\\\\' `
+              -replace '\{', '\{' `
+              -replace '\}', '\}'
+            [void]$rtf.AppendLine("$escaped\par")
+          }
+
+          [void]$rtf.AppendLine('}')
+
+          [System.IO.File]::WriteAllText($licRtf, $rtf.ToString(), [System.Text.Encoding]::ASCII)
+          echo "LICENSE_RTF=$licRtf" >> $env:GITHUB_ENV
+          Write-Host "License.rtf generated: $licRtf ($([math]::Round((Get-Item $licRtf).Length/1KB,1)) KB)"
+
+      # ----------------------------------------------------------------
+      # 8. Replace Lancer QET.bat with the MSI-specific version
+      #    The portable version uses relative paths suited for the zip.
+      #    The MSI version uses %~dp0 to resolve paths relative to
+      #    the installation directory in Program Files.
+      # ----------------------------------------------------------------
+      - name: Replace Lancer QET.bat for MSI
+        shell: pwsh
+        run: |
+          $bat = "$env:FILES_DIR\Lancer QET.bat"
+          $content = "@echo off`r`nstart `"`" `"%~dp0bin\qelectrotech.exe`" --common-elements-dir=`"%~dp0elements/`" --common-tbt-dir=`"%~dp0titleblocks/`" --lang-dir=`"%~dp0lang/`" -style windowsvista`r`n"
+          [System.IO.File]::WriteAllText($bat, $content, [System.Text.Encoding]::ASCII)
+          Write-Host "Lancer QET.bat replaced for MSI installation."
+          Write-Host "=== Content of new Lancer QET.bat ==="
+          Get-Content $bat
+
+      # ----------------------------------------------------------------
+      # 9. Build the MSI
+      # ----------------------------------------------------------------
+      - name: Build MSI
+        shell: pwsh
+        run: |
+          $version    = "${{ steps.version.outputs.VERSION_MSI }}"
+          $verDisplay = "${{ steps.version.outputs.VERSION_DISPLAY }}"
+          $filesDir   = $env:FILES_DIR
+          $licRtf     = $env:LICENSE_RTF
+          $wxs        = "build-aux\windows\QElectroTech.wxs"
+          $outputName = "QElectroTech-${verDisplay}.msi"
+
+          New-Item -ItemType Directory -Force -Path "dist" | Out-Null
+
+          Write-Host "=== wix build ==="
+          Write-Host "  WXS         : $wxs"
+          Write-Host "  Version     : $version"
+          Write-Host "  FilesDir    : $filesDir"
+          Write-Host "  LicenseRtf  : $licRtf"
+          Write-Host "  Output      : dist\$outputName"
+
+          wix build $wxs `
+            -arch x64 `
+            -d "Version=$version" `
+            -d "ProductVersion=$verDisplay" `
+            -d "FilesDir=$filesDir" `
+            -d "LicenseRtf=$licRtf" `
+            -ext WixToolset.UI.wixext `
+            -o "dist\$outputName"
+
+          if (-not (Test-Path "dist\$outputName")) {
+            Write-Error "MSI not generated: dist\$outputName"
+            exit 1
+          }
+
+          $size = [math]::Round((Get-Item "dist\$outputName").Length / 1MB, 1)
+          Write-Host "MSI generated: dist\$outputName ($size MB) ✓"
+          echo "MSI_NAME=$outputName" >> $env:GITHUB_ENV
+
+      # ----------------------------------------------------------------
+      # 10. Upload the MSI artifact
+      # ----------------------------------------------------------------
+      - name: Upload MSI artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: qelectrotech-windows-msi
+          path: dist\*.msi
+          retention-days: 14
+          if-no-files-found: error
+
+      # ----------------------------------------------------------------
+      # 11. Upload MSI to nightly release
+      #     The nightly release is created/updated by windows-build.yml.
+      #     The MSI is added here so the GitHub Pages can link to it.
+      # ----------------------------------------------------------------
+      - name: Upload MSI to nightly release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: nightly
+          files: dist/*.msi
+          fail_on_unmatched_files: true
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      # ----------------------------------------------------------------
+      # 12. Summary
+      # ----------------------------------------------------------------
+      - name: Summary
+        if: always()
+        shell: pwsh
+        run: |
+          Write-Host "=== MSI build summary ==="
+          Write-Host "Version      : ${{ steps.version.outputs.VERSION_DISPLAY }}"
+          Write-Host "WiX          : v7.0.0"
+          Write-Host "Runner image : ${{ runner.os }} / ${{ runner.arch }}"
+          if (Test-Path "dist\$env:MSI_NAME") {
+            $size = [math]::Round((Get-Item "dist\$env:MSI_NAME").Length / 1MB, 1)
+            Write-Host "MSI          : $env:MSI_NAME ($size MB) ✓"
+          } else {
+            Write-Host "MSI          : FAILED ✗"
+          }
