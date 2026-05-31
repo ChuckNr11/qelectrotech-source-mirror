@@ -75,8 +75,9 @@ class ConductorProperties
 				the kind of a particular conductor:
 				Single: singleline symbols, no text input
 				Multi: text input, no symbol
+				Cable: text input, symbol
 			*/
-		enum ConductorType { Single, Multi };
+		enum ConductorType { Single, Multi}; //, Cable };	// Achim Cable assist v2
 
 
 		//Attributes

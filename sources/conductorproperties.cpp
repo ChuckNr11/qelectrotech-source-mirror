@@ -458,6 +458,7 @@ QString ConductorProperties::typeToString(ConductorType t)
 	{
 		case Single: return("single");
 		case Multi:  return("multi");
+		//case Cable:  return("cable");	// Achim cable assist v2
 	}
 	return QString();
 }

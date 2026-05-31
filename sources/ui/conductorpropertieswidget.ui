@@ -27,7 +27,7 @@
        <item row="0" column="0">
         <widget class="QTabWidget" name="tabWidget_2">
          <property name="currentIndex">
-          <number>0</number>
+          <number>2</number>
          </property>
          <widget class="QWidget" name="Multifilaire">
           <attribute name="title">
@@ -448,6 +448,111 @@
            </item>
           </layout>
          </widget>
+         <widget class="QWidget" name="tab">
+          <attribute name="title">
+           <string>Seite</string>
+          </attribute>
+          <layout class="QGridLayout" name="gridLayout_10">
+           <item row="0" column="0">
+            <widget class="QGroupBox" name="groupBox">
+             <property name="title">
+              <string>Cable</string>
+             </property>
+             <property name="checkable">
+              <bool>true</bool>
+             </property>
+             <property name="checked">
+              <bool>false</bool>
+             </property>
+             <layout class="QGridLayout" name="gridLayout_6">
+              <item row="0" column="2">
+               <widget class="QPushButton" name="m_remove_cable_pb">
+                <property name="text">
+                 <string/>
+                </property>
+                <property name="icon">
+                 <iconset resource="../../qelectrotech.qrc">
+                  <normaloff>:/ico/16x16/list-remove.png</normaloff>:/ico/16x16/list-remove.png</iconset>
+                </property>
+               </widget>
+              </item>
+              <item row="1" column="1" colspan="4">
+               <widget class="QTreeWidget" name="treeWidget_2">
+                <attribute name="headerVisible">
+                 <bool>false</bool>
+                </attribute>
+                <column>
+                 <property name="text">
+                  <string notr="true">1</string>
+                 </property>
+                </column>
+               </widget>
+              </item>
+              <item row="0" column="4">
+               <widget class="QPushButton" name="m_move_down_pb">
+                <property name="text">
+                 <string/>
+                </property>
+                <property name="icon">
+                 <iconset resource="../../qelectrotech.qrc">
+                  <normaloff>:/ico/16x16/go-down.png</normaloff>:/ico/16x16/go-down.png</iconset>
+                </property>
+               </widget>
+              </item>
+              <item row="1" column="0">
+               <widget class="QTreeWidget" name="treeWidget">
+                <column>
+                 <property name="text">
+                  <string>Description</string>
+                 </property>
+                </column>
+                <column>
+                 <property name="text">
+                  <string>Value</string>
+                 </property>
+                </column>
+               </widget>
+              </item>
+              <item row="0" column="0">
+               <spacer name="horizontalSpacer">
+                <property name="orientation">
+                 <enum>Qt::Horizontal</enum>
+                </property>
+                <property name="sizeHint" stdset="0">
+                 <size>
+                  <width>253</width>
+                  <height>20</height>
+                 </size>
+                </property>
+               </spacer>
+              </item>
+              <item row="0" column="3">
+               <widget class="QPushButton" name="m_new_cable_pb_2">
+                <property name="text">
+                 <string/>
+                </property>
+                <property name="icon">
+                 <iconset resource="../../qelectrotech.qrc">
+                  <normaloff>:/ico/16x16/go-up.png</normaloff>:/ico/16x16/go-up.png</iconset>
+                </property>
+               </widget>
+              </item>
+              <item row="0" column="1">
+               <widget class="QPushButton" name="m_new_cable_pb">
+                <property name="text">
+                 <string/>
+                </property>
+                <property name="icon">
+                 <iconset resource="../../qelectrotech.qrc">
+                  <normaloff>:/ico/16x16/list-add.png</normaloff>:/ico/16x16/list-add.png</iconset>
+                </property>
+               </widget>
+              </item>
+             </layout>
+            </widget>
+           </item>
+          </layout>
+         </widget>
         </widget>
        </item>
       </layout>
@@ -583,7 +688,6 @@
  </customwidgets>
  <tabstops>
   <tabstop>tabWidget</tabstop>
-  <tabstop>tabWidget_2</tabstop>
   <tabstop>m_multiwires_gb</tabstop>
   <tabstop>m_one_text_per_folio_cb</tabstop>
   <tabstop>m_text_size_sb</tabstop>
@@ -717,22 +821,6 @@
    </hints>
   </connection>
   <connection>
-   <sender>m_phase_cb</sender>
-   <signal>clicked()</signal>
-   <receiver>m_update_preview_pb</receiver>
-   <slot>click()</slot>
-   <hints>
-    <hint type="sourcelabel">
-     <x>126</x>
-     <y>340</y>
-    </hint>
-    <hint type="destinationlabel">
-     <x>254</x>
-     <y>248</y>
-    </hint>
-   </hints>
-  </connection>
-  <connection>
    <sender>m_pen_cb</sender>
    <signal>clicked()</signal>
    <receiver>m_update_preview_pb</receiver>
@@ -751,16 +839,16 @@
   <connection>
    <sender>m_phase_sb</sender>
    <signal>valueChanged(int)</signal>
-   <receiver>m_update_preview_pb</receiver>
-   <slot>click()</slot>
+   <receiver>m_phase_slider</receiver>
+   <slot>setValue(int)</slot>
    <hints>
     <hint type="sourcelabel">
-     <x>357</x>
-     <y>340</y>
+     <x>356</x>
+     <y>322</y>
     </hint>
     <hint type="destinationlabel">
-     <x>305</x>
-     <y>248</y>
+     <x>207</x>
+     <y>325</y>
     </hint>
    </hints>
   </connection>
