@@ -601,6 +601,14 @@ void Diagram::clearEventInterface()
 	}
 }
 
+// Achim cable assist
+bool Diagram::eventInterfaceIsActive()
+{
+	if(m_event_interface)
+		return(true);
+	return(false);
+}
+
 /**
 	@brief Diagram::conductorsAutonumName
 	@return the name of autonum to use.

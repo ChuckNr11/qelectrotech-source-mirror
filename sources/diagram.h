@@ -149,6 +149,7 @@ class Diagram : public QGraphicsScene
 		QUuid uuid();
 		void setEventInterface (DiagramEventInterface *event_interface);
 		void clearEventInterface();
+		bool eventInterfaceIsActive(); // Achim cable assist
 
 		//methods related to autonum
 		QString conductorsAutonumName() const;

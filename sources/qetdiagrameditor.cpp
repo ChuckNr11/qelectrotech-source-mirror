@@ -1434,18 +1434,33 @@ void QETDiagramEditor::addItemGroupTriggered(QAction *action)
 	DiagramEventInterface *diagram_event = nullptr;
 
 	if (value == "line")
-		diagram_event = new DiagramEventAddShape (d, QetShapeItem::Line);
+		if(d->eventInterfaceIsActive())
+			d->clearEventInterface();
+		else
+			diagram_event = new DiagramEventAddShape (d, QetShapeItem::Line);
+
 	else if (value == "rectangle")
-		diagram_event = new DiagramEventAddShape (d, QetShapeItem::Rectangle);
+		if(d->eventInterfaceIsActive())
+			d->clearEventInterface();
+		else
+			diagram_event = new DiagramEventAddShape (d, QetShapeItem::Rectangle);
+
 	else if (value == "ellipse")
-		diagram_event = new DiagramEventAddShape (d, QetShapeItem::Ellipse);
-	else if (value == "polyline")
-	{
-		diagram_event = new DiagramEventAddShape (d, QetShapeItem::Polygon);
-		statusBar()-> showMessage(tr("Double-click pour terminer la forme, Click droit pour annuler le dernier point"));
-		connect(diagram_event, &DiagramEventInterface::destroyed, [this]() {
-		statusBar()->clearMessage();
-		});
+		if(d->eventInterfaceIsActive())
+			d->clearEventInterface();
+		else
+			diagram_event = new DiagramEventAddShape (d, QetShapeItem::Ellipse);
+
+	else if (value == "polyline"){
+		if(d->eventInterfaceIsActive())
+			d->clearEventInterface();
+		else{
+			diagram_event = new DiagramEventAddShape (d, QetShapeItem::Polygon);
+			statusBar()-> showMessage(tr("Double-click pour terminer la forme, Click droit pour annuler le dernier point"));
+			connect(diagram_event, &DiagramEventInterface::destroyed, [this]() {
+			statusBar()->clearMessage();
+			});
+		}
 	}
 	else if (value == "image")
 	{
@@ -1472,8 +1487,10 @@ void QETDiagramEditor::addItemGroupTriggered(QAction *action)
 	}
 
 	else if (value == "cable"){
-
-		diagram_event = new DiagramEventAddCable(d);
+		if(d->eventInterfaceIsActive())
+			d->clearEventInterface();
+		else
+			diagram_event = new DiagramEventAddCable(d);
 
 	}
 
