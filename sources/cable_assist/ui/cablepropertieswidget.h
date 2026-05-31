@@ -1,6 +1,7 @@
 #ifndef CABLEPROPERTIESWIDGET_H
 #define CABLEPROPERTIESWIDGET_H
 
+#include "sources/qetproject.h"
 #include <QWidget>
 #include <QPair>
 #include <QList>
@@ -15,99 +16,76 @@ class CablePropertiesDialog;
 
 class CablePropertiesWidget : public QWidget
 {
-	friend CablePropertiesDialog;
+	//friend CablePropertiesDialog;
 
 
 	Q_OBJECT
 
   public:
-
-	enum NORM {
-		keine =0,
-		DIN_47100,
-		VDE_0293_308_S2,
-		VDE_0293_308_S1_massive,
-		VDE_0293_308_S1_flex,
-		VDE_0293_color,
-		VDE_0815_2x2,
-		VDE_0815,
-		VDE_0816_star_quad_ab,
-		VDE_0816_star_quad_color_ab,
-		VDE_0816_star_quad,
-		Zahlen
+	enum cableData{
+		LABEL = 0,		// ELMT_LABEL
+		PLANT,			// ELMT_PLANT
+		LOCATION,		// ELMT_LOCATION
+		ANNOTATON,		// ELMT_COMMENT
+		FUNCTION,		// ELMT_FUNCTION
+		VOLTAGE,		//
+		TYPE,
+		COND_COUNT,
+		MARKER,
+		CROSS_SECTION,
+		UNIT,
 	};
-	Q_ENUM (NORM)
 
-
-		   // void extracted();
-	explicit CablePropertiesWidget(int wireCount, QWidget* parent = nullptr);
+	explicit CablePropertiesWidget(int wireCount, Diagram *diagram, QWidget* parent = nullptr);
 	~CablePropertiesWidget();
 
 	QStringList cableData() const;
 
+  private:
+	Ui::CablePropertiesWidget* ui;
 
-  private slots:
-
-	void cable_type_editTextChanged(const QString &text);
-	void on_m_pe_chb_stateChanged(int arg1);
-	void wire_count_textChanged(const QString &text);
-	void cross_section_currentIndexChanged(int index);
-	void unit_mm_toggled(bool checked);
-	void unit_qmm_toggled(bool checked);
-	void unit_awg_toggled(bool checked);
-	void core_identification_currentIndexChanged(int index);
-	void plant_textChanged(const QString &text);
-	void location_textChanged(const QString &text);
-	void label_textChanged(const QString &text);
-	void on_m_treeWidget_itemDoubleClicked(QTreeWidgetItem *item, int column);
+	void init();
+	void parseProjectForCable();
+	void addCableToTreewidget(QList<QPointer<Element>> cable);
+	void addNewCable(QStringList cable_data);
+	void updateNewCable();
+	void setConnections(bool);
 
   signals:
 	void disableOkButton(bool disable);
 
+  private slots:
+	void textHasChanged();//const QString &text);
+	void on_m_conductor_count_le_textChanged(const QString &text);
+/*	void on_m_plant_le_textChanged(const QString &text);
+	void on_m_location_le_textChanged(const QString &text);
+	void on_m_label_le_textChanged(const QString &text);
+	void on_m_function_le_textChanged(const QString &text);
+	void on_m_cable_type_cb_editTextChanged(const QString &text);
+
+	void on_m_cross_section_cb_currentIndexChanged(int index);
+	void on_m_mm_rb_toggled(bool checked);
+	void on_m_qmm_rb_toggled(bool checked);
+	void on_m_awg_rb_toggled(bool checked);
+	void on_m_core_identification_cb_currentIndexChanged(int index);
+
+	void on_m_pe_chb_stateChanged(int arg1);
+
+	void on_m_schirm_chb_checkStateChanged(const Qt::CheckState &arg1);
+
+	void on_m_pe_chb_checkStateChanged(const Qt::CheckState &arg1);*/
+
+	void on_m_newcable__tb_clicked();
+
   private:
-	Ui::CablePropertiesWidget* ui;
-
-	using TStandardList = QList<QString>;
-	using TVDE0293List = QList<QList<QString>>;
-	using TCbWidgetList = QList<QList<QString>>;
-
-	void init();
-	void updateCableData();
-	void updateTreeWidget();
-	void activeConnections(bool active);
-	void erstelleAdern(QList<QString> list);
-
-	QTreeWidgetItem *kabel;
-
+	Diagram *m_diagram;
 	int m_wire_count;
+
 	QStringList
-		m_qmm_list,
-		m_awg_list,
-		m_mm_list;
-	QList<QString>
 		m_cable_data;
 
-	TStandardList
-		m_actual_core_list,
-		m_din47100_core_stranding,
-		m_din47100_pair_stranding,
-		m_zahlen;
-
-	TCbWidgetList
-		m_core_identification_list,
-		m_core_identification_list_O;
-
-	TVDE0293List
-		m_vde0293_308_s2_j,
-		m_vde0293_308_s1_massive_j,
-		m_vde0293_308_s1_flex_j,
-		m_vde0293_308_s2_o,
-		m_vde0293_308_s1_massive_o,
-		m_vde0293_308_s1_flex_o;
-
-
-	QMap<QString,NORM> m_cable_type_map;
-
+	QList<QList<QPointer<Element>>> m_cable_list;		/// Liste aller Kabel aus dem Projekt
+	QTreeWidgetItem *m_new_cable=nullptr;
 };
 
 #endif // CABLEPROPERTIESWIDGET_H

@@ -131,7 +131,7 @@ void DiagramEventAddCable::mouseReleaseEvent(QGraphicsSceneMouseEvent *event)
 
 			   // call Dialog
 		m_cable_data_.clear();
-		m_cable_data_=CablePropertiesDialog::cableDialog(m_cable_data,diagramEditor(),m_cond_list.count());
+		m_cable_data_=CablePropertiesDialog::cableDialog(m_cable_data, m_cond_list.count(), m_diagram, diagramEditor());
 		if (!m_cable_data_.isEmpty())
 			makeCable();
 
@@ -452,7 +452,7 @@ void DiagramEventAddCable::makeCable()
 			dc.addValue("function", m_cable_data_.value(0));	// function = Kabeltyp
 			dc.addValue("description", m_cable_data_.value(1)+"x"+m_cable_data_.value(2)+m_cable_data_.value(3));	// Textual description =
 			dc.addValue("designation", m_cable_data_.value(i));	// Order Number = Aderbezeichnung
-			dc.addValue("machine_manufacturer_reference", QString::number(i-9));	// interne NUmmer
+			dc.addValue("machine_manufacturer_reference", QString::number(i-9));	// interne Nummer
 			dc.addValue("unity", m_cable_data_.value(3));	// Einheit
 			element->setElementInformations(dc);
 

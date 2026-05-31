@@ -23,72 +23,155 @@
    <item>
     <layout class="QHBoxLayout" name="horizontalLayout_3">
      <item>
-      <layout class="QGridLayout" name="gridLayout_2">
-       <item row="0" column="0">
-        <widget class="QLabel" name="label_4">
+      <layout class="QGridLayout" name="gridLayout">
+       <item row="1" column="1">
+        <widget class="QLineEdit" name="m_location_le"/>
+       </item>
+       <item row="4" column="1">
+        <widget class="QComboBox" name="m_voltage_cb">
+         <property name="editable">
+          <bool>true</bool>
+         </property>
+         <item>
+          <property name="text">
+           <string/>
+          </property>
+         </item>
+         <item>
+          <property name="text">
+           <string notr="true">230V AC</string>
+          </property>
+         </item>
+         <item>
+          <property name="text">
+           <string notr="true">12V AC</string>
+          </property>
+         </item>
+         <item>
+          <property name="text">
+           <string notr="true">12V DC</string>
+          </property>
+         </item>
+         <item>
+          <property name="text">
+           <string notr="true">24V AC</string>
+          </property>
+         </item>
+         <item>
+          <property name="text">
+           <string notr="true">24V DC</string>
+          </property>
+         </item>
+         <item>
+          <property name="text">
+           <string notr="true">400V AC</string>
+          </property>
+         </item>
+        </widget>
+       </item>
+       <item row="2" column="0">
+        <widget class="QLabel" name="label_3">
          <property name="text">
-          <string>Type of cable</string>
+          <string>Label</string>
+         </property>
+        </widget>
+       </item>
+       <item row="4" column="0">
+        <widget class="QLabel" name="label_8">
+         <property name="text">
+          <string>Voltage</string>
          </property>
         </widget>
        </item>
        <item row="0" column="1">
-        <widget class="QLabel" name="label_10">
-         <property name="text">
-          <string>*</string>
-         </property>
-        </widget>
+        <widget class="QLineEdit" name="m_plant_le"/>
        </item>
-       <item row="0" column="2">
-        <widget class="QComboBox" name="m_cable_type_cb">
-         <property name="editable">
-          <bool>true</bool>
-         </property>
-        </widget>
-       </item>
-       <item row="0" column="3">
-        <layout class="QHBoxLayout" name="horizontalLayout_2">
-         <item>
-          <widget class="QCheckBox" name="m_pe_chb">
-           <property name="text">
-            <string>PE</string>
-           </property>
-           <property name="checked">
-            <bool>true</bool>
-           </property>
-          </widget>
-         </item>
-        </layout>
+       <item row="3" column="1">
+        <widget class="QLineEdit" name="m_function_le"/>
        </item>
        <item row="1" column="0">
-        <widget class="QLabel" name="label_6">
+        <widget class="QLabel" name="label_2">
          <property name="text">
-          <string>Count of wire</string>
+          <string>Location</string>
          </property>
         </widget>
        </item>
-       <item row="1" column="1">
-        <widget class="QLabel" name="label_11">
+       <item row="0" column="0">
+        <widget class="QLabel" name="label">
+         <property name="text">
+          <string>Plant</string>
+         </property>
+        </widget>
+       </item>
+       <item row="2" column="1">
+        <widget class="QLineEdit" name="m_label_le">
          <property name="text">
           <string/>
          </property>
         </widget>
        </item>
-       <item row="1" column="2">
-        <widget class="QLineEdit" name="m_wire_count_le">
+       <item row="5" column="1">
+        <spacer name="verticalSpacer_2">
+         <property name="orientation">
+          <enum>Qt::Vertical</enum>
+         </property>
+         <property name="sizeHint" stdset="0">
+          <size>
+           <width>118</width>
+           <height>17</height>
+          </size>
+         </property>
+        </spacer>
+       </item>
+       <item row="3" column="0">
+        <widget class="QLabel" name="label_7">
          <property name="text">
-          <string/>
+          <string>Function</string>
          </property>
         </widget>
        </item>
-       <item row="1" column="3">
+      </layout>
+     </item>
+     <item>
+      <spacer name="horizontalSpacer_2">
+       <property name="orientation">
+        <enum>Qt::Horizontal</enum>
+       </property>
+       <property name="sizeType">
+        <enum>QSizePolicy::Fixed</enum>
+       </property>
+       <property name="sizeHint" stdset="0">
+        <size>
+         <width>18</width>
+         <height>20</height>
+        </size>
+       </property>
+      </spacer>
+     </item>
+     <item>
+      <layout class="QGridLayout" name="gridLayout_2">
+       <item row="3" column="0">
+        <widget class="QLabel" name="label_14">
+         <property name="text">
+          <string>Unit</string>
+         </property>
+        </widget>
+       </item>
+       <item row="2" column="3">
         <widget class="QCheckBox" name="m_schirm_chb">
+         <property name="enabled">
+          <bool>true</bool>
+         </property>
          <property name="text">
           <string>Schirm</string>
          </property>
         </widget>
        </item>
-       <item row="2" column="0" colspan="3">
-        <widget class="QGroupBox" name="m_unit_rb">
+       <item row="3" column="2">
+        <widget class="QGroupBox" name="m_unit_gb">
+         <property name="enabled">
+          <bool>true</bool>
+         </property>
          <property name="checkable">
           <bool>false</bool>
          </property>
@@ -144,35 +227,24 @@
          </layout>
         </widget>
        </item>
-       <item row="2" column="3">
-        <spacer name="horizontalSpacer">
+       <item row="5" column="2">
+        <spacer name="verticalSpacer">
          <property name="orientation">
-          <enum>Qt::Horizontal</enum>
+          <enum>Qt::Vertical</enum>
          </property>
          <property name="sizeHint" stdset="0">
           <size>
-           <width>68</width>
-           <height>20</height>
+           <width>20</width>
+           <height>40</height>
           </size>
          </property>
         </spacer>
        </item>
-       <item row="3" column="0">
-        <widget class="QLabel" name="label_9">
-         <property name="text">
-          <string>cross section</string>
-         </property>
-        </widget>
-       </item>
-       <item row="3" column="1">
-        <widget class="QLabel" name="label_12">
-         <property name="text">
-          <string>*</string>
-         </property>
-        </widget>
-       </item>
-       <item row="3" column="2">
+       <item row="2" column="2">
         <widget class="QComboBox" name="m_cross_section_cb">
+         <property name="enabled">
+          <bool>true</bool>
+         </property>
          <property name="editable">
           <bool>true</bool>
          </property>
@@ -213,22 +285,24 @@
          </item>
         </widget>
        </item>
-       <item row="4" column="0">
-        <widget class="QLabel" name="label_5">
-         <property name="text">
-          <string>Core identification</string>
+       <item row="2" column="4">
+        <spacer name="horizontalSpacer">
+         <property name="orientation">
+          <enum>Qt::Horizontal</enum>
          </property>
-        </widget>
-       </item>
-       <item row="4" column="1">
-        <widget class="QLabel" name="label_13">
-         <property name="text">
-          <string>*</string>
+         <property name="sizeHint" stdset="0">
+          <size>
+           <width>68</width>
+           <height>20</height>
+          </size>
          </property>
-        </widget>
+        </spacer>
        </item>
        <item row="4" column="2">
         <widget class="QComboBox" name="m_core_identification_cb">
+         <property name="enabled">
+          <bool>true</bool>
+         </property>
          <property name="editable">
           <bool>true</bool>
          </property>
@@ -237,130 +311,82 @@
          </property>
         </widget>
        </item>
-      </layout>
-     </item>
-     <item>
-      <spacer name="horizontalSpacer_2">
-       <property name="orientation">
-        <enum>Qt::Horizontal</enum>
-       </property>
-       <property name="sizeType">
-        <enum>QSizePolicy::Fixed</enum>
-       </property>
-       <property name="sizeHint" stdset="0">
-        <size>
-         <width>18</width>
-         <height>20</height>
-        </size>
-       </property>
-      </spacer>
-     </item>
-     <item>
-      <layout class="QGridLayout" name="gridLayout">
-       <item row="0" column="0">
-        <widget class="QLabel" name="label">
+       <item row="4" column="0">
+        <widget class="QLabel" name="label_5">
          <property name="text">
-          <string>Plant</string>
+          <string>Core identification</string>
          </property>
         </widget>
        </item>
-       <item row="0" column="1">
-        <widget class="QLineEdit" name="m_plant_le"/>
+       <item row="0" column="4">
+        <layout class="QHBoxLayout" name="horizontalLayout_2"/>
        </item>
-       <item row="1" column="0">
-        <widget class="QLabel" name="label_2">
+       <item row="2" column="0">
+        <widget class="QLabel" name="label_4">
          <property name="text">
-          <string>Location</string>
+          <string>Cross section</string>
          </property>
         </widget>
        </item>
        <item row="1" column="1">
-        <widget class="QLineEdit" name="m_location_le"/>
-       </item>
-       <item row="2" column="0">
-        <widget class="QLabel" name="label_3">
-         <property name="text">
-          <string>Label</string>
-         </property>
-        </widget>
-       </item>
-       <item row="2" column="1">
-        <widget class="QLineEdit" name="m_label_le">
+        <widget class="QLabel" name="label_11">
          <property name="text">
           <string/>
          </property>
         </widget>
        </item>
-       <item row="3" column="0">
-        <widget class="QLabel" name="label_7">
+       <item row="1" column="0">
+        <widget class="QLabel" name="label_6">
          <property name="text">
-          <string>Function</string>
+          <string>Conductor count</string>
          </property>
         </widget>
        </item>
-       <item row="3" column="1">
-        <widget class="QLineEdit" name="m_function_le"/>
-       </item>
-       <item row="4" column="1">
-        <spacer name="verticalSpacer_2">
-         <property name="orientation">
-          <enum>Qt::Vertical</enum>
+       <item row="1" column="2">
+        <widget class="QLineEdit" name="m_conductor_count_le">
+         <property name="enabled">
+          <bool>true</bool>
          </property>
-         <property name="sizeHint" stdset="0">
-          <size>
-           <width>118</width>
-           <height>17</height>
-          </size>
-         </property>
-        </spacer>
-       </item>
-       <item row="5" column="0">
-        <widget class="QLabel" name="label_8">
          <property name="text">
-          <string>Voltage</string>
+          <string/>
          </property>
         </widget>
        </item>
-       <item row="5" column="1">
-        <widget class="QComboBox" name="m_voltage_cb">
+       <item row="0" column="0">
+        <widget class="QLabel" name="label_9">
+         <property name="text">
+          <string>Type of cable</string>
+         </property>
+        </widget>
+       </item>
+       <item row="0" column="2">
+        <widget class="QComboBox" name="m_cable_type_cb">
+         <property name="enabled">
+          <bool>true</bool>
+         </property>
          <property name="editable">
           <bool>true</bool>
          </property>
-         <item>
-          <property name="text">
-           <string/>
-          </property>
-         </item>
-         <item>
-          <property name="text">
-           <string notr="true">230V AC</string>
-          </property>
-         </item>
-         <item>
-          <property name="text">
-           <string notr="true">12V AC</string>
-          </property>
-         </item>
-         <item>
-          <property name="text">
-           <string notr="true">12V DC</string>
-          </property>
-         </item>
-         <item>
-          <property name="text">
-           <string notr="true">24V AC</string>
-          </property>
-         </item>
-         <item>
-          <property name="text">
-           <string notr="true">24V DC</string>
-          </property>
-         </item>
-         <item>
-          <property name="text">
-           <string notr="true">400V AC</string>
-          </property>
-         </item>
+        </widget>
+       </item>
+       <item row="1" column="3">
+        <widget class="QCheckBox" name="m_pe_chb">
+         <property name="enabled">
+          <bool>true</bool>
+         </property>
+         <property name="text">
+          <string>PE</string>
+         </property>
+         <property name="checked">
+          <bool>true</bool>
+         </property>
+        </widget>
+       </item>
+       <item row="0" column="3">
+        <widget class="QToolButton" name="m_newcable__tb">
+         <property name="text">
+          <string>...</string>
+         </property>
         </widget>
        </item>
       </layout>
@@ -376,16 +402,16 @@
       </sizepolicy>
      </property>
      <attribute name="headerVisible">
-      <bool>false</bool>
+      <bool>true</bool>
      </attribute>
      <column>
       <property name="text">
-       <string notr="true">1</string>
+       <string notr="true">Kabel</string>
       </property>
      </column>
      <column>
       <property name="text">
-       <string>2</string>
+       <string>Aderkennzeichnung</string>
       </property>
      </column>
     </widget>
@@ -393,14 +419,9 @@
   </layout>
  </widget>
  <tabstops>
-  <tabstop>m_cable_type_cb</tabstop>
-  <tabstop>m_pe_chb</tabstop>
-  <tabstop>m_wire_count_le</tabstop>
-  <tabstop>m_schirm_chb</tabstop>
   <tabstop>m_mm_rb</tabstop>
   <tabstop>m_qmm_rb</tabstop>
   <tabstop>m_awg_rb</tabstop>
-  <tabstop>m_cross_section_cb</tabstop>
   <tabstop>m_core_identification_cb</tabstop>
   <tabstop>m_plant_le</tabstop>
   <tabstop>m_location_le</tabstop>
@@ -410,5 +431,89 @@
   <tabstop>m_treeWidget</tabstop>
  </tabstops>
  <resources/>
- <connections/>
+ <connections>
+  <connection>
+   <sender>m_plant_le</sender>
+   <signal>textEdited(QString)</signal>
+   <receiver>CablePropertiesWidget</receiver>
+   <slot>textHasChanged()</slot>
+   <hints>
+    <hint type="sourcelabel">
+     <x>129</x>
+     <y>20</y>
+    </hint>
+    <hint type="destinationlabel">
+     <x>133</x>
+     <y>-6</y>
+    </hint>
+   </hints>
+  </connection>
+  <connection>
+   <sender>m_location_le</sender>
+   <signal>textEdited(QString)</signal>
+   <receiver>CablePropertiesWidget</receiver>
+   <slot>textHasChanged()</slot>
+   <hints>
+    <hint type="sourcelabel">
+     <x>166</x>
+     <y>53</y>
+    </hint>
+    <hint type="destinationlabel">
+     <x>64</x>
+     <y>-7</y>
+    </hint>
+   </hints>
+  </connection>
+  <connection>
+   <sender>m_label_le</sender>
+   <signal>textEdited(QString)</signal>
+   <receiver>CablePropertiesWidget</receiver>
+   <slot>textHasChanged()</slot>
+   <hints>
+    <hint type="sourcelabel">
+     <x>85</x>
+     <y>79</y>
+    </hint>
+    <hint type="destinationlabel">
+     <x>-6</x>
+     <y>99</y>
+    </hint>
+   </hints>
+  </connection>
+  <connection>
+   <sender>m_function_le</sender>
+   <signal>textEdited(QString)</signal>
+   <receiver>CablePropertiesWidget</receiver>
+   <slot>textHasChanged()</slot>
+   <hints>
+    <hint type="sourcelabel">
+     <x>88</x>
+     <y>110</y>
+    </hint>
+    <hint type="destinationlabel">
+     <x>-5</x>
+     <y>156</y>
+    </hint>
+   </hints>
+  </connection>
+  <connection>
+   <sender>m_voltage_cb</sender>
+   <signal>currentTextChanged(QString)</signal>
+   <receiver>CablePropertiesWidget</receiver>
+   <slot>textHasChanged()</slot>
+   <hints>
+    <hint type="sourcelabel">
+     <x>109</x>
+     <y>131</y>
+    </hint>
+    <hint type="destinationlabel">
+     <x>-7</x>
+     <y>211</y>
+    </hint>
+   </hints>
+  </connection>
+ </connections>
+ <slots>
+  <slot>textHasChanged()</slot>
+ </slots>
 </ui>

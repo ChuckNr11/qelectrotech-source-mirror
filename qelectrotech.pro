@@ -172,9 +172,12 @@ HEADERS += $$files(sources/*.h) \
            $$files(sources/dxf/*.h) \
            $$files(sources/qet_elementscaler/*.h) \
            $$files(sources/svg/*.h) \
+           sources/cable_assist/cabledefinitions.h \
            sources/cable_assist/diagramevent/diagrameventaddcable.h \        # Achim cable
            sources/cable_assist/ui/cablepropertiesdialog.h \
-           sources/cable_assist/ui/cablepropertieswidget.h
+           sources/cable_assist/ui/cablepropertieswidget.h \
+           sources/cable_assist/ui/choosecabledialog.h \
+           sources/cable_assist/ui/newcabledialog.h
 
 SOURCES += $$files(sources/*.cpp) \
            $$files(sources/editor/*.cpp) \
@@ -219,9 +222,12 @@ SOURCES += $$files(sources/*.cpp) \
            $$files(sources/dxf/*.cpp) \
            $$files(sources/qet_elementscaler/*.cpp) \
            $$files(sources/svg/*.cpp) \
+           sources/cable_assist/cabledefinitions.cpp \
            sources/cable_assist/diagramevent/diagrameventaddcable.cpp \      # Achim cable
            sources/cable_assist/ui/cablepropertiesdialog.cpp \
-           sources/cable_assist/ui/cablepropertieswidget.cpp
+           sources/cable_assist/ui/cablepropertieswidget.cpp \
+           sources/cable_assist/ui/choosecabledialog.cpp \
+           sources/cable_assist/ui/newcabledialog.cpp
 
 # Needed for use promote QTreeWidget in terminalstripeditor.ui
 INCLUDEPATH += sources/TerminalStrip/ui
@@ -253,8 +259,11 @@ FORMS += $$files(sources/richtext/*.ui) \
          $$files(sources/print/*.ui) \
          $$files(sources/TerminalStrip/ui/*.ui) \
          $$files(sources/TerminalStrip/ui/ConfigPage/*.ui) \
-         sources/cable_assist/ui/cablepropertiesdialog.ui \       # Achim cable
-         sources/cable_assist/ui/cablepropertieswidget.ui
+         \       # sources/cable_assist/ui/cablepropertiesdialog.ui # Achim cable
+         sources/cable_assist/ui/cablepropertiesdialog.ui \
+         sources/cable_assist/ui/cablepropertieswidget.ui \
+         sources/cable_assist/ui/choosecabledialog.ui \
+         sources/cable_assist/ui/newcabledialog.ui
 
 UI_SOURCES_DIR = sources/ui/
 UI_HEADERS_DIR = sources/ui/
