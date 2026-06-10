@@ -93,6 +93,10 @@ void CrossRefItem::init()
 	setUpConnection();
 	linkedChanged();
 	updateLabel();
+	
+	qreal scalefactor = m_properties.xrefScaleFaktor();
+	this->setScale(scalefactor);		// Achim XRef scale
+	
 }
 
 /**
@@ -692,6 +696,7 @@ void CrossRefItem::drawAsCross(QPainter &painter)
 
 	//and fill it
 	fillCrossRef(painter);
+	this->setScale(m_properties.xrefScaleFaktor());	// Achim XRef scale
 }
 
 /**
@@ -738,6 +743,7 @@ void CrossRefItem::drawAsContacts(QPainter &painter)
 	prepareGeometryChange();
 	m_bounding_rect = bounding_rect;
 	m_shape_path.addRect(bounding_rect);
+	this->setScale(m_properties.xrefScaleFaktor());	// Achim XRef scale
 }
 
 /**
@@ -1047,7 +1053,7 @@ QRectF CrossRefItem::drawContact(QPainter &painter, int flags, Element *elmt, in
 			m_hovered_contacts_map.insert(elmt, bounding_rect);
 		++m_drawed_contacts;
 	}
-		return bounding_rect;
+	return bounding_rect;
 }
 
 

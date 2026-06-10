@@ -1366,6 +1366,7 @@ void DynamicElementTextItem::updateXref()
 					m_slave_Xref_item->setFont(QETApp::diagramTextsFont(5));
 					m_slave_Xref_item->setDefaultTextColor(Qt::black);
 					m_slave_Xref_item->installSceneEventFilter(this);
+					m_slave_Xref_item->setScale(xrp.xrefScaleFaktor());	// Achim XRef scale
 					
 					m_update_slave_Xref_connection << connect(m_master_element.data(), &Element::xChanged,                       this, &DynamicElementTextItem::updateXref);
 					m_update_slave_Xref_connection << connect(m_master_element.data(), &Element::yChanged,                       this, &DynamicElementTextItem::updateXref);
@@ -1375,9 +1376,12 @@ void DynamicElementTextItem::updateXref()
 					m_update_slave_Xref_connection << connect(diagram()->project(),    &QETProject::diagramRemoved,              this, &DynamicElementTextItem::updateXref);
 					m_update_slave_Xref_connection << connect(diagram()->project(),    &QETProject::XRefPropertiesChanged,       this, &DynamicElementTextItem::updateXref);
 				}
-				else
+				else{
 					m_slave_Xref_item->setPlainText(xref_label);
+					m_slave_Xref_item->setScale(xrp.xrefScaleFaktor());	// Achim XRef scale
+				}
 				setXref_item(xrp.getXrefPos());
+				
 				return;
 			}
 		}
@@ -1439,7 +1443,6 @@ void DynamicElementTextItem::setPlainText(const QString &text)
 	}
 	else if (m_slave_Xref_item)
 	{
-
 		XRefProperties xrp = diagram()->project()->defaultXRefProperties(m_master_element.data()->kindInformations()["type"].toString());
 		setXref_item(xrp.getXrefPos());
 	}

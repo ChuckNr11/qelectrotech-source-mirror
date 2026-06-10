@@ -59,6 +59,10 @@ class XRefProperties : public PropertiesInterface
 
 	void setShowTerminalName (const bool a) {m_show_terminal_name = a;}
 	bool showTerminalName	 () const		{return m_show_terminal_name;}
+	
+	// Achim XRef scale
+	void setXrefScaleFaktor (const float r) {m_scale_factor = r;}
+	float xrefScaleFaktor   () const        {return m_scale_factor;}
 
 	void setDisplayHas	  (const DisplayHas dh) {m_display = dh;}
 	DisplayHas displayHas () const				{return m_display;}
@@ -85,6 +89,7 @@ class XRefProperties : public PropertiesInterface
 	private:
 	bool m_show_power_ctc;
 	bool m_show_terminal_name;
+	float m_scale_factor;		// Achim XRef scale
 	DisplayHas m_display;
 	SnapTo m_snap_to;
 	Qt::AlignmentFlag m_xref_pos;
