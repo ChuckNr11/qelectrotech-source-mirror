@@ -111,6 +111,7 @@ class QETElementEditor : public QMainWindow
 		void on_m_about_qt_action_triggered();
 		void on_m_import_dxf_triggered();
 		void on_m_import_scaled_element_triggered();
+		void updateStatusbarCoordinates(QPointF pos);	// Achim Koordinatenanzeige ElementEditor
 
 	private:
 		bool canClose();
@@ -159,7 +160,10 @@ class QETElementEditor : public QMainWindow
 
 		QStackedWidget *m_tools_dock_stack = nullptr;
 
-		QLabel *m_default_informations = nullptr;
+		QLabel
+			*m_default_informations = nullptr,
+			*m_xCoord = nullptr,
+			*m_yCoord = nullptr;
 
 };
 

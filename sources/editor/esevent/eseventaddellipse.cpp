@@ -83,6 +83,10 @@ bool ESEventAddEllipse::mouseMoveEvent(QGraphicsSceneMouseEvent *event) {
 	if (!m_ellipse) return false;
 
 	QPointF pos = m_scene -> snapToGrid(event -> scenePos());
+
+	// position für die  Koordinatenanzeige
+	m_scene->coordinatesChanged(pos); // Achim Koordinatenanzeige ElementEditor
+
 	if (pos == m_new_pos) return true;
 	m_new_pos = pos;
 

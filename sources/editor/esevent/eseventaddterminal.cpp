@@ -52,6 +52,10 @@ bool ESEventAddTerminal::mouseMoveEvent(QGraphicsSceneMouseEvent *event) {
 	QPointF pos = m_scene -> snapToGrid(event -> scenePos());
 	updateHelpCross(pos);
 	m_terminal -> setPos(pos);
+
+	// position für die  Koordinatenanzeige
+	m_scene->coordinatesChanged(pos); // Achim Koordinatenanzeige ElementEditor
+
 	return true;
 }
 

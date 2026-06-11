@@ -85,6 +85,10 @@ bool ESEventAddRect::mouseMoveEvent(QGraphicsSceneMouseEvent *event) {
 	updateHelpCross(event -> scenePos());
 	if (!m_rect) return false;
 
+	// position für die  Koordinatenanzeige
+	QPointF pos = m_scene -> snapToGrid(event -> scenePos());
+	m_scene->coordinatesChanged(pos); // Achim Koordinatenanzeige ElementEditor
+
 	QRectF rect(m_rect->rect().topLeft(), m_scene->snapToGrid(event -> scenePos()));
 	m_rect -> setRect(rect);
 	return true;

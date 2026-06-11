@@ -73,6 +73,10 @@ bool ESEventAddPolygon::mouseMoveEvent(QGraphicsSceneMouseEvent *event) {
 	updateHelpCross(event -> scenePos());
 	if (!m_polygon) return false;
 
+	// position für die  Koordinatenanzeige
+	QPointF pos = m_scene -> snapToGrid(event -> scenePos());
+	m_scene->coordinatesChanged(pos); // Achim Koordinatenanzeige ElementEditor
+
 	m_polygon -> setLastPoint(m_scene -> snapToGrid(event -> scenePos()));
 	return true;
 }
