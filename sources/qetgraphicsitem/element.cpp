@@ -175,6 +175,24 @@ void Element::editProperty()
 			&ElementPropertiesWidget::findEditClicked,
 			&dialog,
 			&QDialog::reject);
+
+
+			   // Achim Größe element Properties Dialog
+		/* Text für commit
+		 * minor element properties dialog
+		 *
+		 *we set minimumSize for element properties dialog to enlarge the dialog,
+		 *making handling more pleasant
+		 */
+		// set dialog minimum size
+		//dialog.setMinimumSize(500, 600);
+
+			   // Achim Größe element Properties Dialog
+			   // andere Variante
+			   // parentSize ist in diesem Fall die Größe des QET-Fensters
+		QSize parentSize =dialog.parentWidget()->size();
+		dialog.resize(parentSize.width()/3,parentSize.height()/1.3);
+
 		//Must be windowModal, else when user do a drag and drop
 		//with the "text" tab of ElementPropertiesWidget,
 		//the ui freeze, until user press escape key
