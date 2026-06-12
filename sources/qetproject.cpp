@@ -375,11 +375,22 @@ void QETProject::setFilePath(const QString &filepath)
 */
 QString QETProject::currentDir() const
 {
+	QSettings settings;    // Achim customProjDir
 	QString current_directory;
 	if (m_file_path.isEmpty()) {
-		current_directory = QETApp::documentDir();
+		// ein neues Projekt:
+		// Standard Verzeichnis
+		if (settings.value("diagrameditor/custom-project-path").toString() == "default"){  // Achim customProjDir
+			current_directory = QETApp::documentDir();
+		}
+		else {
+			// Benutzer Verzeichnis
+			current_directory = settings.value("diagrameditor/custom-project-path").toString();// Achim customProjDir
+		}
 	} else {
-		current_directory = QFileInfo(m_file_path).absoluteDir().absolutePath();
+		// existierendes Projekt:
+		// aktuelles Verzeichnis des Projekts
+		current_directory = QFileInfo(m_file_path).absoluteDir().absolutePath();	// Achim customProjDir
 	}
 	return(current_directory);
 }
