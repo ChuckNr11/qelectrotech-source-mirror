@@ -147,6 +147,18 @@ void DynamicElementTextItemEditor::setCurrentText(DynamicElementTextItem *text)
 
 	ui->m_tree_view->expand(index);
 	ui->m_tree_view->setCurrentIndex(index);
+
+	ui->m_remove_selection->setEnabled(true);
+
+		   // Achim dynamicelementtextitemeditor
+	/* *****************
+	   wenn der Text im Diagram Editor markiert wird,
+	   soll er im dynamicElementTextItemEditor selektiert, ausgeklappt und
+	   am oberen Rand positioniert werden.
+	*/
+	// set item to top
+	ui->m_tree_view->scrollTo(index, QAbstractItemView::PositionAtTop);
+
 	ui->m_remove_selection->setEnabled(true);
 }
 
