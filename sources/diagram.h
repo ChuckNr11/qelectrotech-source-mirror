@@ -286,6 +286,7 @@ class Diagram : public QGraphicsScene
 
 		void diagramActivated();
 		void diagramInformationChanged();
+		void updateCoordinatesDisplay(QPointF, QString);	// Achim Koordinatenanzeige DiagramEditor
 };
 Q_DECLARE_METATYPE(Diagram *)
 
