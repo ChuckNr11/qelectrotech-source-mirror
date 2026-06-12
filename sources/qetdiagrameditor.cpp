@@ -112,6 +112,7 @@ QETDiagramEditor::QETDiagramEditor(const QStringList &files, QWidget *parent) :
 	setUpActions();
 	setUpToolBar();
 	setUpMenu();
+	setUpStatusbar();	// Achim Koordinatenanzeige DiagramEditor
 
 	tabifyDockWidget(qdw_undo, qdw_pa);
 
@@ -2407,6 +2408,9 @@ void QETDiagramEditor::diagramWasAdded(DiagramView *dv)
 		SIGNAL(modeChanged()),
 		this,
 		SLOT(slot_updateModeActions()));
+
+		// Achim Koordinatenanzeige DiagramEditor
+	connect(dv->diagram(), &Diagram::updateCoordinatesDisplay, this, &QETDiagramEditor::displayCoordinates);
 }
 
 /**
@@ -2607,4 +2611,68 @@ void QETDiagramEditor::slot_terminalNumbering() {
 			undo_group.activeStack()->push(macro);
 		}
 	}
+}
+// Achim Koordinatenanzeige DiagramEditor
+/**
+	@brief QETDiagramEditor::setUpStatusbar()
+*/
+void QETDiagramEditor::setUpStatusbar(){
+	// text "x"
+	QLabel *x_coord_text = new QLabel("X:");
+	x_coord_text->setMaximumWidth(15);
+	//statusBar()->addPermanentWidget(x_coord_text);
+
+		   // coord x
+	m_lb_xCoord = new QLabel (this);
+	m_lb_xCoord->setStyleSheet("border: 1px solid black");
+	m_lb_xCoord->setMinimumWidth(50);
+	//m_lb_xCoord->setMaximumWidth(50);
+	m_lb_xCoord->setAlignment(Qt::AlignLeft);
+
+		   // text "y"
+	QLabel *y_coord_text = new QLabel("Y:");
+	y_coord_text->setMaximumWidth(15);
+
+		   // coord y
+	m_lb_yCoord = new QLabel (this);
+	m_lb_yCoord->setStyleSheet("border: 1px solid black");
+	m_lb_yCoord->setMinimumWidth(50);
+	//m_lb_yCoord->setMaximumWidth(50);
+	m_lb_yCoord->setAlignment(Qt::AlignLeft);
+
+		   // border coord
+	m_lb_borderCoord = new QLabel (this);
+	m_lb_borderCoord->setStyleSheet("border: 1px solid black");
+	m_lb_borderCoord->setMinimumWidth(50);
+	//m_lb_borderCoord->setMaximumWidth(50);
+	m_lb_borderCoord->setAlignment(Qt::AlignLeft);
+
+		   // Layout für di Label
+	QHBoxLayout* statusBarLayout = new QHBoxLayout();
+	statusBarLayout->addWidget(x_coord_text);
+	statusBarLayout->addWidget(m_lb_xCoord);
+	statusBarLayout->addWidget(y_coord_text);
+	statusBarLayout->addWidget(m_lb_yCoord);
+	statusBarLayout->addWidget(m_lb_borderCoord);
+	statusBarLayout->addStretch();
+
+		   //Widget
+	QWidget *statusBarContainer = new QWidget;
+	statusBarContainer->setLayout(statusBarLayout);
+	statusBar()-> addPermanentWidget(statusBarContainer,0);
+}
+
+// Achim Koordinatenanzeige DiagramEditor
+/**
+	@brief QETDiagramEditor::displayCoordinates()
+	@param cursorCoord: cartesian coordinates of the cursor in the scene
+		   borderCoord: coordinates of the cursor in rows and columns
+*/
+void QETDiagramEditor::displayCoordinates(QPointF cursorCoord, QString borderCoord){
+
+	QString xPos = QString::number((qreal)qRound(cursorCoord.x()));
+	QString yPos = QString::number((qreal)qRound(cursorCoord.y()));
+	m_lb_xCoord->setText(xPos);
+	m_lb_yCoord->setText(yPos);
+	m_lb_borderCoord->setText(borderCoord);
 }

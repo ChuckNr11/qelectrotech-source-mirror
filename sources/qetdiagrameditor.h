@@ -20,6 +20,7 @@
 
 #include "SearchAndReplace/ui/searchandreplacewidget.h"
 #include "qetmainwindow.h"
+#include "qlabel.h"
 
 #include <QActionGroup>
 #include <QCloseEvent>
@@ -89,6 +90,7 @@ class QETDiagramEditor : public QETMainWindow
 		void setUpActions       ();
 		void setUpToolBar       ();
 		void setUpMenu          ();
+		void setUpStatusbar     ();	// Achim Koordinatenanzeige DiagramEditor
 		
 		bool addProject(QETProject *, bool = true);
 		DiagramView *currentDiagramView() const;
@@ -153,6 +155,8 @@ class QETDiagramEditor : public QETMainWindow
 		void showError(const QETResult &);
 		void showError(const QString &);
 		void subWindowActivated(QMdiSubWindow *subWindows);
+			// Achim Koordinatenanzeige DiagramEditor
+		void displayCoordinates(const QPointF cursorCoord, QString borderCoord);
 
 	private slots:
 		void selectionChanged();
@@ -255,5 +259,12 @@ class QETDiagramEditor : public QETMainWindow
 		int activeSubWindowIndex;
 		bool m_first_show = true;
 		SearchAndReplaceWidget m_search_and_replace_widget;
+
+
+			// Achim Koordinatenanzeige DiagramEditor
+		QLabel
+			*m_lb_xCoord = nullptr,
+			*m_lb_yCoord = nullptr,
+			*m_lb_borderCoord = nullptr;
 };
 #endif

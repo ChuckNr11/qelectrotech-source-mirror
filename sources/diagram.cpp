@@ -310,6 +310,19 @@ void Diagram::mouseMoveEvent(QGraphicsSceneMouseEvent *event)
 		}
 	}
 
+	// Achim Koordinatenanzeige DiagramEditor
+	/*
+		###################
+		Das ist die zweite Variante zum ermitteln der
+		Koordinaten für die Anzeige
+		###################
+	*/
+	// Achim Koordinatenanzeige DiagramEditor
+	//diagramEditor()->displayCoordinates(mapToScene(pos), m_diagram->convertPosition(mapToScene(pos)).toString());
+	if(!m_event_interface && m_elements_mover.isReady())
+		emit(updateCoordinatesDisplay(event->scenePos(), convertPosition(event->scenePos()).toString()));
+
+
 	QGraphicsScene::mouseMoveEvent(event);
 }
 
