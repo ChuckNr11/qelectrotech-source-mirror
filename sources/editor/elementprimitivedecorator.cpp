@@ -209,6 +209,9 @@ void ElementPrimitiveDecorator::mouseMoveEvent(QGraphicsSceneMouseEvent *event)
 		QPointF rounded_current_position = snapConstPointToGrid(current_position);
 		movement = rounded_current_position - decorated_items_.at(0) -> toItem() -> scenePos();
 		
+		// sende Position für die Koordinatenanzeige
+		emit coordinatesChanged(snapConstPointToGrid(scene_pos));	// Achim Koordinatenanzeige ElementEditor
+
 		QRectF bounding_rect = modified_bounding_rect_;
 		applyMovementToRect(current_operation_square_, movement, modified_bounding_rect_);
 		if (modified_bounding_rect_ != bounding_rect) {
@@ -298,6 +301,12 @@ void ElementPrimitiveDecorator::keyPressEvent(QKeyEvent *e)
 		{
 			qgi -> setPos(qgi -> pos() + movement);
 			adjust();
+
+			// macht wohl nur Sinn wenn auch der Cursor mit tastatur bewegt werden kann,
+			// deshalb erst einmal auskommentiert
+			// sende Position für die Koordinatenanzeige bei Tastaturbedienung, Bezugspunkt
+			// ist das Boundingrectangle oben rechts
+			//emit coordinatesChanged(modified_bounding_rect_.topLeft());	// Achim Koordinatenanzeige ElementEditor
 		}
 		
 		e->accept();

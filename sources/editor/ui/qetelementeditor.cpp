@@ -1148,6 +1148,8 @@ void QETElementEditor::setupConnection()
 	connect(&(m_elmt_scene -> undoStack()), &QUndoStack::indexChanged, [this]() {
 		this->updateInformations();
 	});
+
+	connect(m_elmt_scene, &ElementScene::coordinatesChanged, this, &QETElementEditor::updateStatusbarCoordinates); // Achim Koordinatenanzeige ElementEditor
 }
 
 /**
@@ -1191,6 +1193,44 @@ void QETElementEditor::initGui()
 	fillPartsList();
 
 	statusBar()->showMessage(tr("Éditeur d'éléments", "status bar message"));
+
+
+		   // Achim Koordinatenanzeige ElementEditor
+		   // Koordinatenanzeige
+		   // Label x:
+	QLabel *x_coord_text = new QLabel("X:");
+	x_coord_text->setMaximumWidth(15);
+
+		   // Label x-coordinate
+	m_xCoord = new QLabel (this);
+	m_xCoord->setStyleSheet("border: 1px solid black");
+	m_xCoord->setMinimumWidth(50);
+	m_xCoord->setMaximumWidth(50);
+	m_xCoord->setAlignment(Qt::AlignRight);
+
+		   //Label y:
+	QLabel *y_coord_text = new QLabel("Y:");
+	y_coord_text->setMaximumWidth(15);
+
+		   // Label y-coordinate
+	m_yCoord = new QLabel (this);
+	m_yCoord->setStyleSheet("border: 1px solid black");
+	m_yCoord->setMinimumWidth(50);
+	m_yCoord->setMaximumWidth(50);
+	m_yCoord->setAlignment(Qt::AlignRight);
+
+		   // Layout Koordinatenanzeige
+	QHBoxLayout* statusBarLayout = new QHBoxLayout();
+	statusBarLayout->addWidget(x_coord_text);
+	statusBarLayout->addWidget(m_xCoord);
+	statusBarLayout->addWidget(y_coord_text);
+	statusBarLayout->addWidget(m_yCoord);
+	statusBarLayout->addStretch();
+
+		   // Widget Koordinatenanzeige
+	QWidget *statusBarContainer = new QWidget;
+	statusBarContainer->setLayout(statusBarLayout);
+	statusBar()-> addPermanentWidget(statusBarContainer,0);
 }
 
 /**
@@ -1539,3 +1579,14 @@ void QETElementEditor::on_m_import_scaled_element_triggered()
 	}
 }
 
+// Achim Koordinatenanzeige ElementEditor
+/**
+ * @brief QETElementEditor::updateStatusbarCoordinates
+ * @param current mouse position
+ */
+void QETElementEditor::updateStatusbarCoordinates(QPointF pos){
+	QString xPos = QString::number((qreal)qRound(pos.x()*10)/10);  // auf  Nachkommastellen beschränkt
+	QString yPos = QString::number((qreal)qRound(pos.y()*10)/10);
+	m_xCoord->setText(xPos);
+	m_yCoord->setText(yPos);
+}
