@@ -90,6 +90,10 @@ bool ESEventAddArc::mouseMoveEvent(QGraphicsSceneMouseEvent *event) {
 	if (!m_arc) return false;
 
 	m_mouse_pos = m_scene -> snapToGrid(event -> scenePos());
+
+	// position für die  Koordinatenanzeige
+	m_scene->coordinatesChanged(m_mouse_pos); // Achim Koordinatenanzeige ElementEditor
+
 	updateArc();
 
 	return true;

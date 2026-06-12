@@ -126,8 +126,15 @@ void ElementScene::mouseMoveEvent(QGraphicsSceneMouseEvent *e)
 	}
 
 	QPointF event_pos = e -> scenePos();
-	if (!(e -> modifiers() & Qt::ControlModifier))
+	if (!(e -> modifiers() & Qt::ControlModifier)){
 		event_pos = snapToGrid(event_pos);
+		// sende Position für die Koordinatenanzeige mit snap
+		emit coordinatesChanged(snapToGrid(event_pos));	// Achim Koordinatenanzeige ElementEditor
+	}
+	else
+		// sende Position für die Koordinatenanzeige ohne snap
+		emit coordinatesChanged(e -> scenePos());	// Achim Koordinatenanzeige ElementEditor
+
 
 	if (m_behavior == PasteArea) {
 		QRectF current_rect(m_paste_area -> rect());
@@ -254,6 +261,10 @@ void ElementScene::keyPressEvent(QKeyEvent *event)
 				p.ry() -= 0.1;
 			else if (k == Qt::Key_Down)
 				p.ry() += 0.1;
+				// macht wohl nur Sinn wenn auch der Cursor mit tastatur bewegt werden kann,
+				// deshalb erst einmal auskommentiert
+				// sende Position für die Koordinatenanzeige bei Tastaturbedienung
+				//emit coordinatesChanged(p);	// Achim Koordinatenanzeige ElementEditor
 				}
 			else {
 
@@ -266,6 +277,10 @@ void ElementScene::keyPressEvent(QKeyEvent *event)
 				p.ry() -= 1;
 			else if (k == Qt::Key_Down)
 				p.ry() += 1;
+				// macht wohl nur Sinn wenn auch der Cursor mit tastatur bewegt werden kann,
+				// deshalb erst einmal auskommentiert
+				// sende Position für die Koordinatenanzeige bei Tastaturbedienung
+				//emit coordinatesChanged(p);	// Achim Koordinatenanzeige ElementEditor
 			}
 
 			qgo->setPos(p);

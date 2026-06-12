@@ -177,6 +177,8 @@ class ElementScene : public QGraphicsScene
 		/// Signal emitted when need zoomFit
 		void needZoomFit();
 		void elementInfoChanged();
+		/// Signal emitted on mouseMove with current position
+		void coordinatesChanged(QPointF pos);	// Achim Koordinatenanzeige ElementEditor
 };
 
 Q_DECLARE_OPERATORS_FOR_FLAGS(ElementScene::ItemOptions)

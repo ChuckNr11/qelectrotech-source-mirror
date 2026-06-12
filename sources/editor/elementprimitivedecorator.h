@@ -65,6 +65,7 @@ class ElementPrimitiveDecorator : public QGraphicsObject
 	
 	signals:
 		void actionFinished(ElementEditionCommand *);
+		void coordinatesChanged(QPointF pos);	// Achim Koordinatenanzeige ElementEditor
 	
 	protected:
 		void mousePressEvent(QGraphicsSceneMouseEvent *) override;
