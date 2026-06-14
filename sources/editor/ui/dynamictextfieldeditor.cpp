@@ -390,6 +390,7 @@ void DynamicTextFieldEditor::on_m_alignment_pb_clicked()
 
 	for (int i = 0; i < m_parts.length(); i++) {
 		if(atd.alignment() != m_parts[i] -> alignment()) {
+			m_parts[i]->setAlignment(m_parts[i]->alignment());	// Achim CompositeText_right_alignment
 			QPropertyUndoCommand *undo =\
 				new QPropertyUndoCommand(
 					m_parts[i], "alignment", QVariant(m_parts[i] -> alignment()), QVariant(atd.alignment()));
