@@ -74,7 +74,7 @@ class DiagramTextItem : public QGraphicsTextItem
 
 		void setNoEditable(bool e = true) {m_no_editable = e;}
 		
-		void setAlignment(const Qt::Alignment &alignment);
+		virtual void setAlignment(const Qt::Alignment &alignment);	// Achim CompositeText_right_alignment
 		Qt::Alignment alignment() const;
 		bool m_block_alignment = false;
 		
@@ -117,9 +117,10 @@ class DiagramTextItem : public QGraphicsTextItem
 		m_previous_text;
 		
 		QPointF m_mouse_to_origin_movement;
+		Qt::Alignment m_alignment = (Qt::AlignTop | Qt::AlignLeft);	// Achim CompositeText_right_alignment
 		
 	private:
 		QRectF m_alignment_rect;
-		Qt::Alignment m_alignment = (Qt::AlignTop | Qt::AlignLeft);
+
 };
 #endif

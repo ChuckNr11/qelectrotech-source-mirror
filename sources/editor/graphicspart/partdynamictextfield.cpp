@@ -457,7 +457,33 @@ void PartDynamicTextField::setPlainText(const QString &text) {
 	finishAlignment();
 }
 
-void PartDynamicTextField::setAlignment(Qt::Alignment alignment) {
+void PartDynamicTextField::setAlignment(Qt::Alignment alignment)
+{
+		// Achim CompositeText_right_alignment
+	if(m_text_from == DynamicElementTextItem::CompositeText){
+		if(alignment &Qt::AlignLeft){
+			QTextOption option = document()->defaultTextOption();
+			option.setAlignment(Qt::AlignLeft);
+			document()->setDefaultTextOption(option);
+			document()->setTextWidth(document()->idealWidth());
+			setTextWidth(-1);
+		}
+		else if(alignment &Qt::AlignHCenter){
+			QTextOption option = document()->defaultTextOption();
+			option.setAlignment(Qt::AlignHCenter);
+			document()->setDefaultTextOption(option);
+			document()->setTextWidth(document()->idealWidth()+1);
+			setTextWidth(document()->size().width());
+		}
+		else if(alignment &Qt::AlignRight){
+			QTextOption option = document()->defaultTextOption();
+			option.setAlignment(Qt::AlignRight);
+			document()->setDefaultTextOption(option);
+			document()->setTextWidth(document()->idealWidth()+1);
+			setTextWidth(document()->size().width());
+		}
+
+	}
 	m_alignment = alignment;
 	emit alignmentChanged(m_alignment);
 }

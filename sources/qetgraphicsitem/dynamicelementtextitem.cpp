@@ -796,6 +796,36 @@ bool DynamicElementTextItem::sceneEventFilter(QGraphicsItem *watched, QEvent *ev
 	return false;
 }
 
+// Achim CompositeText_right_alignment
+void DynamicElementTextItem::setAlignment(const Qt::Alignment &alignment)
+{
+	if(m_text_from == CompositeText){
+		if(alignment &Qt::AlignHCenter){
+			QTextOption option = document()->defaultTextOption();
+			option.setAlignment(Qt::AlignHCenter);
+			document()->setDefaultTextOption(option);
+			document()->setTextWidth(document()->idealWidth()+1);
+			setTextWidth(-1);
+		}
+		else if(alignment &Qt::AlignHCenter){
+			QTextOption option = document()->defaultTextOption();
+			option.setAlignment(Qt::AlignHCenter);
+			document()->setDefaultTextOption(option);
+			document()->setTextWidth(document()->idealWidth()+1);
+			setTextWidth(document()->size().width());
+		}	
+		else if(alignment &Qt::AlignRight){
+			QTextOption option = document()->defaultTextOption();
+			option.setAlignment(Qt::AlignRight);
+			document()->setDefaultTextOption(option);
+			document()->setTextWidth(document()->idealWidth()+1);
+			setTextWidth(document()->size().width());
+		}
+	}
+	m_alignment = alignment;
+	emit alignmentChanged(alignment);
+}
+
 void DynamicElementTextItem::elementInfoChanged()
 {
 	DiagramContext dc;
@@ -1448,6 +1478,11 @@ void DynamicElementTextItem::setPlainText(const QString &text)
 void DynamicElementTextItem::setTextWidth(qreal width)
 {
 	this->document()->setTextWidth(width);
+
+		//Adjust the width, to ideal width if needed
+	if(width > 0 && document() -> size().width() > width)
+		document() -> setTextWidth(document() -> idealWidth());
+
 	m_text_width = width;
 	emit textWidthChanged(width);
 }

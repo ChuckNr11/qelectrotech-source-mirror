@@ -123,6 +123,7 @@ class DynamicElementTextItem : public DiagramTextItem
 		void paint(QPainter *painter, const QStyleOptionGraphicsItem *option, QWidget *widget) override;
 		QVariant itemChange(GraphicsItemChange change, const QVariant &value) override;
 		bool sceneEventFilter(QGraphicsItem *watched, QEvent *event) override;
+		void setAlignment(const Qt::Alignment &alignment) override;	// Achim CompositeText_right_alignment
 
 	private:
 		void elementInfoChanged();
