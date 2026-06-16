@@ -29,7 +29,7 @@
 #include <QSqlError>
 
 #include <QSqlDriver>
-#include <sqlite3.h>
+//#include <sqlite3.h>
 
 
 /**

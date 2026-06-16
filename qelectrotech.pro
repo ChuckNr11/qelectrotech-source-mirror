@@ -30,7 +30,19 @@ win32 {
         QET_LICENSE_PATH           = './'
         # Liste des ressources Windows
     #RC_FILE = qelectrotech.rc
+    
+# Achim Release-Mode:
+       # DLL's im release-Mode bereitstellen
+       # Die Funktion windeployqt schreibt die .exe Datei und die zugehörigen .dll's
+       # in den mit DESTDIR festgelegten Ordner. Die kf5 und sqlite dll's müssen
+       # manuell hinzugefügt werden.Eventuell auch die dll für sqlite3.
+       # CONFIG(release,... bestimmt das windeployqt nur im release Modus ausgefuhrt wird
+        CONFIG(release, debug|release){
+        DESTDIR = 'C:/Users/Chuck/PortablePrograms/my_Qelectrotech/bin'
+        QMAKE_POST_LINK =  windeployqt $$shell_path($$DESTDIR/$${TARGET}.exe)
+        }
 }
+    
 macx {
         # Chemins MacOS X
         COMPIL_PREFIX              = './'
@@ -61,7 +73,7 @@ DEFINES += QET_ALLOW_OVERRIDE_CD_OPTION
 DEFINES += QET_ALLOW_OVERRIDE_DD_OPTION
 
 #comment the line below to disable the project database export
-DEFINES += QET_EXPORT_PROJECT_DB
+#DEFINES += QET_EXPORT_PROJECT_DB
 
 # warn on *any* usage of deprecated APIs
 #DEFINES += QT_DEPRECATED_WARNINGS
@@ -263,7 +275,7 @@ TARGET = qelectrotech
 
 # Ajustement des bibliotheques utilisees lors de l'edition des liens
 unix:QMAKE_LIBS_THREAD -= -lpthread
-unix|win32: PKGCONFIG += sqlite3
+#unix|win32: PKGCONFIG += sqlite3
 
 # Enable C++17
 QMAKE_CXXFLAGS += -std=c++17
