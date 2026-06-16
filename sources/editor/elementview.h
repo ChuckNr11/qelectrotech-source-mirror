@@ -82,6 +82,10 @@ class ElementView : public QGraphicsView {
 	ElementContent pasteWithOffset(const QDomDocument &);
 	
 	// attributes
+	public:
+	QPointF m_pos;
+	bool m_left_mouse_button_press  ;
+
 	private:
 	ElementScene *m_scene;
 	QString to_paste_in_area_;

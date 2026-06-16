@@ -321,7 +321,8 @@ class CustomElementGraphicPart : public QGraphicsObject, public CustomElementPar
 				QGraphicsSceneMouseEvent *event) override;
 
 		// attributes
-		bool m_hovered;
+		bool m_hovered,
+			 m_handler_mouse_press=false;	// Achim ElmtEditor Rotation
 	private:
 		LineStyle _linestyle;
 		LineWeight _lineweight;

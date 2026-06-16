@@ -61,15 +61,35 @@ QString PartDynamicTextField::xmlName() const
 }
 
 
-
+/*
 /**
 	Redefines setRotation
 	@param angle
-*/
+*//*
 void PartDynamicTextField::setRotation(qreal angle) {
 	qreal diffAngle = qRound((angle - rotation()) * 100.0) / 100.0;
 	QGraphicsObject::setRotation(QET::correctAngle(angle, true));
 	setPos(QTransform().rotate(diffAngle).map(pos()));
+}*/
+
+	// Achim ElmtEditor Rotation
+/**
+	@brief PartDynamicTextField::setRotation
+	Redefines setRotation
+	dreht das Item um den Winkel angle um den Mittelpunkt des Item
+	@param angle Rotationswinkel
+*/
+void PartDynamicTextField::setRotation(qreal angle) {
+			// Drehpunkt = center vom Bounding Rechteck des items
+	QPointF centerPos = boundingRect().center();
+			// Kommastellen entfernen
+		qreal diffAngle = qRound((angle - rotation()) * 100.0) / 100.0;
+			// Drehwinkel = neuerWinkel - aktuellerWinkel, Nachkommastellen entfernen
+		QGraphicsObject::setRotation(QET::correctAngle(angle, true));
+			// Basispunkt für die Transform setzen
+		setTransformOriginPoint(centerPos);
+				// rotieren
+		QTransform().rotate(diffAngle);
 }
 
 void PartDynamicTextField::mirror() {

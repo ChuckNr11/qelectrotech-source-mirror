@@ -115,5 +115,6 @@ class PartRectangle : public CustomElementGraphicPart
 			  m_old_yRadius;
 		bool m_modifie_radius_equaly = false;
 		qreal m_rot;
+		QPointF	m_handler_pos;	// Achim ElmtEditor Rotation;
 };
 #endif

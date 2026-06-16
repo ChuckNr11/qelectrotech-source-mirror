@@ -153,6 +153,13 @@ void ElementScene::mouseMoveEvent(QGraphicsSceneMouseEvent *e)
 */
 void ElementScene::mousePressEvent(QGraphicsSceneMouseEvent *e)
 {
+  // Achim ElmtEditor Rotation
+	if (e->button() == Qt::LeftButton){
+		m_pos.setX(round(e -> buttonDownScenePos( Qt::LeftButton).rx()));
+		m_pos.setY(round(e -> buttonDownScenePos( Qt::LeftButton).ry()));
+		m_left_mouse_button_press=true;
+	}
+
 	if (m_event_interface) {
 		if (m_event_interface -> mousePressEvent(e)) {
 			if (m_event_interface->isFinish()) {
@@ -172,6 +179,9 @@ void ElementScene::mousePressEvent(QGraphicsSceneMouseEvent *e)
 */
 void ElementScene::mouseReleaseEvent(QGraphicsSceneMouseEvent *e)
 {
+		// Achim ElmtEditor Rotation
+	m_left_mouse_button_press=false;
+
 	if (m_event_interface) {
 		if (m_event_interface -> mouseReleaseEvent(e)) {
 			if (m_event_interface->isFinish()) {
