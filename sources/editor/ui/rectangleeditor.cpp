@@ -37,7 +37,7 @@ RectangleEditor::RectangleEditor(QETElementEditor *editor, PartRectangle *rect, 
 {
 	ui->setupUi(this);
 	m_style = new StyleEditor(editor);
-	ui->verticalLayout->insertWidget(0, m_style);
+	ui->m_main_layout->insertWidget(0, m_style);
 }
 
 /**

@@ -128,5 +128,6 @@ class PartLine : public CustomElementGraphicPart
 		QPropertyUndoCommand *m_undo_command;
 		QVector<QetGraphicsHandlerItem *> m_handler_vector;
 		qreal m_rot;
+		QPointF m_handler_pos;	// Achim ElmtEditor Rotation
 };
 #endif

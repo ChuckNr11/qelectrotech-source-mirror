@@ -179,6 +179,10 @@ class ElementScene : public QGraphicsScene
 		void elementInfoChanged();
 		/// Signal emitted on mouseMove with current position
 		void coordinatesChanged(QPointF pos);	// Achim Koordinatenanzeige ElementEditor
+
+	public:
+		QPointF m_pos;						// Achim ElmtEditor Rotation
+		bool m_left_mouse_button_press  ;	// Achim ElmtEditor Rotation
 };
 
 Q_DECLARE_OPERATORS_FOR_FLAGS(ElementScene::ItemOptions)

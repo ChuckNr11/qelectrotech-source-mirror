@@ -85,5 +85,6 @@ class PartEllipse : public AbstractPartEllipse
 		int m_resize_mode = 1,
 			m_vector_index = -1;
 		qreal m_rot = 0;
+		QPointF m_handler_pos;	// Achim ElmtEditor Rotation
 };
 #endif

@@ -63,17 +63,36 @@ PartText::PartText(QETElementEditor *editor, QGraphicsItem *parent) :
 PartText::~PartText()
 {
 }
-
+/*
 /**
 	Redefines setRotation
 	@param angle
-*/
+*//*
 void PartText::setRotation(qreal angle) {
 	qreal diffAngle = qRound((angle - rotation()) * 100.0) / 100.0;
 	QGraphicsObject::setRotation(QET::correctAngle(angle, true));
 	setPos(QTransform().rotate(diffAngle).map(pos()));
-}
+}*/
 
+// Achim ElmtEditor Rotation
+/**
+	@brief PartArc::setRotation
+	Redefines setRotation
+	dreht das Item um den Winkel angle um den Mittelpunkt des Item
+	 @param angle Rotationswinkel
+*/
+void PartText::setRotation(qreal angle) {
+	// center Position des Textes() vom vom Bounding Rechteck
+	QPointF centerPos = boundingRect().center();
+		// Drehwinkel = neuerWinkel - aktuellerWinkel, Nachkommastellen entfernen
+	qreal diffAngle = qRound((angle - rotation()) * 100.0) / 100.0;
+		// den Rotationswinkel setzen
+	QGraphicsObject::setRotation(QET::correctAngle(angle, true));
+		// Basispunkt für die Transform setzen
+	setTransformOriginPoint(centerPos);
+		// rotieren
+	QTransform().rotate(diffAngle);
+}
 void PartText::mirror() {
 	// at first: rotate the text:
 	QGraphicsObject::setRotation(QET::correctAngle((360-rotation()), true));

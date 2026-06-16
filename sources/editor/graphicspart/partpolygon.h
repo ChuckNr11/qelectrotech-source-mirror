@@ -118,7 +118,8 @@ class PartPolygon : public CustomElementGraphicPart
 		QVector<QetGraphicsHandlerItem *> m_handler_vector;
 		QAction *m_insert_point,
 				*m_remove_point;
-		QPointF m_context_menu_pos;
+		QPointF m_context_menu_pos,
+				m_handler_pos;	// Achim ElmtEditor Rotation
 		qreal m_rot;
 };
 #endif
