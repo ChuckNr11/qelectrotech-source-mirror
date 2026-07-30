@@ -116,9 +116,12 @@ void renderDiagram(Diagram *diagram, QPainter &painter, const QRectF &target)
 	// draw_grid_ is set (default true), so toggle it off around the render
 	// and restore it afterwards.
 	const bool was_drawing_grid = diagram->displayGrid();
+	const bool was_drawing_guides = diagram->displayGuides();
 	diagram->setDisplayGrid(false);
+	diagram->setDisplayGuides(false);
 	diagram->render(&painter, target, source, Qt::KeepAspectRatio);
 	diagram->setDisplayGrid(was_drawing_grid);
+	diagram->setDisplayGuides(was_drawing_guides);
 }
 
 int exportPdf(QETProject &project, const QString &output)
@@ -419,6 +422,14 @@ int checkOneElement(const QString &path)
 		return 2;
 	}
 	QDomDocument doc;
+#if QT_VERSION >= QT_VERSION_CHECK(6, 5, 0)
+	if (const auto result = doc.setContent(&file); !result) {
+		file.close();
+		out << "FAIL  " << path << "  (XML error line "
+			<< result.errorLine << ": " << result.errorMessage << ")\n";
+		return 2;
+	}
+#else
 	QString error;
 	int line = 0;
 	if (!doc.setContent(&file, &error, &line)) {
@@ -427,6 +438,7 @@ int checkOneElement(const QString &path)
 			<< line << ": " << error << ")\n";
 		return 2;
 	}
+#endif
 	file.close();
 
 	const QDomElement root = doc.documentElement();

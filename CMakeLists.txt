@@ -22,11 +22,31 @@ project(qelectrotech
         VERSION 0.100.1
         DESCRIPTION "QET is a CAD/CAE editor focusing on schematics drawing features."
         HOMEPAGE_URL "https://qelectrotech.org/"
-        LANGUAGES CXX)
+        LANGUAGES C CXX)
 
 include(cmake/copyright_message.cmake)
 
 set(QET_DIR ${PROJECT_SOURCE_DIR})
+
+# QT_VERSION_MAJOR is chosen explicitly by whoever configures the build,
+# via -DQT_VERSION_MAJOR=5 or -DQT_VERSION_MAJOR=6.
+# Default to Qt5 (current stable) when not specified, so existing
+# CI/scripts that don't pass this option keep working unchanged.
+# This must happen BEFORE add_subdirectory(tests) and the fetch_*.cmake
+# includes below, so every subdirectory and every FetchContent dependency
+# sees a consistent, already-defined value.
+if(NOT DEFINED QT_VERSION_MAJOR)
+    set(QT_VERSION_MAJOR 5)
+endif()
+
+# Some third-party CMake projects we pull in via FetchContent (e.g.
+# SingleApplication) don't know about QET_VERSION_MAJOR: they follow Qt's
+# own "QT_DEFAULT_MAJOR_VERSION" convention instead, and silently default
+# to Qt5 if it isn't set. Propagate our choice so they stay in sync,
+# otherwise they can end up linked against a different Qt major version
+# than the rest of QET, which breaks AUTOMOC with an
+# INTERFACE_QT_MAJOR_VERSION mismatch at generate time.
+set(QT_DEFAULT_MAJOR_VERSION ${QT_VERSION_MAJOR} CACHE STRING "Qt version to use (5 or 6)" FORCE)
 
 # Add sub directories
 option(PACKAGE_TESTS "Build the tests" ON)
@@ -53,27 +73,52 @@ SET(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 
 find_package(
-    QT
-    NAMES
-    Qt5
-    COMPONENTS
-    ${QET_COMPONENTS}
-    REQUIRED
-)
-
-find_package(
     Qt${QT_VERSION_MAJOR}
     COMPONENTS
     ${QET_COMPONENTS}
     REQUIRED)
 
+# Qt6 only creates the Qt::GuiPrivate target (used for QPdfEngine::drawHyperlink)
+# when the GuiPrivate component is explicitly requested. Qt5 has no such
+# component package and creates the target implicitly with Gui, so only
+# request it on Qt6 - requesting it on Qt5 fails the whole configure.
+if(QT_VERSION_MAJOR GREATER_EQUAL 6)
+    find_package(Qt${QT_VERSION_MAJOR} REQUIRED COMPONENTS GuiPrivate)
+endif()
+
 find_package(SQLite3 REQUIRED)
+
+# CMake < 4.3 only creates the SQLite::SQLite3 target (no SQLite3::SQLite3
+# alias yet), while CMake >= 4.3's bundled FindSQLite3 creates SQLite3::SQLite3
+# and deprecates the old name. Add the missing alias ourselves so we can use
+# the modern target name everywhere regardless of the CMake version in use
+# (this project must keep building on CMake versions below 4.3, e.g. on most
+# current Linux distros).
+if(NOT TARGET SQLite3::SQLite3 AND TARGET SQLite::SQLite3)
+    add_library(SQLite3::SQLite3 ALIAS SQLite::SQLite3)
+endif()
 
 set(CMAKE_AUTOUIC_SEARCH_PATHS ${QET_DIR}/sources/ui)
 
-qt5_create_translation(QM_FILES ${CMAKE_SOURCE_DIR} ${TS_FILES})
+# The default build only compiles the tracked .ts files to .qm (lrelease).
+# Refreshing the .ts from the sources (lupdate) is a developer action behind
+# the explicit "update_translations" target below: running lupdate on every
+# build rewrote tracked files as a side effect, and under high parallelism
+# lupdate rewriting a .ts while lrelease read the same file made the build
+# fail with "Premature end of document".
 set_source_files_properties(${TS_FILES} PROPERTIES OUTPUT_LOCATION "${QET_DIR}/lang")
-qt5_add_translation(QM_FILES ${TS_FILES})
+if(QT_VERSION_MAJOR EQUAL 6)
+    qt6_add_translation(QM_FILES ${TS_FILES})
+else()
+    qt5_add_translation(QM_FILES ${TS_FILES})
+endif()
+
+add_custom_target(update_translations
+    COMMAND $<TARGET_FILE:Qt${QT_VERSION_MAJOR}::lupdate> ${CMAKE_SOURCE_DIR}/sources -ts ${TS_FILES}
+    WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}
+    COMMENT "Updating .ts files from sources/ (lupdate) - developer target, run explicitly"
+    VERBATIM
+)
 
 # als laatse
 include(cmake/define_definitions.cmake)
@@ -106,7 +151,7 @@ target_link_libraries(
     PRIVATE
     pugixml::pugixml
     SingleApplication::SingleApplication
-    SQLite::SQLite3
+    SQLite3::SQLite3
     ${KF5_PRIVATE_LIBRARIES}
     ${QET_PRIVATE_LIBRARIES}
 )
@@ -147,6 +192,14 @@ target_include_directories(
     ${QET_DIR}/sources/print
     ${QET_DIR}/sources/svg
 )
+
+if(NOT BUILD_WITH_KF5)
+    target_include_directories(
+        ${PROJECT_NAME}
+        PRIVATE
+        ${QET_DIR}/sources/ui/nokde
+    )
+endif()
 
 install(TARGETS ${PROJECT_NAME})
 

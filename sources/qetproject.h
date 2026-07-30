@@ -28,8 +28,9 @@
 #include "properties/xrefproperties.h"
 #include "titleblock/templatescollection.h"
 #include "titleblockproperties.h"
-
+#include "diagram.h"
 #ifdef BUILD_WITHOUT_KF5
+#	include "ui/nokde/kautosavefile.h"
 #else
 #	include <KAutoSaveFile>
 #endif
@@ -48,10 +49,23 @@ class XmlElementCollection;
 class QTimer;
 class TerminalStrip;
 
-#ifdef BUILD_WITHOUT_KF5
-#else
-class KAutoSaveFile;
-#endif
+
+#include <QColor>
+
+struct GuideProperties {
+	int orientation; // 0 = Horizontal, 1 = Vertical
+	qreal position;
+	QColor color;
+
+	bool operator==(const GuideProperties &other) const {
+		return orientation == other.orientation &&
+		position == other.position &&
+		color == other.color;
+	}
+	bool operator!=(const GuideProperties &other) const {
+		return !(*this == other);
+	}
+};
 
 /**
 	This class represents a QET project. Typically saved as a .qet file, it
@@ -79,10 +93,7 @@ class QETProject : public QObject
 	public:
 		QETProject (QObject *parent = nullptr);
 		QETProject (const QString &path, QObject * = nullptr);
-#ifdef BUILD_WITHOUT_KF5
-#else
 		QETProject (KAutoSaveFile *backup, QObject *parent=nullptr);
-#endif
 		~QETProject() override;
 
 	private:
@@ -115,6 +126,9 @@ class QETProject : public QObject
 			///DEFAULT PROPERTIES
 		BorderProperties defaultBorderProperties() const;
 		void             setDefaultBorderProperties(const BorderProperties &);
+
+		QList<GuideProperties> defaultGuides() const;
+		void setDefaultGuides(const QList<GuideProperties> &guides);
 
 		TitleBlockProperties defaultTitleBlockProperties() const;
 		void                 setDefaultTitleBlockProperties(const TitleBlockProperties &);
@@ -268,6 +282,8 @@ class QETProject : public QObject
 		QString read_only_file_path_;
 			/// Default dimensions and properties for new diagrams created within the project
 		BorderProperties default_border_properties_ = BorderProperties::defaultProperties();
+			/// Default guides for new diagrams created within the project
+		QList<GuideProperties> m_default_guides;
 			/// Default conductor properties for new diagrams created within the project
 		ConductorProperties default_conductor_properties_ = ConductorProperties::defaultProperties();
 			/// Default title block properties for new diagrams created within the project
@@ -297,10 +313,7 @@ class QETProject : public QObject
 		QTimer m_save_backup_timer,
 			   m_autosave_timer;
 		QFuture<bool> m_backup_future;
-#ifdef BUILD_WITHOUT_KF5
-#else
 		KAutoSaveFile m_backup_file;
-#endif
 		QUuid m_uuid = QUuid::createUuid();
 		projectDataBase m_data_base;
 		QVector<TerminalStrip *> m_terminal_strip_vector;

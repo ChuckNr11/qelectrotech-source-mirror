@@ -35,6 +35,7 @@
 #include "qetxml.h"
 #include "qetversion.h"
 
+#include <QElapsedTimer>
 #include <QHash>
 #include <QTimer>
 #include <QtConcurrentRun>
@@ -56,15 +57,27 @@ void QETProject::setBackupEnabled(bool enabled)
 	@param parent
 */
 QETProject::QETProject(QObject *parent) :
-	QObject              (parent),
-	m_titleblocks_collection(this),
-	m_data_base(this, this),
-	m_project_properties_handler{this}
+QObject              (parent),
+m_titleblocks_collection(this),
+m_data_base(this, this),
+m_project_properties_handler{this}
 {
 	setDefaultTitleBlockProperties(TitleBlockProperties::defaultProperties());
 
 	m_elements_collection = new XmlElementCollection(this);
 	init();
+
+	QSettings settings;
+	int size = settings.beginReadArray(QStringLiteral("diagrameditor/defaultguides"));
+	for (int i = 0; i < size; ++i) {
+		settings.setArrayIndex(i);
+		GuideProperties g;
+		g.orientation = settings.value(QStringLiteral("orientation"), 0).toInt();
+		g.position = settings.value(QStringLiteral("position"), 0.0).toReal();
+		g.color = QColor(settings.value(QStringLiteral("color"), QStringLiteral("#ff0000")).toString());
+		m_default_guides.append(g);
+	}
+	settings.endArray();
 }
 
 ProjectPropertiesHandler &QETProject::projectPropertiesHandler()
@@ -93,8 +106,6 @@ QETProject::QETProject(const QString &path, QObject *parent) :
 	init();
 }
 
-#ifdef BUILD_WITHOUT_KF5
-#else
 /**
 	@brief QETProject::QETProject
 	@param backup : backup file to open, QETProject take ownership of backup.
@@ -129,7 +140,6 @@ QETProject::QETProject(KAutoSaveFile *backup, QObject *parent) :
 
 	init();
 }
-#endif
 
 /**
 	@brief QETProject::~QETProject
@@ -208,6 +218,7 @@ void QETProject::init()
 		});
 		m_autosave_timer.start();
 	}
+
 }
 
 /**
@@ -217,6 +228,9 @@ void QETProject::init()
 */
 QETProject::ProjectState QETProject::openFile(QFile *file)
 {
+	QElapsedTimer load_timer;
+	load_timer.start();
+
 	bool opened_here = file->isOpen() ? false : true;
 	if (!file->isOpen()
 			&& !file->open(QIODevice::ReadOnly
@@ -235,9 +249,18 @@ QETProject::ProjectState QETProject::openFile(QFile *file)
 		}
 		return XmlParsingFailed;
 	}
+	const qint64 xml_parse_ms = load_timer.elapsed();
 
 		//Build the project from the xml
 	readProjectXml(xml_project);
+
+	const qint64 total_ms = load_timer.elapsed();
+	qInfo().nospace().noquote()
+			<< "Project \"" << fi.fileName() << "\" ("
+			<< fi.size() / 1024 << " KiB) opened in "
+			<< total_ms / 1000.0 << " seconds (xml parsing "
+			<< xml_parse_ms / 1000.0 << ", content "
+			<< (total_ms - xml_parse_ms) / 1000.0 << ")";
 
 	if (!fi.isWritable()) {
 		setReadOnly(true);
@@ -342,15 +365,12 @@ void QETProject::setFilePath(const QString &filepath)
 	if (filepath == m_file_path) {
 		return;
 	}
-#ifdef BUILD_WITHOUT_KF5
-#else
 		//Don't close/re-point the backup file while a backup is still writing it.
 	m_backup_future.waitForFinished();
 	if (m_backup_file.isOpen()) {
 		m_backup_file.close();
 	}
 	m_backup_file.setManagedFile(QUrl::fromLocalFile(filepath));
-#endif
 	m_file_path = filepath;
 
 	QFileInfo fi(m_file_path);
@@ -517,6 +537,23 @@ void QETProject::setDefaultBorderProperties(const BorderProperties &border) {
 TitleBlockProperties QETProject::defaultTitleBlockProperties() const
 {
 	return(default_titleblock_properties_);
+}
+
+QList<GuideProperties> QETProject::defaultGuides() const {
+	return m_default_guides;
+}
+
+void QETProject::setDefaultGuides(const QList<GuideProperties> &guides) {
+	if (m_default_guides != guides) {
+		m_default_guides = guides;
+		setModified(true);
+
+		for (Diagram *diagram : m_diagrams_list) {
+			if (diagram) {
+				diagram->updateProjectGuides(m_default_guides);
+			}
+		}
+	}
 }
 
 /**
@@ -1166,6 +1203,22 @@ ElementsLocation QETProject::importElement(ElementsLocation &location)
 			}
 			//Erase the existing element, and use the newer instead
 			else if (action == QET::Erase) {
+				// Warn if the new element introduces slave contact groups
+				QDomElement new_kind = location.xml().firstChildElement("kindInformations");
+				if (!new_kind.firstChildElement("slaveContactGroups").isNull()) {
+					QMessageBox::StandardButton answer = QMessageBox::warning(nullptr,
+						tr("Système de contacts modifié"),
+						tr("Le nouvel élément définit des groupes de contacts esclaves.\n"
+						   "Les éléments esclaves existants ne seront pas automatiquement "
+						   "assignés. Vous devrez relier manuellement les esclaves "
+						   "et assigner les groupes de contacts.\n\n"
+						   "Voulez-vous continuer ?"),
+						QMessageBox::Yes | QMessageBox::No,
+						QMessageBox::Yes);
+					if (answer == QMessageBox::No) {
+						return ElementsLocation();
+					}
+				}
 				ElementsLocation parent_loc = existing_location.parent();
 				return m_elements_collection->copy(location, parent_loc);
 			}
@@ -1460,21 +1513,44 @@ void QETProject::readProjectXml(QDomDocument &xml_project)
 		//load the embedded titleblock templates
 	m_titleblocks_collection.fromXml(xml_project.documentElement());
 
+		/* Timings of the phases below are logged so the cost of opening a
+		 * project can be attributed. Reading the XML and building the objects
+		 * is mostly independent of the Qt version, while refreshing the
+		 * diagrams is graphics-scene work -- keeping them apart is what makes
+		 * the numbers comparable between builds.
+		 */
+	QElapsedTimer phase_timer;
+	phase_timer.start();
+
 		//Load the embedded elements collection
 	readElementsCollectionXml(xml_project);
+	const qint64 elements_ms = phase_timer.restart();
 
 		//Load the diagrams
 	readDiagramsXml(xml_project);
+	const qint64 diagrams_ms = phase_timer.restart();
 
 		//Load the terminal strip
 	readTerminalStripXml(xml_project);
+	const qint64 strips_ms = phase_timer.restart();
 
 		//Now that all are loaded we refresh content of the project.
 	refresh();
-
+	const qint64 refresh_ms = phase_timer.restart();
 
 	m_data_base.blockSignals(false);
 	m_data_base.updateDB();
+	const qint64 database_ms = phase_timer.elapsed();
+
+	qInfo().nospace()
+			<< "Project content built in "
+			<< (elements_ms + diagrams_ms + strips_ms
+				+ refresh_ms + database_ms) / 1000.0
+			<< " seconds (elements collection " << elements_ms / 1000.0
+			<< ", diagrams " << diagrams_ms / 1000.0
+			<< ", terminal strips " << strips_ms / 1000.0
+			<< ", refresh " << refresh_ms / 1000.0
+			<< ", database " << database_ms / 1000.0 << ")";
 
 	m_state = Ok;
 }
@@ -1606,7 +1682,7 @@ void QETProject::readDefaultPropertiesXml(QDomDocument &xml_project)
 	m_default_xref_properties	   = XRefProperties::      defaultProperties();
 
 		//Read values indicate in project
-	QDomElement border_elmt, titleblock_elmt, conductors_elmt, report_elmt, xref_elmt, conds_autonums, folio_autonums, element_autonums;
+	QDomElement border_elmt, titleblock_elmt, conductors_elmt, report_elmt, xref_elmt, conds_autonums, folio_autonums, element_autonums, guides_elmt;
 
 	for (QDomNode child = newdiagrams_elmt.firstChild() ; !child.isNull() ; child = child.nextSibling())
 	{
@@ -1629,6 +1705,8 @@ void QETProject::readDefaultPropertiesXml(QDomDocument &xml_project)
 			folio_autonums = child_elmt;
 		else if (child_elmt.tagName()== QLatin1String("element_autonums"))
 			element_autonums = child_elmt;
+		else if (child_elmt.tagName() == QLatin1String("guides"))
+			guides_elmt = child_elmt;
 	}
 
 		// size, titleblock, conductor, report, conductor autonum, folio autonum, element autonum
@@ -1674,6 +1752,18 @@ void QETProject::readDefaultPropertiesXml(QDomDocument &xml_project)
 			NumerotationContext nc;
 			nc.fromXml(elmt);
 			m_element_autonum.insert(elmt.attribute(QStringLiteral("title")), nc);
+		}
+	}
+	// Read guides from XML (if missing, e.g. in old projects, list stays empty)
+	m_default_guides.clear();
+
+	if (!guides_elmt.isNull()) {
+		for (auto elmt : QET::findInDomElement(guides_elmt, QStringLiteral("guide"))) {
+			GuideProperties g;
+			g.orientation = elmt.attribute(QStringLiteral("orientation"), QStringLiteral("0")).toInt();
+			g.position = elmt.attribute(QStringLiteral("position"), QStringLiteral("0.0")).toDouble();
+			g.color = QColor(elmt.attribute(QStringLiteral("color"), QStringLiteral("#ff0000")));
+			m_default_guides.append(g);
 		}
 	}
 }
@@ -1786,6 +1876,17 @@ void QETProject::writeDefaultPropertiesXml(QDomElement &xml_element)
 		}
 	}
 	xml_element.appendChild(element_autonums);
+
+	// Export default guides
+	QDomElement guides_elmt = xml_document.createElement("guides");
+	for (const auto &g : m_default_guides) {
+		QDomElement guide_elmt = xml_document.createElement("guide");
+		guide_elmt.setAttribute("orientation", static_cast<int>(g.orientation));
+		guide_elmt.setAttribute("position", g.position);
+		guide_elmt.setAttribute("color", g.color.name());
+		guides_elmt.appendChild(guide_elmt);
+	}
+	xml_element.appendChild(guides_elmt);
 }
 
 /**
@@ -1824,24 +1925,17 @@ void QETProject::writeBackup()
 {
 	if (!m_backup_enabled)
 		return;
-#ifdef BUILD_WITHOUT_KF5
-#else
-#	if QT_VERSION < QT_VERSION_CHECK(6, 0, 0) // ### Qt 6: remove
 		//Don't launch a new backup while the previous one is still writing:
 		//both would write through &m_backup_file on different threads.
 	if (m_backup_future.isRunning())
 		return;
+		//Capture the document by value (implicitly shared, so cheap): the
+		//Qt5-style QtConcurrent::run(function, reference-args) call did not
+		//survive the Qt6 API change, a lambda behaves identically on both.
 	QDomDocument xml_project(toXml());
-	m_backup_future = QtConcurrent::run(
-				QET::writeToFile,xml_project,&m_backup_file,nullptr);
-#	else
-#		if TODO_LIST
-#			pragma message("@TODO remove code for QT 6 or later")
-#		endif
-	qDebug() << "Help code for QT 6 or later"
-			 << "QtConcurrent::run its backwards now...function, object, args";
-#	endif
-#endif
+	m_backup_future = QtConcurrent::run([this, xml_project]() mutable {
+		return QET::writeToFile(xml_project, &m_backup_file, nullptr);
+	});
 }
 
 /**
@@ -1994,7 +2088,7 @@ void QETProject::updateDiagramsFolioData()
 		}
 	}
 
-	for (const auto &diagram_ : qAsConst(m_diagrams_list)) {
+	for (const auto &diagram_ : std::as_const(m_diagrams_list)) {
 		diagram_->update();
 	}
 }

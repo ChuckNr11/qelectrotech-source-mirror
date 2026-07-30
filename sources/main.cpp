@@ -24,6 +24,7 @@
 #include "utils/qetsettings.h"
 
 #include <QApplication>
+#include <QDomImplementation>
 
 #include <QStyleFactory>
 #include <QtConcurrentRun>
@@ -207,6 +208,12 @@ int main(int argc, char **argv)
 	QCoreApplication::setOrganizationName("QElectroTech");
 	QCoreApplication::setOrganizationDomain("qelectrotech.org");
 	QCoreApplication::setApplicationName("QElectroTech");
+
+	// Refuse invalid data when building QDom documents instead of
+	// serializing malformed XML (CVE-2026-15037). This is the default
+	// from Qt 6.12 on; opt in explicitly for older Qt 5/6.
+	QDomImplementation::setInvalidDataPolicy(
+		QDomImplementation::ReturnNullNode);
 	//Creation and execution of the application
 	//HighDPI
 #if QT_VERSION < QT_VERSION_CHECK(5, 14, 0)	// ### Qt 6: remove
@@ -245,6 +252,14 @@ QGuiApplication::setHighDpiScaleFactorRoundingPolicy(QetSettings::hdpiScaleFacto
 			return CLIExport::run(export_app.arguments());
 		}
 	}
+
+	// Install the log-file message handler BEFORE the application starts:
+	// QETApp's constructor does the whole startup (collections, editor,
+	// opening the projects given on the command line), so installing the
+	// handler afterwards - as was done in the startup worker below - meant
+	// exactly the interesting lines (collection and project load timers)
+	// went to stderr, which is invisible in a Windows GUI session.
+	qInstallMessageHandler(myMessageOutput);
 
 	SingleApplication app(argc, argv, true);
 #ifdef Q_OS_MACOS
@@ -289,10 +304,8 @@ QGuiApplication::setHighDpiScaleFactorRoundingPolicy(QetSettings::hdpiScaleFacto
 	// here guarantees the singleton is fully built before the worker runs.
 	MachineInfo::instance();
 
-	QtConcurrent::run([=]()
+	[[maybe_unused]] auto startup_future = QtConcurrent::run([=]()
 	{
-		// for debugging
-		qInstallMessageHandler(myMessageOutput);
 		qInfo("Start-up");
 		// delete old log files of max 7 days old.
 		delete_old_log_files(7);

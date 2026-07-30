@@ -47,6 +47,7 @@
 #include <QProcessEnvironment>
 #include <QRegularExpression>
 #ifdef BUILD_WITHOUT_KF5
+#	include "ui/nokde/kautosavefile.h"
 #else
 #	include <KAutoSaveFile>
 #endif
@@ -539,6 +540,48 @@ TitleBlockTemplatesCollection *QETApp::titleBlockTemplatesCollection(
 }
 
 /**
+	@brief resolveConfiguredDataPath
+	Resolve a data directory baked in at compile time.
+
+	An absolute path is returned unchanged. A relative one used to be
+	interpreted against the process working directory, which is only correct
+	when QET is started from its own installation folder: opening a document
+	from a file manager sets the working directory to the document's folder,
+	so the data was not found there. Resolve it against the executable
+	instead, trying the folder next to the binary and then its parent -- some
+	packagings put the binary in a "bin" subfolder with the data beside it
+	(see issue #86).
+
+	The working-directory interpretation is still attempted first, so any
+	setup that relied on it keeps working.
+
+	\~French Resout un dossier de donnees fixe a la compilation.
+	@param configured : the compile-time path
+	@return an existing directory if one is found, @a configured otherwise
+*/
+static QString resolveConfiguredDataPath(const QString &configured)
+{
+	if (configured.isEmpty() || QDir::isAbsolutePath(configured)) {
+		return(configured);
+	}
+	if (QDir(configured).exists()) {
+		return(configured);
+	}
+
+	const QString bin_dir = QCoreApplication::applicationDirPath();
+	const QStringList candidates = {
+		QDir::cleanPath(bin_dir + "/" + configured) + "/",
+		QDir::cleanPath(bin_dir + "/../" + configured) + "/"
+	};
+	for (const QString &candidate : candidates) {
+		if (QDir(candidate).exists()) {
+			return(candidate);
+		}
+	}
+	return(configured);
+}
+
+/**
 	@brief QETApp::commonElementsDir
 	@return the dir path of the common elements collection.
 */
@@ -585,7 +628,8 @@ QString QETApp::commonElementsDir()
 		/* the compilation option represents a classic absolute
 		 *  or relative path
 		 */
-		m_common_element_dir = QUOTE(QET_COMMON_COLLECTION_PATH);
+		m_common_element_dir =
+				resolveConfiguredDataPath(QUOTE(QET_COMMON_COLLECTION_PATH));
 		return m_common_element_dir;
 #else
 		/* the compilation option represents a path
@@ -753,7 +797,7 @@ QString QETApp::commonTitleBlockTemplatesDir()
 	#ifndef QET_COMMON_COLLECTION_PATH_RELATIVE_TO_BINARY_PATH
 		// the compile-time option represents a usual path
 		// (be it absolute or relative)
-		return(QUOTE(QET_COMMON_TBT_PATH));
+		return(resolveConfiguredDataPath(QUOTE(QET_COMMON_TBT_PATH)));
 	#else
 		/* the compile-time option represents a path relative
 		 * to the directory that contains the executable binary
@@ -1260,7 +1304,7 @@ QString QETApp::languagesPath()
 		 * l'option de compilation represente
 		 *  un chemin absolu ou relatif classique
 		 */
-		return(QUOTE(QET_LANG_PATH));
+		return(resolveConfiguredDataPath(QUOTE(QET_LANG_PATH)));
 	#else
 		/* the compilation option represents a path relative
 		 *  to the folder containing the executable binary
@@ -1689,17 +1733,22 @@ void QETApp::invertMainWindowVisibility(QWidget *window) {
 void QETApp::useSystemPalette(bool use) {
 	if (use) {
 		qApp->setPalette(initial_palette_);
-		qApp->setStyleSheet(
-				"QAbstractScrollArea#mdiarea {"
-				"background-color -> setPalette(initial_palette_);"
-				"}"
-				);
+		// Drop any stylesheet previously loaded from style.css: with system
+		// colors requested, the palette set just above is what provides them.
+		//
+		// This used to install a one-rule stylesheet whose only declaration
+		// was invalid CSS ("background-color -> setPalette(initial_palette_);",
+		// a note-to-self committed in e6c32bc0, 2014). It styled nothing, but
+		// a non-empty application stylesheet still wraps every widget in
+		// QStyleSheetStyle, which overrides per-widget QWidget::setStyle().
+		qApp->setStyleSheet(QString());
 	} else {
 		QFile file(configDir() + "/style.css");
-		file.open(QFile::ReadOnly);
-		QString styleSheet = QLatin1String(file.readAll());
-		qApp->setStyleSheet(styleSheet);
-		file.close();
+		if (file.open(QFile::ReadOnly)) {
+			QString styleSheet = QLatin1String(file.readAll());
+			qApp->setStyleSheet(styleSheet);
+			file.close();
+		}
 	}
 }
 
@@ -2500,9 +2549,6 @@ void QETApp::buildSystemTrayMenu()
 */
 void QETApp::checkBackupFiles()
 {
-#ifdef BUILD_WITHOUT_KF5
-	return;
-#else
 	QList<KAutoSaveFile *> stale_files = KAutoSaveFile::allStaleFiles();
 
 	//Remove from the list @stale_files, the stales file of opened project
@@ -2577,7 +2623,6 @@ void QETApp::checkBackupFiles()
 			delete stale;
 		}
 	}
-#endif
 }
 
 /**

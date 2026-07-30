@@ -480,15 +480,11 @@ void QETElementEditor::fillPartsList()
 					}
 				}
 				QListWidgetItem *qlwi = new QListWidgetItem(part_desc);
-				QVariant v;
-#if QT_VERSION < QT_VERSION_CHECK(6, 0, 0)	// ### Qt 6: remove
-				v.setValue<QGraphicsItem *>(qgi);
-#else
-#if TODO_LIST
-#pragma message("@TODO remove code for QT 6 or later")
-#endif
-				qDebug()<<"Help code for QT 6 or later";
-#endif
+					// Qt declares the QGraphicsItem* metatype itself, so this
+					// works on Qt 5 and Qt 6 alike. Without the stored pointer
+					// the parts list loses its item association and selecting
+					// a part no longer selects it on the canvas.
+				QVariant v = QVariant::fromValue(qgi);
 				qlwi -> setData(42, v);
 				m_parts_list -> addItem(qlwi);
 				qlwi -> setSelected(qgi -> isSelected());
@@ -1093,7 +1089,7 @@ void QETElementEditor::updateAction()
 			<< ui->m_revert_selection_action
 			<< ui->m_paste_from_file_action
 			<< ui->m_paste_from_element_action;
-	for (auto action : qAsConst(ro_list)) {
+	for (auto action : std::as_const(ro_list)) {
 		action->setDisabled(m_read_only);
 	}
 
@@ -1108,7 +1104,7 @@ void QETElementEditor::updateAction()
 				<< ui->m_flip_action
 				<< ui->m_mirror_action;
 	auto items_selected = !m_read_only && m_elmt_scene->selectedItems().count();
-	for (auto action : qAsConst(select_list)) {
+	for (auto action : std::as_const(select_list)) {
 		action->setEnabled(items_selected);
 	}
 
@@ -1193,6 +1189,12 @@ void QETElementEditor::initGui()
 
 	updateInformations();
 	fillPartsList();
+
+	// When the element type changes, update the terminal editor master label visibility
+	connect(m_elmt_scene, &ElementScene::elementTypeChanged, this, [this]() {
+		auto *te = static_cast<TerminalEditor *>(m_editors["terminal"]);
+		if (te) te->refreshMasterLabelVisibility();
+	});
 
 	statusBar()->showMessage(tr("Éditeur d'éléments", "status bar message"));
 

@@ -85,11 +85,14 @@ ElementData ElementScene::elementData() {
 void ElementScene::setElementData(ElementData data)
 {
 	bool emit_ = m_element_data.m_informations != data.m_informations;
+	bool type_changed = m_element_data.m_type != data.m_type;
 
 	m_element_data = data;
 
 	if (emit_)
 		emit elementInfoChanged();
+	if (type_changed)
+		emit elementTypeChanged();
 }
 
 /**
@@ -107,6 +110,9 @@ ElementScene::~ElementScene()
 
 	if (m_decorator)
 		delete m_decorator;
+
+	if (m_paste_area && !m_paste_area->scene())
+		delete m_paste_area;
 }
 
 /**
@@ -773,7 +779,7 @@ void ElementScene::addItems(QVector<QGraphicsItem *> items)
  */
 void ElementScene::removeItems(QVector<QGraphicsItem *> items)
 {
-	const int previous_selected_count{selectedItems().size()};
+	const int previous_selected_count = static_cast<int>(selectedItems().size());
 
 		//block signal to avoid multiple emit of selection changed,
 		//we emit this signal only once at the end of this function.

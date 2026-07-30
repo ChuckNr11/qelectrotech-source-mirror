@@ -45,10 +45,7 @@ class ElementsCollectionWidget;
 class AutoNumberingDockWidget;
 class TerminalNumberingDialog;
 
-#ifdef BUILD_WITHOUT_KF5
-#else
 class KAutoSaveFile;
-#endif
 /**
 	This class represents the main window of the QElectroTech diagram editor and,
 	ipso facto, the most important part of the QElectroTech user interface.
@@ -73,10 +70,7 @@ class QETDiagramEditor : public QETMainWindow
 		ProjectView *currentProjectView() const;
 		QETProject *currentProject() const;
 		bool drawGrid() const;
-#ifdef BUILD_WITHOUT_KF5
-#else
 		void openBackupFiles (QList<KAutoSaveFile *> backup_files);
-#endif
 
 	  protected:
 		bool event(QEvent *) override;
@@ -203,6 +197,7 @@ class QETDiagramEditor : public QETMainWindow
 		*conductor_default,		///< Show a dialog to edit default conductor properties
 		*m_grey_background,		///< Switch the background color in white or grey
 		*m_draw_grid,			///< Switch the background grid display or not
+		*m_draw_guides = nullptr,	///< Switch the custom guides display or not
 		*m_project_edit_properties,	///< Edit the properties of the current project.
 		*m_project_add_diagram,		///< Add a diagram to the current project.
 		*m_remove_diagram_from_project,	///< Delete a diagram from the current project
