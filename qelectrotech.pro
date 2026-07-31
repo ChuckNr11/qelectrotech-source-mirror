@@ -38,7 +38,8 @@ win32 {
        # manuell hinzugefügt werden.Eventuell auch die dll für sqlite3.
        # CONFIG(release,... bestimmt das windeployqt nur im release Modus ausgefuhrt wird
         CONFIG(release, debug|release){
-        DESTDIR = 'C:/Users/Chuck/PortablePrograms/my_Qelectrotech/bin'
+        #DESTDIR = 'C:/Users/Chuck/PortablePrograms/my_Qelectrotech/bin'
+        DESTDIR = 'C:\Users\Achim\PortablePrograms\my_Qelectrotech\bin'
         QMAKE_POST_LINK =  windeployqt $$shell_path($$DESTDIR/$${TARGET}.exe)
         }
 }
