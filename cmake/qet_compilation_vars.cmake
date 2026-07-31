@@ -359,6 +359,8 @@ set(QET_SRC_FILES
   ${QET_DIR}/sources/editor/graphicspart/partpolygon.h
   ${QET_DIR}/sources/editor/graphicspart/partrectangle.cpp
   ${QET_DIR}/sources/editor/graphicspart/partrectangle.h
+  ${QET_DIR}/sources/editor/graphicspart/partplctable.cpp
+  ${QET_DIR}/sources/editor/graphicspart/partplctable.h
   ${QET_DIR}/sources/editor/graphicspart/partterminal.cpp
   ${QET_DIR}/sources/editor/graphicspart/partterminal.h
   ${QET_DIR}/sources/editor/graphicspart/parttext.cpp
@@ -438,6 +440,8 @@ set(QET_SRC_FILES
 
   ${QET_DIR}/sources/project/projectpropertieshandler.cpp
   ${QET_DIR}/sources/project/projectpropertieshandler.h
+  ${QET_DIR}/sources/project/projectusagetracker.cpp
+  ${QET_DIR}/sources/project/projectusagetracker.h
 
   ${QET_DIR}/sources/properties/elementdata.cpp
   ${QET_DIR}/sources/properties/elementdata.h
@@ -701,6 +705,8 @@ set(QET_SRC_FILES
   ${QET_DIR}/sources/ui/marginseditdialog.h
   ${QET_DIR}/sources/ui/masterpropertieswidget.cpp
   ${QET_DIR}/sources/ui/masterpropertieswidget.h
+  ${QET_DIR}/sources/ui/plclinkwidget.cpp
+  ${QET_DIR}/sources/ui/plclinkwidget.h
   ${QET_DIR}/sources/ui/multipastedialog.cpp
   ${QET_DIR}/sources/ui/multipastedialog.h
   ${QET_DIR}/sources/ui/potentialselectordialog.cpp

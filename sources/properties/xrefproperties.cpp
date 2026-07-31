@@ -180,7 +180,7 @@ QHash<QString, XRefProperties> XRefProperties::defaultProperties()
 {
 	QHash <QString, XRefProperties> hash;
 	QStringList keys;
-	keys << "coil" << "protection" << "commutator";
+	keys << "coil" << "protection" << "commutator" << "plc";
 
 	QSettings settings;
 
