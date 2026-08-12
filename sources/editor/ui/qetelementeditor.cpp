@@ -1200,13 +1200,21 @@ void QETElementEditor::initGui()
 		//Live cursor position readout, in the same scene coordinates as the parts' X/Y properties
 	m_position_label = new QLabel(this);
 	m_position_label->setMinimumWidth(120);
-	statusBar()->addPermanentWidget(m_position_label);
+		// Layout
+	QHBoxLayout *coordDisplayLayout = new QHBoxLayout();
+	coordDisplayLayout->addWidget(m_position_label);
+	coordDisplayLayout->addStretch();
+		// Widget
+	QWidget *coordDisplay = new QWidget;
+	coordDisplay->setLayout(coordDisplayLayout);
+	
+	statusBar()->addPermanentWidget(coordDisplay);
 	connect(m_elmt_scene, &ElementScene::mouseMoved, this, [this](const QPointF &pos) {
 		m_position_label->setText(tr("X: %1  Y: %2")
 			.arg(pos.x(), 0, 'f', 1)
 			.arg(pos.y(), 0, 'f', 1));
 	});
-
+	
 	statusBar()->showMessage(tr("Éditeur d'éléments", "status bar message"));
 }
 
