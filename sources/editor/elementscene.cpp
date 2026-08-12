@@ -121,7 +121,12 @@ void ElementScene::mouseMoveEvent(QGraphicsSceneMouseEvent *e)
 {
 	if (m_event_interface) {
 		if (m_event_interface -> mouseMoveEvent(e)) {
-			emit mouseMoved(e -> scenePos());
+			// Achim Elementeditor Koordinatenanzeige Fix
+			/* hier werden die reinen Scene Koordinaten gesendet, ohne snapToGrid
+			// entweder muss wie unten bei der event_pos auch snapToGrid benutzt
+			// werden, oder in meinen Augen besser im ESEventInterface in der
+			// updateHelpCross Funktion. siehe dort*/
+			//emit mouseMoved(e -> scenePos()); // 
 			if (m_event_interface->isFinish()) {
 				delete m_event_interface;
 				m_event_interface = nullptr;

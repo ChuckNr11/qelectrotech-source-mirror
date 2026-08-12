@@ -133,7 +133,13 @@ void ESEventInterface::updateHelpCross(const QPointF &p) {
 
 	//Update the position of the cross
 	QPointF point = m_scene -> snapToGrid(p);
-
+	
+	// Achim Elementeditor Koordinatenanzeige Fix
+	/*Hier wird der Schnittpunkt der helpCross Linien zur 
+	 * Koordinatenanzeige gesendet, in meinen Augen die schönste Variante
+	  */
+	emit (m_scene->mouseMoved(point));
+	
 	m_help_horiz -> setY(point.y());
 	m_help_verti -> setX(point.x());
 
