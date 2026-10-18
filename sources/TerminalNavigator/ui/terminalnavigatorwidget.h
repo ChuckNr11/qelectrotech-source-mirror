@@ -21,10 +21,12 @@
 #include <QHash>
 #include <QPointer>
 #include <QSharedPointer>
+#include <QTimer>
 #include <QUuid>
 #include <QVector>
 #include <QWidget>
 
+class Element;
 class QETProject;
 class QTreeWidgetItem;
 class TerminalStrip;
@@ -48,6 +50,13 @@ namespace Ui {
 
 	Unlike the dock this is a plain tab, so it has no drag and drop of
 	its own: free terminals are moved in the terminal strip editor.
+
+	The tree follows what the folios hold: a terminal placed on a folio
+	shows up below the free terminals, and one taken off leaves again --
+	QETProject::elementAdded()/elementRemoved() say so for every way an
+	element reaches a folio (DiagramEventAddElement, a paste, an undo, a
+	drop from the panel). Those signals arrive one per element, so they
+	are collected by a timer into a single rebuild.
 */
 class TerminalNavigatorWidget : public QWidget
 {
@@ -85,12 +94,15 @@ class TerminalNavigatorWidget : public QWidget
 
 	private slots:
 		void on_m_tree_view_currentItemChanged(QTreeWidgetItem *current, QTreeWidgetItem *previous);
+		void onElementChanged();
 
 	private:
 		void buildTree();
 		QTreeWidgetItem* addTerminalStrip(TerminalStrip *terminal_strip);
 		void addFreeTerminal();
 		void setCurrentStrip(TerminalStrip *strip);
+		void connectElementSignals();
+		void disconnectElementSignals();
 
 	private:
 		Ui::TerminalNavigatorWidget *ui;
@@ -102,6 +114,12 @@ class TerminalNavigatorWidget : public QWidget
 		QHash<QUuid, QSharedPointer<RealTerminal>> m_uuid_terminal_H;
 		QHash<QUuid, QPointer<TerminalStrip>> m_uuid_strip_H;
 		QVector<QMetaObject::Connection> m_strip_changed_connection;
+		QVector<QMetaObject::Connection> m_element_changed_connection;
+			/// Collects the elementAdded()/elementRemoved() signals into
+			/// one rebuild: placing, pasting and loading emit one signal
+			/// per element, and rebuilding the whole tree per signal
+			/// would be a visible stall on a big project.
+		QTimer m_reload_timer;
 		bool m_current_is_free_terminal{false};
 };
 

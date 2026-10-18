@@ -98,12 +98,26 @@ class tst_terminalnavigator : public QObject
 				: nullptr;
 	}
 
+		//A reload rebuilds every item of the tree, so the root holding
+		//the free terminals has to be taken again after each one -- the
+		//item held before is deleted.
+	QTreeWidgetItem *freeRoot() const
+	{
+		return m_tree->topLevelItem(1);
+	}
+
+	int freeTerminalCount() const
+	{
+		return freeRoot() ? freeRoot()->childCount() : -1;
+	}
+
 private slots:
 	void initTestCase();
 	void groupsStripsByInstallationAndLocation();
 	void movesTerminalFromFreeToStrip();
 	void selectsStripAndTerminal();
 	void reloadKeepsTheSelectedStrip();
+	void followsElementsOfTheFolios();
 	void clearsWithoutProject();
 	void followsTheActiveProject();
 	void cleanupTestCase();
@@ -287,6 +301,70 @@ void tst_terminalnavigator::reloadKeepsTheSelectedStrip()
 	m_widget->reload();
 	QCOMPARE(m_tree->topLevelItemCount(), 2);
 	QVERIFY(!m_widget->currentStrip());
+}
+
+/**
+	A terminal placed on a folio shows up below the free terminals, and
+	one taken off leaves again. The two signals reach the navigator one
+	per element, so they are collected into a single rebuild; and an
+	element of any other kind, which leaves the tree untouched, is not
+	asked for a rebuild at all.
+*/
+void tst_terminalnavigator::followsElementsOfTheFolios()
+{
+	const int free_before = freeTerminalCount();
+	QVERIFY(free_before > 1);
+
+	auto terminals = ElementProvider(m_project).freeTerminal();
+	QVERIFY(!terminals.isEmpty());
+
+		//A free terminal without a conductor of its own, so taking it
+		//off the folio does not disturb the wiring of the project.
+	Element *terminal = nullptr;
+	for (auto candidate : terminals) {
+		if (candidate->conductors().isEmpty()) {
+			terminal = candidate;
+			break;
+		}
+	}
+	QVERIFY2(terminal, "a free terminal with no conductor");
+	const QString label = terminal->actualLabel();
+	QVERIFY(!label.isEmpty());
+	Diagram *folio = terminal->diagram();
+	QVERIFY(folio);
+	QVERIFY(childrenTexts(freeRoot()).contains(label));
+
+		//Taken off the folio it is gone from the tree...
+	folio->removeItem(terminal);
+	QCoreApplication::processEvents();
+	QCOMPARE(freeTerminalCount(), free_before - 1);
+	QVERIFY(!childrenTexts(freeRoot()).contains(label));
+
+		//...and back on it, it is back in the tree.
+	folio->addItem(terminal);
+	QCoreApplication::processEvents();
+	QCOMPARE(freeTerminalCount(), free_before);
+	QVERIFY(childrenTexts(freeRoot()).contains(label));
+
+		//An element of another kind is reported too, but the tree holds
+		//no place for it: nothing about the terminals changed, so the
+		//free terminals are counted as they were.
+	auto others = ElementProvider(m_project).find(ElementData::Simple);
+	QVERIFY(!others.isEmpty());
+	Element *other = others.first();
+	QVERIFY(other);
+	Diagram *other_folio = other->diagram();
+	QVERIFY(other_folio);
+	const int others_before = other_folio->elements().count();
+
+	other_folio->removeItem(other);
+	QCoreApplication::processEvents();
+	QCOMPARE(freeTerminalCount(), free_before);
+
+	other_folio->addItem(other);
+	QCoreApplication::processEvents();
+	QCOMPARE(freeTerminalCount(), free_before);
+	QCOMPARE(other_folio->elements().count(), others_before);
 }
 
 void tst_terminalnavigator::clearsWithoutProject()

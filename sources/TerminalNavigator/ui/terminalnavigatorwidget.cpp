@@ -38,6 +38,17 @@ TerminalNavigatorWidget::TerminalNavigatorWidget(QWidget *parent) :
 	ui->setupUi(this);
 
 	ui->m_tree_view->expandRecursively(ui->m_tree_view->rootIndex());
+
+		//Elements are reported one signal at a time -- a paste of thirty
+		//terminals emits thirty of them, a project load one per element
+		//of every folio. Rebuilding the tree per signal would be a
+		//visible stall, so the signals only restart this timer, and the
+		//tree is rebuilt once, when the burst is over. A single shot
+		//with no interval fires as soon as the event loop turns.
+	m_reload_timer.setSingleShot(true);
+	m_reload_timer.setInterval(0);
+	connect(&m_reload_timer, &QTimer::timeout,
+			this, &TerminalNavigatorWidget::reload);
 }
 
 TerminalNavigatorWidget::~TerminalNavigatorWidget()
@@ -59,6 +70,7 @@ void TerminalNavigatorWidget::setProject(QETProject *project)
 	if (m_project && m_project_destroy_connection) {
 		disconnect(m_project_destroy_connection);
 	}
+	disconnectElementSignals();
 	m_project = project;
 	if (m_project) {
 			//`this` as context: this widget can be deleted before the
@@ -70,11 +82,67 @@ void TerminalNavigatorWidget::setProject(QETProject *project)
 				//is already half destroyed.
 			this->m_project.clear();
 			this->m_current_strip.clear();
+			this->disconnectElementSignals();
 			this->reload();
 		});
+		connectElementSignals();
 	}
 	m_current_strip.clear();
 	reload();
+}
+
+/**
+ * @brief TerminalNavigatorWidget::connectElementSignals
+ * Follow the elements of the project's folios, so a terminal placed on
+ * a folio shows up below the free terminals and one taken off leaves
+ * again. Only terminals matter here: any other element -- a resistor, a
+ * drawing item -- leaves the tree exactly as it was, and rebuilding it
+ * for those would be work for nothing.
+ */
+void TerminalNavigatorWidget::connectElementSignals()
+{
+	if (!m_project) {
+		return;
+	}
+
+	const auto on_element = [this](Element *element) {
+		if (element && element->elementData().m_type == ElementData::Terminal) {
+			this->onElementChanged();
+		}
+	};
+
+	m_element_changed_connection.append(
+				connect(m_project, &QETProject::elementAdded, this, on_element));
+	m_element_changed_connection.append(
+				connect(m_project, &QETProject::elementRemoved, this, on_element));
+}
+
+/**
+ * @brief TerminalNavigatorWidget::disconnectElementSignals
+ */
+void TerminalNavigatorWidget::disconnectElementSignals()
+{
+	for (const auto &connection_ : std::as_const(m_element_changed_connection)) {
+		disconnect(connection_);
+	}
+	m_element_changed_connection.clear();
+	m_reload_timer.stop();
+}
+
+/**
+ * @brief TerminalNavigatorWidget::onElementChanged
+ * A terminal was placed on a folio or taken off one. The tree is not
+ * rebuilt here but when the event loop turns: an insertion is reported
+ * one signal at a time, and a paste or a load sends a whole burst of
+ * them, which this timer turns into a single rebuild.
+ */
+void TerminalNavigatorWidget::onElementChanged()
+{
+	if (!m_project) {
+		return;
+	}
+
+	m_reload_timer.start();
 }
 
 /**

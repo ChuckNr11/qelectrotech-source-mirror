@@ -411,6 +411,13 @@ class QETProject : public QObject
 		Bridge *newBridge();
 		bool addBridge(Bridge *bridge);
 		bool removeBridge(Bridge *bridge);
+			//Emit elementAdded()/elementRemoved() for @p element. Called
+			//by Diagram::addItem() and Diagram::removeItem(): a C++ signal
+			//can only be emitted from its own class, so the funnel has to
+			//go through here. Nothing is stored -- the elements of a folio
+			//belong to that folio, this only reports the change.
+		void elementWasAdded(Element *element);
+		void elementWasRemoved(Element *element);
 		Diagram *diagramByUuid(const QUuid &uuid);
 
 	public slots:
@@ -456,6 +463,22 @@ class QETProject : public QObject
 			/// bridges listen to both to work their rows out again.
 		void bridgeAdded(Bridge *bridge);
 		void bridgeRemoved(Bridge *bridge);
+			/// An element was placed on a folio, or taken off one. They
+			/// answer "did the content of a folio gain or lose an
+			/// element", which no other signal does: the database's own
+			/// dataBaseUpdated() also covers conductors, drawing items
+			/// and moves, and DiagramEventAddPaste blocks it for a whole
+			/// paste on purpose (it would re-run every table query per
+			/// item). Both are emitted from Diagram::addItem() and
+			/// Diagram::removeItem(), the one funnel every insertion
+			/// goes through -- placing, pasting, an undo and a drop from
+			/// the panel alike -- so a view of the folios' elements
+			/// stays right without watching each of those routes.
+			/// Bounce what you get from them through a timer if you
+			/// rebuild: a paste or a project load emits one signal per
+			/// element.
+		void elementAdded(Element *element);
+		void elementRemoved(Element *element);
 
 	private slots:
 		void updateDiagramsFolioData();

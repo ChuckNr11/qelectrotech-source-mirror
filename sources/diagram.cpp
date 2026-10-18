@@ -2959,6 +2959,10 @@ void Diagram::addItem(QGraphicsItem *item)
 			if ((elmt->linkType() & Element::AllReport) && m_project->chainedReports()) {
 				m_project->scheduleAutoLink();
 			}
+				//Reported once the element is really in the scene, so a
+				//listener re-reading its elements finds it (a listener of
+				//the free terminals would otherwise miss it).
+			m_project->elementWasAdded(elmt);
 			break;
 		}
 		case Conductor::Type:
@@ -2993,6 +2997,7 @@ void Diagram::removeItem(QGraphicsItem *item)
 {
 	if (!item || isReadOnly()) return;
 
+	Element *removed_element = nullptr;
 	switch (item->type())
 	{
 		case Element::Type:
@@ -3003,6 +3008,7 @@ void Diagram::removeItem(QGraphicsItem *item)
 			if ((elmt->linkType() & Element::AllReport) && m_project->chainedReports()) {
 				m_project->scheduleAutoLink();
 			}
+			removed_element = elmt;
 			break;
 		}
 		case Conductor::Type:
@@ -3026,6 +3032,14 @@ void Diagram::removeItem(QGraphicsItem *item)
 	}
 
 	QGraphicsScene::removeItem(item);
+
+		//Reported once the element is really out of the scene, so a
+		//listener re-reading its elements does not find it anymore -- the
+		//item itself is still valid here (it is deleted by its caller),
+		//but do not count on that for longer than this signal.
+	if (removed_element) {
+		m_project->elementWasRemoved(removed_element);
+	}
 }
 /**
 	@brief Diagram::titleChanged
