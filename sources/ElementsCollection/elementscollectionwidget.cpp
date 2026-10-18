@@ -26,6 +26,7 @@
 #include "../qeticons.h"
 #include "../qetmessagebox.h"
 #include "../qetproject.h"
+#include "../TerminalNavigator/ui/terminalnavigatorwidget.h"
 #include "elementcollectionitem.h"
 #include "elementpreviewdelegate.h"
 #include "elementscollectionmodel.h"
@@ -138,6 +139,11 @@ void ElementsCollectionWidget::addProject(QETProject *project)
 	else {
 		m_waiting_project.append(project);
 	}
+
+		//The terminal navigator follows the project the user is working
+		//on (currentProjectChanged, setUpConnection), so it is not fed
+		//here: several projects can be open in this editor at once, and
+		//the one added last is not necessarily the active one.
 }
 
 void ElementsCollectionWidget::removeProject(QETProject *project) {
@@ -148,6 +154,16 @@ void ElementsCollectionWidget::removeProject(QETProject *project) {
 		m_new_model->removeProject(project);
 	if (m_model)
 		m_model->removeProject(project);
+
+		//The navigator follows the active project and tracks the
+		//destruction of the one it holds by itself, so a project closed
+		//here only needs taking out while it is still the one shown --
+		//closing it makes another project active, whose signal has not
+		//run yet at this point.
+	if (m_terminal_navigator
+		&& m_terminal_navigator->project() == project) {
+		m_terminal_navigator->setProject();
+	}
 }
 
 /**
@@ -282,6 +298,12 @@ void ElementsCollectionWidget::setUpWidget()
 	m_tab_widget->addTab(m_tree_view, tr("Collections"));
 	m_tab_widget->addTab(m_macros_tree_view, tr("Templates"));
 
+		//Third tab: the terminal strips of the project, as a tree. The
+		//project it shows is the one the editor has active, wired up in
+		//setUpConnection() below.
+	m_terminal_navigator = new TerminalNavigatorWidget(this);
+	m_tab_widget->addTab(m_terminal_navigator, tr("Terminal"));
+
 		//Flat ranked search results.
 		//The tree search hides non-matching rows, so hits stay scattered
 		//through five levels of expanded folders -- searching "diode" leaves
@@ -349,6 +371,21 @@ void ElementsCollectionWidget::setUpConnection()
 		this, &ElementsCollectionWidget::resetShowThisDir);
 	connect(m_dir_propertie, &QAction::triggered,
 		this, &ElementsCollectionWidget::dirProperties);
+
+		//The terminal navigator shows the strips of the project the user
+		//is really working on, so it follows the editor's active project
+		//rather than the project added last: several projects can be open
+		//at once, and switching their tabs has to switch the tree too.
+	auto *editor = QETApp::diagramEditorAncestorOf(this);
+	if (editor) {
+		connect(editor, &QETDiagramEditor::currentProjectChanged,
+			this, [this](QETProject *project) {
+				if (m_terminal_navigator) {
+					m_terminal_navigator->setProject(project);
+				}
+			});
+		m_terminal_navigator->setProject(editor->currentProject());
+	}
 
 	connect(m_tree_view, &QTreeView::doubleClicked,
 			[this](const QModelIndex &index) { this->activateIndex(index); });

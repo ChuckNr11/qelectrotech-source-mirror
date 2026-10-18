@@ -4992,6 +4992,7 @@ void QETDiagramEditor::subWindowActivated(QMdiSubWindow *subWindows)
 	slot_updateActions();
 	slot_updateWindowsMenu();
 	emit syncElementsPanel();
+	emit currentProjectChanged(currentProject());
 	updateUsageTrackersActiveState();
 	updateWindowModifiedState();
 }

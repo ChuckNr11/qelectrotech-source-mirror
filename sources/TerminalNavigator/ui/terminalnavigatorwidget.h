@@ -1,0 +1,108 @@
+/*
+	Copyright 2006-2026 The QElectroTech Team
+	This file is part of QElectroTech.
+
+	QElectroTech is free software: you can redistribute it and/or modify
+	it under the terms of the GNU General Public License as published by
+	the Free Software Foundation, either version 2 of the License, or
+	(at your option) any later version.
+
+	QElectroTech is distributed in the hope that it will be useful,
+	but WITHOUT ANY WARRANTY; without even the implied warranty of
+	MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+	GNU General Public License for more details.
+
+	You should have received a copy of the GNU General Public License
+	along with QElectroTech.  If not, see <http://www.gnu.org/licenses/>.
+*/
+#ifndef TERMINALNAVIGATORWIDGET_H
+#define TERMINALNAVIGATORWIDGET_H
+
+#include <QHash>
+#include <QPointer>
+#include <QSharedPointer>
+#include <QUuid>
+#include <QVector>
+#include <QWidget>
+
+class QETProject;
+class QTreeWidgetItem;
+class TerminalStrip;
+class RealTerminal;
+
+namespace Ui {
+	class TerminalNavigatorWidget;
+}
+
+/**
+	@brief The TerminalNavigatorWidget class
+	Shows the terminal strips of a project as a tree, as a third tab
+	("Terminal") of the elements collection panel.
+
+	The tree is the one TerminalStripTreeDockWidget draws inside the
+	terminal strip editor, in the same order and with the same items:
+	the project as the root, then installation, location, strip and
+	terminal, and a second root holding the free terminals. The strips
+	are read from the project itself (QETProject::terminalStrip()), the
+	free terminals from the folios (ElementProvider::freeTerminal()).
+
+	Unlike the dock this is a plain tab, so it has no drag and drop of
+	its own: free terminals are moved in the terminal strip editor.
+*/
+class TerminalNavigatorWidget : public QWidget
+{
+	Q_OBJECT
+
+	private:
+		enum TreeWidgetType{
+			Root,
+			Terminal,
+			FreeTerminal,
+			Installation,
+			Location,
+			Strip
+		};
+			//Role used for data in QTreeWidgetItem
+		static constexpr int UUID_USER_ROLE{Qt::UserRole + 1};
+
+	public:
+		explicit TerminalNavigatorWidget(QWidget *parent = nullptr);
+		~TerminalNavigatorWidget();
+
+		void setProject(QETProject *project = nullptr);
+		QETProject *project() const;
+		void reload();
+
+		bool currentIsStrip() const;
+		TerminalStrip* currentStrip() const;
+		QString currentInstallation() const;
+		QString currentLocation() const;
+		void setSelectedStrip(TerminalStrip *strip);
+		QSharedPointer<RealTerminal> currentRealTerminal() const;
+
+	signals:
+		void currentStripChanged(TerminalStrip *strip);
+
+	private slots:
+		void on_m_tree_view_currentItemChanged(QTreeWidgetItem *current, QTreeWidgetItem *previous);
+
+	private:
+		void buildTree();
+		QTreeWidgetItem* addTerminalStrip(TerminalStrip *terminal_strip);
+		void addFreeTerminal();
+		void setCurrentStrip(TerminalStrip *strip);
+
+	private:
+		Ui::TerminalNavigatorWidget *ui;
+		QPointer<QETProject> m_project;
+		QPointer<TerminalStrip> m_current_strip;
+		QMetaObject::Connection m_project_destroy_connection;
+
+		QHash<QTreeWidgetItem *, QPointer<TerminalStrip>> m_item_strip_H;
+		QHash<QUuid, QSharedPointer<RealTerminal>> m_uuid_terminal_H;
+		QHash<QUuid, QPointer<TerminalStrip>> m_uuid_strip_H;
+		QVector<QMetaObject::Connection> m_strip_changed_connection;
+		bool m_current_is_free_terminal{false};
+};
+
+#endif // TERMINALNAVIGATORWIDGET_H

@@ -36,6 +36,7 @@ class ElementCollectionItem;
 class QProgressBar;
 class QETProject;
 class ElementsTreeView;
+class TerminalNavigatorWidget;
 
 /**
 	@brief The ElementsCollectionWidget class
@@ -137,6 +138,8 @@ class ElementsCollectionWidget : public QWidget
 		ElementsTreeView *m_tree_view;
 		ElementsTreeView *m_macros_tree_view = nullptr;
 		QTabWidget *m_tab_widget = nullptr;
+			/// Third tab ("Terminal"): the terminal strips of the project
+		TerminalNavigatorWidget *m_terminal_navigator = nullptr;
 			/// Flat ranked results, shown in place of the tree while searching
 		QListView *m_search_results = nullptr;
 		QStandardItemModel *m_search_model = nullptr;

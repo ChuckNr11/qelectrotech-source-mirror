@@ -145,6 +145,14 @@ class QETDiagramEditor : public QETMainWindow
 
 	signals:
 		void syncElementsPanel();
+		/**
+			Emitted whenever the active MDI subwindow changes, so the
+			projects held by a widget of this window follow the project
+			the user is really working on -- the elements collection's
+			terminal navigator reads the strips of @p currentProject()
+			from it.
+		*/
+		void currentProjectChanged(QETProject *project);
 
 	public slots:
 		void save();
