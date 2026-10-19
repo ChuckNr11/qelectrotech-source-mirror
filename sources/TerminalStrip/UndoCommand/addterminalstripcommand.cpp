@@ -17,8 +17,8 @@
 */
 #include "addterminalstripcommand.h"
 #include "../../qetproject.h"
+#include "../physicalterminal.h"
 #include "../terminalstrip.h"
-#include "../qetgraphicsitem/element.h"
 #include "../realterminal.h"
 
 #include <QObject>
@@ -53,6 +53,11 @@ void AddTerminalStripCommand::redo() {
 	}
 }
 
+/**
+ * @brief RemoveTerminalStripCommand::RemoveTerminalStripCommand
+ * @param strip
+ * @param parent
+ */
 RemoveTerminalStripCommand::RemoveTerminalStripCommand(TerminalStrip *strip,
 													   QETProject    *project,
 													   QUndoCommand  *parent) :
@@ -60,10 +65,12 @@ RemoveTerminalStripCommand::RemoveTerminalStripCommand(TerminalStrip *strip,
 	m_strip(strip),
 	m_project(project)
 {
-	for (const auto &real_t : strip->realTerminals())
-	{
-		if (real_t->element())
-			m_elements.append(real_t->element());
+		//The terminals are kept here grouped the way the physical terminals
+		//hold them: redo() takes the strip out of the project, and then
+		//these shared references are the only thing left keeping a terminal
+		//which is not drawn in any folio alive.
+	for (const auto &phy_t : strip->physicalTerminal()) {
+		m_terminals.append(phy_t->realTerminals());
 	}
 	setText(QObject::tr("Delete a group of terminals"));
 }
@@ -74,9 +81,7 @@ RemoveTerminalStripCommand::~RemoveTerminalStripCommand()
 void RemoveTerminalStripCommand::undo()
 {
 	if (m_project && m_strip) {
-		for (auto elmt : m_elements) {
-			m_strip->addTerminal(elmt);
-		}
+		m_strip->addAndGroupTerminals(m_terminals);
 		m_project->addTerminalStrip(m_strip);
 	}
 }
@@ -84,9 +89,11 @@ void RemoveTerminalStripCommand::undo()
 void RemoveTerminalStripCommand::redo()
 {
 	if (m_project && m_strip) {
-		for (auto elmt : m_elements) {
-			m_strip->removeTerminal(elmt);
+		QVector<QSharedPointer<RealTerminal>> real_t;
+		for (const auto &terminal_vector : std::as_const(m_terminals)) {
+			real_t.append(terminal_vector);
 		}
+		m_strip->removeTerminals(real_t);
 		m_project->removeTerminalStrip(m_strip);
 	}
 }

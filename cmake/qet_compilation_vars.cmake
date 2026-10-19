@@ -84,6 +84,7 @@ set(QET_RES_FILES
   ${QET_DIR}/sources/SearchAndReplace/ui/replaceelementdialog.ui
   ${QET_DIR}/sources/SearchAndReplace/ui/replacefoliowidget.ui
   ${QET_DIR}/sources/SearchAndReplace/ui/searchandreplacewidget.ui
+  ${QET_DIR}/sources/TerminalNavigator/ui/addterminalstripdialog.ui
   ${QET_DIR}/sources/TerminalNavigator/ui/terminalnavigatorwidget.ui
   ${QET_DIR}/sources/TerminalStrip/ui/addterminalstripitemdialog.ui
   ${QET_DIR}/sources/TerminalStrip/ui/freeterminaleditor.ui
@@ -767,8 +768,12 @@ set(QET_SRC_FILES
   ${QET_DIR}/sources/titleblock/templatevisualcell.cpp
   ${QET_DIR}/sources/titleblock/templatevisualcell.h
 
+  ${QET_DIR}/sources/TerminalNavigator/ui/addterminalstripdialog.cpp
+  ${QET_DIR}/sources/TerminalNavigator/ui/addterminalstripdialog.h
   ${QET_DIR}/sources/TerminalNavigator/ui/terminalnavigatorwidget.cpp
   ${QET_DIR}/sources/TerminalNavigator/ui/terminalnavigatorwidget.h
+  ${QET_DIR}/sources/TerminalNavigator/UndoCommand/createterminalstripcommand.cpp
+  ${QET_DIR}/sources/TerminalNavigator/UndoCommand/createterminalstripcommand.h
 
   ${QET_DIR}/sources/TerminalStrip/physicalterminal.cpp
   ${QET_DIR}/sources/TerminalStrip/physicalterminal.h

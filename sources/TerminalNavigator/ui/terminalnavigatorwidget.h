@@ -57,6 +57,13 @@ namespace Ui {
 	element reaches a folio (DiagramEventAddElement, a paste, an undo, a
 	drop from the panel). Those signals arrive one per element, so they
 	are collected by a timer into a single rebuild.
+
+	The tab also creates strips: a toolbar button and a context menu entry
+	both open the creator dialog of the terminal strip editor, prefilled
+	with the plant and the location the user is looking at, and the strip
+	lands in the project through its own undo command --
+	CreateTerminalStripCommand, in sources/TerminalNavigator/UndoCommand/ --
+	so it can be taken back with a single undo, tree included.
 */
 class TerminalNavigatorWidget : public QWidget
 {
@@ -94,6 +101,8 @@ class TerminalNavigatorWidget : public QWidget
 
 	private slots:
 		void on_m_tree_view_currentItemChanged(QTreeWidgetItem *current, QTreeWidgetItem *previous);
+		void on_m_tree_view_customContextMenuRequested(const QPoint &pos);
+		void on_m_add_strip_triggered();
 		void onElementChanged();
 
 	private:
@@ -103,6 +112,7 @@ class TerminalNavigatorWidget : public QWidget
 		void setCurrentStrip(TerminalStrip *strip);
 		void connectElementSignals();
 		void disconnectElementSignals();
+		void createTerminalStrip();
 
 	private:
 		Ui::TerminalNavigatorWidget *ui;

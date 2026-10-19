@@ -15,7 +15,24 @@
   </property>
   <layout class="QVBoxLayout" name="verticalLayout">
    <item>
+    <widget class="QToolBar" name="m_tool_bar">
+     <property name="movable">
+      <bool>false</bool>
+     </property>
+     <property name="toolButtonStyle">
+      <enum>Qt::ToolButtonTextBesideIcon</enum>
+     </property>
+     <property name="windowTitle">
+      <string>toolBar</string>
+     </property>
+     <addaction name="m_add_strip"/>
+    </widget>
+   </item>
+   <item>
     <widget class="QTreeWidget" name="m_tree_view">
+     <property name="contextMenuPolicy">
+      <enum>Qt::CustomContextMenu</enum>
+     </property>
      <property name="animated">
       <bool>true</bool>
      </property>
@@ -30,6 +47,17 @@
     </widget>
    </item>
   </layout>
+  <action name="m_add_strip">
+   <property name="icon">
+    <iconset theme="list-add"/>
+   </property>
+   <property name="text">
+    <string>New terminal strip</string>
+   </property>
+   <property name="toolTip">
+    <string>Add a terminal strip to the project</string>
+   </property>
+  </action>
  </widget>
  <resources/>
  <connections/>

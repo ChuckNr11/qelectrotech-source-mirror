@@ -21,6 +21,9 @@
 #include "../../qetproject.h"
 
 #include "../../qet.h"
+#include "../../utils/qetutils.h"
+
+#include <algorithm>
 /**
  * @brief TerminalStripCreatorDialog::TerminalStripCreatorDialog
  * @param project : Project to add a new terminal strip
@@ -32,6 +35,7 @@ TerminalStripCreatorDialog::TerminalStripCreatorDialog(QETProject *project, QWid
 	m_project(project)
 {
 	ui->setupUi(this);
+	fillWithExistingValues();
 	QET::trackDialogGeometry(this);
 }
 
@@ -44,21 +48,25 @@ TerminalStripCreatorDialog::~TerminalStripCreatorDialog() {
 
 /**
  * @brief TerminalStripCreatorDialog::setInstallation
- * Set the installation field string
+ * Set the installation field string. @p installation does not have to be
+ * one the combo box already offers: a value the project does not know yet
+ * is accepted as it is typed.
  * @param installation
  */
 void TerminalStripCreatorDialog::setInstallation(const QString &installation) {
-	ui->m_installation_le->setText(installation);
+	ui->m_installation_cb->setCurrentText(installation);
 	setCursorToEmptyLine();
 }
 
 /**
  * @brief TerminalStripCreatorDialog::setLocation
- * Set the location field string
+ * Set the location field string. @p location does not have to be one the
+ * combo box already offers: a value the project does not know yet is
+ * accepted as it is typed.
  * @param location
  */
 void TerminalStripCreatorDialog::setLocation(const QString &location) {
-	ui->m_location_le->setText(location);
+	ui->m_location_cb->setCurrentText(location);
 	setCursorToEmptyLine();
 }
 
@@ -70,8 +78,8 @@ void TerminalStripCreatorDialog::setLocation(const QString &location) {
  */
 TerminalStrip *TerminalStripCreatorDialog::generatedTerminalStrip() const
 {
-	QString installation_ = ui->m_installation_le->text();
-	QString location_     = ui->m_location_le->text();
+	QString installation_ = ui->m_installation_cb->currentText();
+	QString location_     = ui->m_location_cb->currentText();
 	QString name_         = ui->m_name_le->text();
 
 	if (installation_.isEmpty()) {
@@ -98,12 +106,56 @@ TerminalStrip *TerminalStripCreatorDialog::generatedTerminalStrip() const
  */
 void TerminalStripCreatorDialog::setCursorToEmptyLine()
 {
-	if (ui->m_installation_le->text().isEmpty()) {
+	if (ui->m_installation_cb->currentText().isEmpty()) {
 		return;
 	}
-	if (ui->m_location_le->text().isEmpty()) {
-		ui->m_location_le->setFocus();
+	if (ui->m_location_cb->currentText().isEmpty()) {
+		ui->m_location_cb->setFocus();
 		return;
 	}
 	ui->m_name_le->setFocus();
+}
+
+/**
+ * @brief TerminalStripCreatorDialog::fillWithExistingValues
+ * Offer the plants and locations the strips of the project already use,
+ * so the same one is picked instead of typed a second time -- the
+ * navigator groups by those two values, and two look-alike plants are
+ * two branches which are hard to tell apart afterwards.
+ *
+ * Sorted naturally (Cabinet 2 before Cabinet 10), each value once, and a
+ * project without any strip simply leaves the two combo boxes empty:
+ * they still work as the plain text fields they were.
+ */
+void TerminalStripCreatorDialog::fillWithExistingValues()
+{
+	if (!m_project) {
+		return;
+	}
+
+	QStringList installations_;
+	QStringList locations_;
+	for (auto *strip : m_project->terminalStrip())
+	{
+		if (!strip) {
+			continue;
+		}
+		const auto installation_ = strip->installation();
+		const auto location_ = strip->location();
+		if (!installation_.isEmpty() && !installations_.contains(installation_)) {
+			installations_.append(installation_);
+		}
+		if (!location_.isEmpty() && !locations_.contains(location_)) {
+			locations_.append(location_);
+		}
+	}
+
+	const auto natural_order_ = [](const QString &a, const QString &b) {
+		return QETUtils::naturalLessThan(a, b);
+	};
+	std::sort(installations_.begin(), installations_.end(), natural_order_);
+	std::sort(locations_.begin(), locations_.end(), natural_order_);
+
+	ui->m_installation_cb->addItems(installations_);
+	ui->m_location_cb->addItems(locations_);
 }

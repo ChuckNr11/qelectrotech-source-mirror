@@ -37,6 +37,11 @@ class TerminalStripBridge;
  * or a terminal set by user but not present
  * on any folio (for example a reserved terminal).
  *
+ * The second case is what createPending() builds: a terminal which is
+ * already in a strip -- with a label and a symbol to be drawn with later --
+ * but which holds no element, so isElement() is false and label() falls back
+ * on the label the terminal was created with.
+ *
  * When create a new instance of RealTerminal you must
  * call sharedRef() and only use the returned QSharedPointer
  * instead of the raw pointer
@@ -71,10 +76,34 @@ class RealTerminal
 		TerminalStrip *parentStrip() const noexcept;
 		QSharedPointer<PhysicalTerminal> physicalTerminal() const noexcept;
 
+		/**
+		 * @brief createPending
+		 * Build a terminal which belongs to a strip but which is not drawn
+		 * in any folio yet -- the terminals the terminal navigator creates
+		 * out of the ID field of its strip creation dialog, before the user
+		 * drags their symbol onto a folio.
+		 *
+		 * Such a terminal carries its own label (@p label, the same
+		 * 'strip name:ID' a drawn terminal gets from its element) and the
+		 * location of the element it should be drawn with (@p symbol, a
+		 * location string such as 'embed://...' or 'common://...'), neither
+		 * of which any element could provide here.
+		 *
+		 * @param label : the label of the terminal, may be empty
+		 * @param symbol : location string of the symbol to draw it with, may be empty
+		 * @param uuid : identity of the terminal, a new one is made when null
+		 * @return a shared reference, which is the only usable handle on it
+		 * (@sa the class description about sharedRef())
+		 */
+		static QSharedPointer<RealTerminal> createPending(const QString &label,
+														  const QString &symbol = QString(),
+														  const QUuid &uuid = QUuid());
+
 		QDomElement toXml(QDomDocument &parent_document) const;
 
 		int level() const;
 		QString label() const;
+		QString symbol() const;
 		QString Xref() const;
 		QString cable() const;
 		QString cableWire() const;
@@ -121,7 +150,21 @@ class RealTerminal
 		QSharedPointer<TerminalStripBridge> bridge() const;
 
 		Element* element() const;
+		/**
+		 * @brief elementUuid
+		 * @return the uuid of the element this terminal is drawn with, or a
+		 * null uuid when the terminal is not drawn (yet).
+		 */
 		QUuid elementUuid() const;
+		/**
+		 * @brief uuid
+		 * @return the identity to address this terminal with: the uuid of
+		 * its element for a drawn terminal -- unchanged, every bridge and
+		 * every command of the terminal strip editor keeps working -- and
+		 * the uuid of the terminal itself when it is not drawn yet, which
+		 * elementUuid() can not provide since there is no element at all.
+		 */
+		QUuid uuid() const;
 
 		static QString xmlTagName();
 
@@ -135,6 +178,11 @@ class RealTerminal
 		ElementData m_spare_data;
 		QWeakPointer<RealTerminal> m_this_weak;
 		QSharedPointer<PhysicalTerminal> m_physical_terminal;
+		/// Identity of a terminal which holds no element yet, @sa uuid()
+		QUuid m_uuid;
+		/// Label and symbol of a terminal which holds no element yet,
+		/// @sa createPending()
+		QString m_label, m_symbol;
 };
 
 #endif // REALTERMINAL_H

@@ -204,6 +204,29 @@ RealTerminal::~RealTerminal()
 }
 
 /**
+ * @brief RealTerminal::createPending
+ * Build a terminal which holds no element, that is to say a terminal of a
+ * strip which is not drawn in any folio yet.
+ * @param label : the label of the terminal, 'strip name:ID' the way a drawn
+ * terminal gets it from its element
+ * @param symbol : location string of the element to draw it with later,
+ * may be empty when the user did not choose one
+ * @param uuid : identity of the terminal, a new one is made when null
+ * @return a shared reference on the new terminal
+ */
+QSharedPointer<RealTerminal> RealTerminal::createPending(const QString &label,
+														 const QString &symbol,
+														 const QUuid &uuid)
+{
+	auto *real_t = new RealTerminal(nullptr);
+	real_t->m_label = label;
+	real_t->m_symbol = symbol;
+	real_t->m_uuid = uuid.isNull() ? QUuid::createUuid() : uuid;
+
+	return real_t->sharedRef();
+}
+
+/**
  * @brief RealTerminal::sharedRef
  * @return a QSharedPointer of this
  */
@@ -260,6 +283,23 @@ QDomElement RealTerminal::toXml(QDomDocument &parent_document) const
 	}
 	else if (m_element) {
 		root_elmt.setAttribute(QStringLiteral("element_uuid"), m_element->uuid().toString());
+	} else if (!m_uuid.isNull()) {
+		//A terminal which is not drawn in any folio yet carries its own
+		//identity, its label and the symbol it should be drawn with, so
+		//that the project round trip keeps it. A terminal which holds no
+		//element and no identity of its own -- what an element deleted in
+		//an older version left behind -- is still written empty and still
+		//dropped at reading time, @sa TerminalStrip::fromXml().
+		//A spare terminal and such a pending terminal never both describe
+		//one terminal: a spare has spare_uuid and no terminal_uuid, a
+		//pending one the other way round.
+		root_elmt.setAttribute(QStringLiteral("terminal_uuid"), m_uuid.toString());
+		if (!m_label.isEmpty()) {
+			root_elmt.setAttribute(QStringLiteral("label"), m_label);
+		}
+		if (!m_symbol.isEmpty()) {
+			root_elmt.setAttribute(QStringLiteral("symbol"), m_symbol);
+		}
 	}
 
 	return root_elmt;
@@ -315,7 +355,9 @@ int RealTerminal::level() const
 
 /**
  * @brief label
- * @return the label of this real terminal
+ * @return the label of this real terminal. A terminal which is not drawn in
+ * any folio yet has no element to take a label from, and falls back on the
+ * label it was created with (@sa createPending()).
  */
 QString RealTerminal::label() const {
 	if (m_spare) {
@@ -323,8 +365,18 @@ QString RealTerminal::label() const {
 	} else if (!m_element.isNull()) {
 		return m_element->actualLabel();
 	} else {
-		return QLatin1String();
+		return m_label;
 	}
+}
+
+/**
+ * @brief symbol
+ * @return the location string of the element this terminal should be drawn
+ * with, for a terminal which is not drawn yet. A drawn terminal takes its
+ * symbol from its own element and has nothing to say here.
+ */
+QString RealTerminal::symbol() const {
+	return m_symbol;
 }
 
 /**
@@ -860,6 +912,22 @@ QUuid RealTerminal::elementUuid() const {
 		return m_element->uuid();
 	} else {
 		return QUuid();
+	}
+}
+
+/**
+ * @brief uuid
+ * @return the identity to address this terminal with: the uuid of the
+ * element of a drawn terminal (nothing changes for the bridges and the
+ * commands of the terminal strip editor), or the uuid of the terminal
+ * itself when it is not drawn yet, since elementUuid() is a null uuid
+ * in that case.
+ */
+QUuid RealTerminal::uuid() const {
+	if (!m_element.isNull()) {
+		return m_element->uuid();
+	} else {
+		return m_uuid;
 	}
 }
 

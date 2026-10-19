@@ -20,11 +20,12 @@
 
 #include <QUndoCommand>
 #include <QPointer>
+#include <QSharedPointer>
 #include <QVector>
 
 class TerminalStrip;
 class QETProject;
-class Element;
+class RealTerminal;
 
 class AddTerminalStripCommand : public QUndoCommand
 {
@@ -52,7 +53,13 @@ class RemoveTerminalStripCommand : public QUndoCommand
 	private:
 		QPointer<TerminalStrip> m_strip;
 		QPointer<QETProject> m_project;
-		QVector<QPointer<Element>> m_elements;
+		/// Terminals of the strip, grouped the way its physical terminals
+		/// hold them, so that undo() gives the strip back as it was.
+		/// Shared references and not raw pointers: a terminal which is not
+		/// drawn in any folio yet has no element to hold it, and a raw
+		/// pointer would be a dangling one as soon as this command is the
+		/// only thing left remembering it.
+		QVector<QVector<QSharedPointer<RealTerminal>>> m_terminals;
 };
 
 #endif // ADDTERMINALSTRIPCOMMAND_H

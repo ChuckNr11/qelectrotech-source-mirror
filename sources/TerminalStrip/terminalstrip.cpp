@@ -524,7 +524,9 @@ QVector<QSharedPointer<PhysicalTerminal>> TerminalStrip::physicalTerminal() cons
 QSharedPointer<RealTerminal> TerminalStrip::realTerminalForUuid(const QUuid &uuid) const
 {
 	for (const auto &t : realTerminals()) {
-		if (t->elementUuid() == uuid) {
+			//The identity of a terminal which is not drawn yet is its own,
+			//and not the one of an element, @sa RealTerminal::uuid()
+		if (t->uuid() == uuid) {
 			return t;
 		}
 	}
@@ -1317,7 +1319,8 @@ bool TerminalStrip::fromXml(QDomElement &xml_element)
 		QSet<QUuid> terminals;
 		const QDomNodeList xml_reals = xml_layout.elementsByTagName(RealTerminal::xmlTagName());
 		for (int i = 0 ; i < xml_reals.size() ; ++i) {
-				//A spare terminal is on no folio
+				//A spare terminal is on no folio, and so is a terminal
+				//which is not drawn yet : neither carries an element_uuid
 			const auto element_uuid_ = xml_reals.at(i).toElement().attribute(QStringLiteral("element_uuid"));
 			if (!element_uuid_.isEmpty()) {
 				terminals.insert(QUuid(element_uuid_));
@@ -1341,6 +1344,17 @@ bool TerminalStrip::fromXml(QDomElement &xml_element)
 					//A spare terminal (on no folio) has its own data
 				if (auto spare_ = RealTerminal::spareFromXml(xml_real)) {
 					real_t_vector.append(spare_);
+					continue;
+				}
+
+					//A terminal which is not drawn in any folio yet carries
+					//an identity of its own instead of the one of an element
+				const auto own_uuid = xml_real.attribute(QStringLiteral("terminal_uuid"));
+				if (!own_uuid.isEmpty()) {
+					real_t_vector.append(RealTerminal::createPending(
+						xml_real.attribute(QStringLiteral("label")),
+						xml_real.attribute(QStringLiteral("symbol")),
+						QUuid(own_uuid)));
 					continue;
 				}
 

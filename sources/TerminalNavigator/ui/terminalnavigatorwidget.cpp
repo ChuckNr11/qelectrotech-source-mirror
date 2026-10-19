@@ -26,7 +26,14 @@
 #include "../../TerminalStrip/physicalterminal.h"
 #include "../../TerminalStrip/realterminal.h"
 #include "../../TerminalStrip/terminalstrip.h"
+#include "../../TerminalStrip/UndoCommand/addterminaltostripcommand.h"
 #include "../../utils/qetutils.h"
+#include "../UndoCommand/createterminalstripcommand.h"
+#include "addterminalstripdialog.h"
+
+#include <QMenu>
+#include <QScopedPointer>
+#include <QUndoStack>
 
 #include <algorithm>
 #include <utility>
@@ -38,6 +45,10 @@ TerminalNavigatorWidget::TerminalNavigatorWidget(QWidget *parent) :
 	ui->setupUi(this);
 
 	ui->m_tree_view->expandRecursively(ui->m_tree_view->rootIndex());
+
+		//No project yet: adding a strip has nowhere to go until the
+		//panel hands one over. setProject() switches it on again.
+	ui->m_add_strip->setEnabled(false);
 
 		//Elements are reported one signal at a time -- a paste of thirty
 		//terminals emits thirty of them, a project load one per element
@@ -83,10 +94,13 @@ void TerminalNavigatorWidget::setProject(QETProject *project)
 			this->m_project.clear();
 			this->m_current_strip.clear();
 			this->disconnectElementSignals();
+			this->ui->m_add_strip->setEnabled(false);
 			this->reload();
 		});
 		connectElementSignals();
 	}
+		//Nothing can be added to no project at all.
+	ui->m_add_strip->setEnabled(bool(m_project));
 	m_current_strip.clear();
 	reload();
 }
@@ -181,6 +195,18 @@ void TerminalNavigatorWidget::reload()
 	auto item = m_item_strip_H.key(current_);
 	if (item) {
 		ui->m_tree_view->setCurrentItem(item);
+	}
+	else if (current_ && m_current_strip) {
+			//The strip which was selected is not part of the tree
+			//anymore: undone, or deleted in the terminal strip editor.
+			//Holding on to the pointer would make currentStrip() answer
+			//for a strip the project does not have, and
+			//currentInstallation()/currentLocation() would offer a
+			//branch which is gone -- both feed the creator dialog.
+			//clear() above has normally said this already through
+			//currentItemChanged(); the check on m_current_strip keeps
+			//this a safety net instead of a second signal.
+		setCurrentStrip(nullptr);
 	}
 }
 
@@ -306,6 +332,116 @@ void TerminalNavigatorWidget::on_m_tree_view_currentItemChanged(QTreeWidgetItem 
 }
 
 /**
+ * @brief TerminalNavigatorWidget::on_m_add_strip_triggered
+ * The toolbar button: create a terminal strip the way the terminal strip
+ * editor does, in the branch the user is looking at.
+ */
+void TerminalNavigatorWidget::on_m_add_strip_triggered()
+{
+	createTerminalStrip();
+}
+
+/**
+ * @brief TerminalNavigatorWidget::on_m_tree_view_customContextMenuRequested
+ * Right click offers the same creation as the toolbar button, but for the
+ * branch under the cursor: the clicked item becomes the current one
+ * first, so the dialog is prefilled with its plant and location.
+ * @param pos
+ */
+void TerminalNavigatorWidget::on_m_tree_view_customContextMenuRequested(const QPoint &pos)
+{
+	if (!m_project) {
+		return;
+	}
+
+	if (auto *item = ui->m_tree_view->itemAt(pos)) {
+		ui->m_tree_view->setCurrentItem(item);
+	}
+
+	QMenu menu(this);
+	menu.addAction(ui->m_add_strip);
+	menu.exec(ui->m_tree_view->viewport()->mapToGlobal(pos));
+}
+
+/**
+ * @brief TerminalNavigatorWidget::createTerminalStrip
+ * Open the navigator's own strip creation dialog, prefilled with the plant
+ * and the location of the current selection, and put what the dialog
+ * describes into the project: a terminal strip, and the terminals of its
+ * ID field.
+ *
+ * The terminals are created as terminals which are not drawn in any folio
+ * yet: they hold a label ('strip name:ID') and the symbol the user picked,
+ * but no element, which is why isElement() is the marker the tree uses to
+ * tell a drawn terminal from a pending one. Nothing needs an active folio
+ * here, the terminals get their folio when their symbol is dropped on one.
+ *
+ * A name which already belongs to a strip of the node means that the
+ * terminals are added to that strip rather than to a new one: same node,
+ * same strip, the IDs are simply extended.
+ *
+ * Everything goes into a single macro, so that one undo takes the
+ * terminals out again and leaves the tree the way it was. QUndoStack::
+ * push() runs redo() straight away, so there is nothing left to do here.
+ */
+void TerminalNavigatorWidget::createTerminalStrip()
+{
+	if (!m_project) {
+		return;
+	}
+
+	QScopedPointer<AddTerminalStripDialog> dialog(
+				new AddTerminalStripDialog(m_project, this));
+	dialog->setLocation(currentLocation());
+	dialog->setInstallation(currentInstallation());
+
+	if (dialog->exec() != QDialog::Accepted) {
+		return;
+	}
+
+	auto *existing_strip = dialog->terminalStripOfTheDialog();
+	auto *strip_ = existing_strip ? existing_strip : dialog->generatedTerminalStrip();
+	if (!strip_) {
+		return;
+	}
+
+	const auto ids = dialog->terminalIds();
+	auto *macro = new QUndoCommand(ids.isEmpty()
+		? tr("Add a group of terminals")
+		: tr("Add %n terminal(s) to the terminal strip %1", "", ids.count())
+			.arg(strip_->name()));
+
+	if (!existing_strip) {
+		new CreateTerminalStripCommand(strip_, m_project, this, macro);
+	}
+
+	if (!ids.isEmpty())
+	{
+		QVector<QSharedPointer<RealTerminal>> terminals;
+		const auto label_prefix = strip_->name() + QStringLiteral(":");
+		for (const auto &id : ids) {
+			terminals.append(
+						RealTerminal::createPending(label_prefix + id, dialog->symbolLocation()));
+		}
+		new AddTerminalToStripCommand(terminals, strip_, macro);
+	}
+
+	if (macro->childCount() == 0) {	//Neither a strip nor a terminal was described
+		delete macro;
+		return;
+	}
+
+	m_project->undoStack()->push(macro);
+
+	if (existing_strip) {
+		//The command of a new strip already selects it; an existing one
+		//is only reloaded through orderChanged() and would keep whatever
+		//item the tree happened to select.
+		setSelectedStrip(strip_);
+	}
+}
+
+/**
  * @brief TerminalNavigatorWidget::buildTree
  * Fill the tree with the terminal strips of the project, grouped by
  * installation and location, plus the free terminals.
@@ -391,16 +527,22 @@ QTreeWidgetItem* TerminalNavigatorWidget::addTerminalStrip(TerminalStrip *termin
 		if (phy_t->realTerminalCount())
 		{
 			QString text_;
+			bool drawn_ = false;
 			for (const auto &real_t : phy_t->realTerminals())
 			{
 				if (text_.isEmpty())
 					text_ = real_t->label();
 				else
 					text_.append(QStringLiteral(", ")).append(real_t->label());
+					//A terminal which is not drawn in any folio yet holds no
+					//symbol, and the missing icon is what tells the two apart
+				drawn_ = drawn_ || real_t->isElement();
 			}
 			auto terminal_item = new QTreeWidgetItem(strip_item, QStringList(text_), Terminal);
 			terminal_item->setData(0, UUID_USER_ROLE, phy_t->uuid());
-			terminal_item->setIcon(0, QET::Icons::ElementTerminal);
+			if (drawn_) {
+				terminal_item->setIcon(0, QET::Icons::ElementTerminal);
+			}
 		}
 	}
 
