@@ -74,6 +74,7 @@ struct modelRealTerminalData
 				mrtd.real_terminal = real_t.toWeakRef();
 				mrtd.bridged_ = real_t->isBridged();
 				mrtd.spare_ = real_t->isSpare();
+				mrtd.pending_ = real_t->isPending();
 			}
 
 			return mrtd;
@@ -101,6 +102,7 @@ struct modelRealTerminalData
 		QString catalog_entry_;	//Terminal chosen in the catalog, empty if the width was typed
 		bool bridged_ = false;
 		bool spare_ = false;	//Spare terminal, on no folio (RealTerminal::isSpare())
+		bool pending_ = false;	//Drawn in no folio yet (RealTerminal::isPending())
 
 		ElementData::TerminalType type_ = ElementData::TerminalType::TTGeneric;
 		ElementData::TerminalFunction function_ = ElementData::TerminalFunction::TFGeneric;

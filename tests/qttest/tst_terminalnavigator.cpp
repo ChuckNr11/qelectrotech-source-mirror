@@ -228,6 +228,7 @@ private slots:
 	void previewsTheTerminalsInTheTree();
 	void createsTheStripWithItsTerminalsOnOk();
 	void keepsPendingTerminalsInXml();
+	void keepsTheDataOfTerminalsWhichAreNotDrawnInXml();
 	void clearsWithoutProject();
 	void followsTheActiveProject();
 	void cleanupTestCase();
@@ -1166,6 +1167,81 @@ void tst_terminalnavigator::keepsPendingTerminalsInXml()
 	QVERIFY(orphan_target->fromXml(orphan_strip));
 	QVERIFY2(orphan_target->realTerminals().isEmpty(),
 			 "an element-less terminal without an identity of its own is left out");
+}
+
+/**
+	The data the terminal strip editor edits for a terminal which is
+	drawn in no folio yet are its own, saved with it the way a spare
+	terminal saves its own: type, function, LED and informations -- and
+	with those informations the label the terminal carries, since
+	label() reads it back from them.
+
+	Nothing of it names an element: the terminal holds no element, so
+	its identity stays its own, and reading it back gives a terminal of
+	the same kind with the same data, still drawn nowhere, still not in
+	the nomenclature of the project -- which counts the spare terminals
+	and the terminals drawn on folios only.
+*/
+void tst_terminalnavigator::keepsTheDataOfTerminalsWhichAreNotDrawnInXml()
+{
+	QETProject other(QStringLiteral(QET_TEST_PROJECT_PATH));
+	auto *strip = other.newTerminalStrip(
+				QStringLiteral("KC"), QStringLiteral("Cellar"), QStringLiteral("X901"));
+	QVERIFY(strip);
+	auto pending = RealTerminal::createPending(
+				QStringLiteral("X901:1"), QStringLiteral("embed://terminal.elmt"));
+	QVERIFY(pending);
+	QVERIFY(strip->addTerminal(pending));
+
+		//The terminal strip editor edits the row of that terminal: label,
+		//type, function, all of it stored with the terminal itself
+	ElementData data;
+	data.setTerminalType(ElementData::TTFuse);
+	data.setTerminalFunction(ElementData::TFPhase);
+	data.setTerminalLED(true);
+	data.m_informations.addValue(QStringLiteral("label"), QStringLiteral("X901:7"));
+	data.m_informations.addValue(RealTerminal::sectionInfoKey(),
+								 QStringLiteral("2.5"));
+	pending->setSpareData(data);
+
+	QVERIFY2(pending->isPending(), "the terminal is drawn in no folio");
+	QVERIFY(!pending->isSpare());
+	QCOMPARE(pending->label(), QStringLiteral("X901:7"));
+	QCOMPARE(pending->type(), ElementData::TTFuse);
+	QCOMPARE(pending->section(), 2.5);
+
+	QDomDocument document;
+	auto xml_strip = strip->toXml(document);
+	const auto xml_real = xml_strip.elementsByTagName(RealTerminal::xmlTagName())
+						  .at(0).toElement();
+	QVERIFY2(!xml_real.attribute(QStringLiteral("terminal_uuid")).isEmpty(),
+			 "it holds an identity of its own, not the one of an element");
+	QVERIFY(xml_real.attribute(QStringLiteral("element_uuid")).isEmpty());
+	QCOMPARE(xml_real.attribute(QStringLiteral("label")), QStringLiteral("X901:7"));
+	QCOMPARE(xml_real.attribute(QStringLiteral("type")),
+			 ElementData::terminalTypeToString(ElementData::TTFuse));
+	QCOMPARE(xml_real.attribute(QStringLiteral("function")),
+			 ElementData::terminalFunctionToString(ElementData::TFPhase));
+	QVERIFY2(!xml_real.firstChildElement(QStringLiteral("informations")).isNull(),
+			 "its informations are saved with it");
+
+	auto *restored = other.newTerminalStrip(
+				QStringLiteral("KC"), QStringLiteral("Cellar"), QStringLiteral("X901bis"));
+	QVERIFY(restored);
+	QVERIFY(restored->fromXml(xml_strip));
+	const auto terminals = restored->realTerminals();
+	QCOMPARE(terminals.count(), 1);
+	const auto restored_t = terminals.at(0);
+	QVERIFY(restored_t->isPending());
+	QVERIFY(!restored_t->isSpare());
+	QVERIFY(!restored_t->isElement());
+	QCOMPARE(restored_t->uuid(), pending->uuid());
+	QCOMPARE(restored_t->symbol(), QStringLiteral("embed://terminal.elmt"));
+	QCOMPARE(restored_t->label(), QStringLiteral("X901:7"));
+	QCOMPARE(restored_t->type(), ElementData::TTFuse);
+	QCOMPARE(restored_t->function(), ElementData::TFPhase);
+	QVERIFY(restored_t->isLed());
+	QCOMPARE(restored_t->section(), 2.5);
 }
 
 void tst_terminalnavigator::clearsWithoutProject()

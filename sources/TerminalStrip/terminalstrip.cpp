@@ -1348,13 +1348,10 @@ bool TerminalStrip::fromXml(QDomElement &xml_element)
 				}
 
 					//A terminal which is not drawn in any folio yet carries
-					//an identity of its own instead of the one of an element
-				const auto own_uuid = xml_real.attribute(QStringLiteral("terminal_uuid"));
-				if (!own_uuid.isEmpty()) {
-					real_t_vector.append(RealTerminal::createPending(
-						xml_real.attribute(QStringLiteral("label")),
-						xml_real.attribute(QStringLiteral("symbol")),
-						QUuid(own_uuid)));
+					//an identity of its own instead of the one of an element,
+					//with the data the strip editor edited for it
+				if (auto pending_ = RealTerminal::pendingFromXml(xml_real)) {
+					real_t_vector.append(pending_);
 					continue;
 				}
 

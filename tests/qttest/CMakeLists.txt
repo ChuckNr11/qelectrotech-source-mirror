@@ -2064,6 +2064,14 @@ qet_add_app_test(tst_terminalstripautoimport tst_terminalstripautoimport.cpp)
 target_compile_definitions(tst_terminalstripautoimport PRIVATE
   "QET_TEST_PROJECT_PATH=\"${QET_DIR}/examples/industrial.qet\"")
 
+# The table of the terminal strip editor: a terminal which is drawn in no
+# folio yet has data of its own, so what is typed into its row is kept,
+# undone in one step, and the row says "Not drawn yet" instead of a
+# cross-reference it has none of.
+qet_add_app_test(tst_terminalstripeditor tst_terminalstripeditor.cpp)
+target_compile_definitions(tst_terminalstripeditor PRIVATE
+  "QET_TEST_PROJECT_PATH=\"${QET_DIR}/examples/industrial.qet\"")
+
 # The working copy: the project database in a file, committed after each
 # edit; killed at random moments, it holds every edit finished, and a clean
 # exit leaves nothing. QET-SQL-FORMAT S3z2.
