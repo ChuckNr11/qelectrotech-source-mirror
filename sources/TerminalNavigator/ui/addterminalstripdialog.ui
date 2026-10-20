@@ -102,7 +102,7 @@
    <item row="5" column="1">
     <widget class="QComboBox" name="m_symbol_cb">
      <property name="toolTip">
-      <string>Symbol the terminals will be drawn with, once they are placed on a folio. Leave empty to decide later.</string>
+      <string>Symbol the terminals are drawn with, once they are placed on a folio. Select the terminals in the list below to give this symbol to them; with nothing selected, it becomes the symbol the terminals typed next get.</string>
      </property>
     </widget>
    </item>
@@ -154,13 +154,10 @@
    <item row="9" column="0" colspan="2">
     <widget class="QTreeWidget" name="m_preview_tree">
      <property name="toolTip">
-      <string>Terminals about to be added to the terminal strip. A terminal without a symbol is not drawn in any folio yet.</string>
+      <string>Terminals about to be added to the terminal strip, with the symbol each one is drawn with. Select one or several of them and pick a symbol below to give it to them; a terminal without a symbol is not drawn in any folio yet.</string>
      </property>
      <property name="columnCount">
-      <number>1</number>
-     </property>
-     <property name="headerHidden">
-      <bool>true</bool>
+      <number>2</number>
      </property>
      <property name="selectionMode">
       <enum>QAbstractItemView::ExtendedSelection</enum>

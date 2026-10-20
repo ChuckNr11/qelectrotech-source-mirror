@@ -798,7 +798,8 @@ void tst_terminalnavigator::checksTheStripDialog()
 /**
 	The strip dialog previews the terminals the OK button would create: the
 	strip as the root item of the tree below the description, one child per
-	ID of the ID field, updated while the user types.
+	ID of the ID field, updated while the user types, the ID in the first
+	column and the name of the symbol it is drawn with in the second one.
 	A terminal which is not drawn in any folio yet has no symbol to show,
 	and the missing icon is how the trees tell it apart from a drawn one --
 	the very marking the navigator gives those terminals later on.
@@ -806,7 +807,11 @@ void tst_terminalnavigator::checksTheStripDialog()
 	is what a drag out of that tree would read.
 
 	The tree lets the user pick children one by one, in ranges or all at
-	once, with the mouse or the keyboard (ExtendedSelection).
+	once, with the mouse or the keyboard (ExtendedSelection), and a symbol
+	picked in the combo box applies to the children selected -- and to
+	them only, the others keeping the one they were given. With nothing
+	selected, the value only becomes the symbol the children typed next
+	are created with.
 */
 void tst_terminalnavigator::previewsTheTerminalsInTheTree()
 {
@@ -817,8 +822,10 @@ void tst_terminalnavigator::previewsTheTerminalsInTheTree()
 	m_tree->setCurrentItem(cabinet_a);
 
 	bool tree_shown = false, root_has_icon = true, children_without_icon = true;
-	QString root_text_before, root_text_after, symbol_chosen;
-	QStringList children_after, symbols;
+	bool symbol_column_shown = false, combo_follows_one_selection = false;
+	QString root_text_before, root_text_after, symbol_chosen, symbol_name_chosen;
+	QStringList children_after, symbols, symbols_in_column;
+	QStringList symbols_after_picking, symbols_after_new_default;
 	int children_on_broken_list = -1, selected_children = 0;
 
 	const bool dialog_found = interactWithTheStripDialog([&](QDialog *dialog) {
@@ -830,11 +837,13 @@ void tst_terminalnavigator::previewsTheTerminalsInTheTree()
 			return;
 		}
 		tree_shown = tree->isVisible();
+		symbol_column_shown = tree->columnCount() == 2 && !tree->isHeaderHidden();
 
 			//The dialog preselects the terminal symbol the project
 			//already draws its terminals with, so the children carry
 			//that symbol around with them.
 		symbol_chosen = symbols_cb->itemData(symbols_cb->currentIndex()).toString();
+		symbol_name_chosen = symbols_cb->itemText(symbols_cb->currentIndex());
 
 		auto *root_item = tree->topLevelItem(0);
 		if (root_item) {
@@ -852,6 +861,7 @@ void tst_terminalnavigator::previewsTheTerminalsInTheTree()
 				auto *child = root_item->child(i);
 				children_after << child->text(0);
 				symbols << child->data(0, Qt::UserRole).toString();
+				symbols_in_column << child->text(1);
 				children_without_icon = children_without_icon && child->icon(0).isNull();
 			}
 		}
@@ -861,6 +871,49 @@ void tst_terminalnavigator::previewsTheTerminalsInTheTree()
 		id_field->setText(QStringLiteral("1-2-3"));
 		root_item = tree->topLevelItem(0);
 		children_on_broken_list = root_item ? root_item->childCount() : -1;
+
+			//A symbol picked for the terminals the user selected: the
+			//first and the third lose the one they had, the second one
+			//keeps it, since it was not selected.
+		id_field->setText(QStringLiteral("1-3"));
+		root_item = tree->topLevelItem(0);
+		if (root_item && root_item->childCount() == 3) {
+			root_item->child(0)->setSelected(true);
+			root_item->child(2)->setSelected(true);
+		}
+		symbols_cb->setCurrentIndex(0);		//(no symbol)
+		root_item = tree->topLevelItem(0);
+		if (root_item) {
+			for (int i = 0 ; i < root_item->childCount() ; ++i) {
+				symbols_after_picking << root_item->child(i)
+										 ->data(0, Qt::UserRole).toString();
+			}
+		}
+
+			//One selected terminal shows the symbol it carries, so
+			//that the user reads what he is about to change.
+		tree->clearSelection();
+		root_item = tree->topLevelItem(0);
+		if (root_item && root_item->childCount() == 3) {
+			root_item->child(1)->setSelected(true);
+			combo_follows_one_selection =
+					symbols_cb->itemData(symbols_cb->currentIndex()).toString()
+					== symbol_chosen;
+		}
+
+			//With nothing selected, the symbol picked next is the one
+			//the terminals typed next are created with -- and it
+			//never changes the terminals already listed.
+		tree->clearSelection();
+		symbols_cb->setCurrentIndex(0);		//(no symbol)
+		id_field->setText(QStringLiteral("1-4"));
+		root_item = tree->topLevelItem(0);
+		if (root_item) {
+			for (int i = 0 ; i < root_item->childCount() ; ++i) {
+				symbols_after_new_default << root_item->child(i)
+											  ->data(0, Qt::UserRole).toString();
+			}
+		}
 
 			//A selection the user can build with the mouse or the
 			//keyboard, and which survives the typing of a new ID.
@@ -880,6 +933,8 @@ void tst_terminalnavigator::previewsTheTerminalsInTheTree()
 
 	QVERIFY2(dialog_found, "the strip dialog was shown");
 	QVERIFY2(tree_shown, "the preview tree is shown, below the description");
+	QVERIFY2(symbol_column_shown,
+			 "the second column of the preview shows the symbol of each terminal");
 	QVERIFY2(root_text_before.isEmpty(), "the root item starts with the empty name");
 	QVERIFY2(root_has_icon, "the root item shows a terminal strip");
 	QCOMPARE(root_text_after, QStringLiteral("X77"));
@@ -891,7 +946,19 @@ void tst_terminalnavigator::previewsTheTerminalsInTheTree()
 	QVERIFY2(!symbol_chosen.isEmpty(),
 			 "the dialog preselects the terminal symbol the project draws with");
 	QCOMPARE(symbols, (QStringList{symbol_chosen, symbol_chosen, symbol_chosen}));
+	QCOMPARE(symbols_in_column, (QStringList{symbol_name_chosen,
+											 symbol_name_chosen,
+											 symbol_name_chosen}));
 	QCOMPARE(children_on_broken_list, 3);
+	QCOMPARE(symbols_after_picking, (QStringList{QString(),
+												 symbol_chosen,
+												 QString()}));
+	QVERIFY2(combo_follows_one_selection,
+			 "one selected terminal shows the symbol it carries");
+	QCOMPARE(symbols_after_new_default, (QStringList{QString(),
+													 symbol_chosen,
+													 QString(),
+													 QString()}));
 	QCOMPARE(selected_children, 2);
 }
 
@@ -919,19 +986,33 @@ void tst_terminalnavigator::createsTheStripWithItsTerminalsOnOk()
 	const int terminals_in_x10 = x10->physicalTerminalCount();
 
 		//A name of his own creates the strip and the two terminals of
-		//the ID field, neither of them drawn anywhere.
+		//the ID field, neither of them drawn anywhere. Each of them
+		//carries the symbol the user gave it: the first one keeps the
+		//symbol the dialog preselects, the second one is given none.
+	QString symbol_kept;
 	const bool dialog_found = interactWithTheStripDialog([&](QDialog *dialog) {
 		auto *names = dialogNameCombo(dialog);
 		auto *id_field = dialogIdField(dialog);
-		if (!names || !id_field) {
+		auto *tree = dialogPreviewTree(dialog);
+		auto *symbols_cb = dialogSymbolCombo(dialog);
+		if (!names || !id_field || !tree || !symbols_cb) {
 			return;
 		}
 		QTest::keyClicks(names->lineEdit(), QStringLiteral("X77"));
 		id_field->setText(QStringLiteral("1-2"));
+
+		auto *root_item = tree->topLevelItem(0);
+		if (root_item && root_item->childCount() == 2) {
+			symbol_kept = symbols_cb->itemData(symbols_cb->currentIndex()).toString();
+			root_item->child(1)->setSelected(true);
+			symbols_cb->setCurrentIndex(0);		//(no symbol)
+		}
 		dialog->accept();
 	});
 
 	QVERIFY2(dialog_found, "the strip dialog was shown and accepted");
+	QVERIFY2(!symbol_kept.isEmpty(),
+			 "the dialog preselects the terminal symbol the project draws with");
 	QCOMPARE(m_project->terminalStrip().count(), strips_before + 1);
 		//The index of the stack and not its count: a push drops whatever
 		//the stack held as undone, so the count may well stay put.
@@ -947,6 +1028,8 @@ void tst_terminalnavigator::createsTheStripWithItsTerminalsOnOk()
 		const auto terminal = physical->realTerminals().at(0);
 		QVERIFY2(!terminal->isElement(), "the terminal is not drawn in any folio yet");
 		QCOMPARE(terminal->label(), QStringLiteral("X77:%1").arg(i + 1));
+		QCOMPARE(terminal->symbol(),
+				 i == 0 ? symbol_kept : QString());
 	}
 
 		//The tree shows them the same way: their label, and no symbol.
@@ -1004,9 +1087,11 @@ void tst_terminalnavigator::createsTheStripWithItsTerminalsOnOk()
 /**
 	A terminal which is not drawn in any folio yet travels through the XML
 	of the project: it carries an identity of its own, its label and the
-	symbol it should be drawn with -- which is what keeps it alive through a
-	save and a load, unlike an element-less terminal of an older project,
-	which holds nothing worth remembering and is still dropped.
+	symbol it should be drawn with -- and each of those terminals keeps a
+	symbol of its own, two terminals of one strip being drawn with two
+	different symbols. That is what keeps it alive through a save and a
+	load, unlike an element-less terminal of an older project, which holds
+	nothing worth remembering and is still dropped.
 */
 void tst_terminalnavigator::keepsPendingTerminalsInXml()
 {
@@ -1017,19 +1102,29 @@ void tst_terminalnavigator::keepsPendingTerminalsInXml()
 	QVERIFY(strip->addTerminal(
 				RealTerminal::createPending(QStringLiteral("X900:1"),
 											QStringLiteral("embed://terminal.elmt"))));
+		//Each terminal carries a symbol of its own: two terminals of one
+		//strip are drawn with two different symbols.
+	QVERIFY(strip->addTerminal(
+				RealTerminal::createPending(
+					QStringLiteral("X900:2"),
+					QStringLiteral("common://cabinet/other_terminal.elmt"))));
 
 	QDomDocument document;
 	auto xml_strip = strip->toXml(document);
 	const auto xml_reals = xml_strip.elementsByTagName(RealTerminal::xmlTagName());
-	QCOMPARE(xml_reals.size(), 1);
-	const auto xml_real = xml_reals.at(0).toElement();
-	QVERIFY2(!xml_real.attribute(QStringLiteral("terminal_uuid")).isEmpty(),
-			 "a terminal which is not drawn carries an identity of its own");
-	QCOMPARE(xml_real.attribute(QStringLiteral("label")), QStringLiteral("X900:1"));
-	QCOMPARE(xml_real.attribute(QStringLiteral("symbol")),
-			 QStringLiteral("embed://terminal.elmt"));
-	QVERIFY2(xml_real.attribute(QStringLiteral("element_uuid")).isEmpty(),
-			 "it holds no element, so it names no element either");
+	QCOMPARE(xml_reals.size(), 2);
+	for (int i = 0 ; i < xml_reals.size() ; ++i) {
+		const auto xml_real = xml_reals.at(i).toElement();
+		QVERIFY2(!xml_real.attribute(QStringLiteral("terminal_uuid")).isEmpty(),
+				 "a terminal which is not drawn carries an identity of its own");
+		QCOMPARE(xml_real.attribute(QStringLiteral("label")),
+				 QStringLiteral("X900:%1").arg(i + 1));
+		QCOMPARE(xml_real.attribute(QStringLiteral("symbol")),
+				 i == 0 ? QStringLiteral("embed://terminal.elmt")
+						: QStringLiteral("common://cabinet/other_terminal.elmt"));
+		QVERIFY2(xml_real.attribute(QStringLiteral("element_uuid")).isEmpty(),
+				 "it holds no element, so it names no element either");
+	}
 
 		//Reading it back gives a terminal of the same kind again, with
 		//the same identity -- which is what a bridge addressing it by
@@ -1039,10 +1134,14 @@ void tst_terminalnavigator::keepsPendingTerminalsInXml()
 	QVERIFY(restored);
 	QVERIFY(restored->fromXml(xml_strip));
 	const auto terminals = restored->realTerminals();
-	QCOMPARE(terminals.count(), 1);
-	QVERIFY(!terminals.at(0)->isElement());
-	QCOMPARE(terminals.at(0)->label(), QStringLiteral("X900:1"));
-	QCOMPARE(terminals.at(0)->symbol(), QStringLiteral("embed://terminal.elmt"));
+	QCOMPARE(terminals.count(), 2);
+	for (int i = 0 ; i < terminals.count() ; ++i) {
+		QVERIFY(!terminals.at(i)->isElement());
+		QCOMPARE(terminals.at(i)->label(), QStringLiteral("X900:%1").arg(i + 1));
+		QCOMPARE(terminals.at(i)->symbol(),
+				 i == 0 ? QStringLiteral("embed://terminal.elmt")
+						: QStringLiteral("common://cabinet/other_terminal.elmt"));
+	}
 	QCOMPARE(restored->realTerminalForUuid(terminals.at(0)->uuid()),
 			 terminals.at(0));
 

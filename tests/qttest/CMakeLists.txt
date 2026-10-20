@@ -2056,6 +2056,14 @@ qet_add_app_test(tst_terminalnavigator tst_terminalnavigator.cpp)
 target_compile_definitions(tst_terminalnavigator PRIVATE
   "QET_TEST_PROJECT_PATH=\"${QET_DIR}/examples/industrial.qet\"")
 
+# The automatic import: the free terminals of a project go to the strip
+# named after their label. A terminal which is drawn nowhere holds no
+# element -- a pending one of the terminal navigator, a spare one of the
+# editor -- and the import leaves it where it is.
+qet_add_app_test(tst_terminalstripautoimport tst_terminalstripautoimport.cpp)
+target_compile_definitions(tst_terminalstripautoimport PRIVATE
+  "QET_TEST_PROJECT_PATH=\"${QET_DIR}/examples/industrial.qet\"")
+
 # The working copy: the project database in a file, committed after each
 # edit; killed at random moments, it holds every edit finished, and a clean
 # exit leaves nothing. QET-SQL-FORMAT S3z2.

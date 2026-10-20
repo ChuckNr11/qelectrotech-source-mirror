@@ -109,6 +109,8 @@ AddTerminalStripDialog::AddTerminalStripDialog(QETProject *project, QWidget *par
 {
 	ui->setupUi(this);
 	ui->m_notice_lb->setStyleSheet(QStringLiteral("QLabel {color: red;}"));
+	ui->m_preview_tree->setHeaderLabels(
+				{tr("ID"), tr("Symbol")});
 
 		//Three lines of description, whatever the font and the screen: the
 		//field is capped, so that it stops taking the room the preview
@@ -136,6 +138,9 @@ AddTerminalStripDialog::AddTerminalStripDialog(QETProject *project, QWidget *par
 	m_symbol_watcher = new QFutureWatcher<QStringList>(this);
 	connect(m_symbol_watcher, &QFutureWatcher<QStringList>::finished,
 		this, &AddTerminalStripDialog::onSymbolScanFinished);
+		//The symbol shown by the combo box is the one the terminals typed
+		//next are created with: @sa onSymbolPicked().
+	m_default_symbol = symbolLocation();
 
 	fillInstallationAndLocation();
 
@@ -148,7 +153,9 @@ AddTerminalStripDialog::AddTerminalStripDialog(QETProject *project, QWidget *par
 	connect(ui->m_id_le, &QLineEdit::textChanged,
 		this, &AddTerminalStripDialog::validate);
 	connect(ui->m_symbol_cb, &QComboBox::currentIndexChanged,
-		this, &AddTerminalStripDialog::validate);
+		this, &AddTerminalStripDialog::onSymbolPicked);
+	connect(ui->m_preview_tree, &QTreeWidget::itemSelectionChanged,
+		this, &AddTerminalStripDialog::onPreviewSelectionChanged);
 
 	fillNamesOfTheCurrentNode();
 	QET::trackDialogGeometry(this);
@@ -226,20 +233,37 @@ TerminalStrip *AddTerminalStripDialog::terminalStripOfTheDialog() const
 }
 
 /**
-	@brief AddTerminalStripDialog::terminalIds
-	@return the IDs of the terminals this dialog describes, which is the
-	expanded ID field, or nothing when that field can not be read at all.
+	@brief AddTerminalStripDialog::describedTerminals
+	@return the terminals this dialog describes: one per ID of the ID
+	field, in the order of the preview tree, each with the symbol the user
+	gave it.
+	The preview tree is read and not the ID field, because it is the only
+	place which knows the symbol of each single terminal, and because it is
+	what the user looked at before pressing OK. A list which can not be
+	read at all leaves the tree on its last valid state, and the dialog
+	refuses that state with its notice label, so the OK button is disabled
+	before this could return something the user did not see.
 */
-QStringList AddTerminalStripDialog::terminalIds() const
+QList<AddTerminalStripDialog::TerminalDescription> AddTerminalStripDialog::describedTerminals() const
 {
-	return parseIds().ids;
+	QList<TerminalDescription> result;
+	if (!m_root_item) {
+		return result;
+	}
+
+	for (int i = 0 ; i < m_root_item->childCount() ; ++i) {
+		const auto *child = m_root_item->child(i);
+		result.append({child->text(0), child->data(0, Qt::UserRole).toString()});
+	}
+
+	return result;
 }
 
 /**
 	@brief AddTerminalStripDialog::symbolLocation
-	@return the location string of the symbol picked in the symbol combo
+	@return the location string of the symbol shown in the symbol combo
 	box ('embed://...' for a symbol of the project, 'common://...' for one
-	of the standard collection), or an empty string when the user picked
+	of the standard collection), or an empty string when that box shows
 	none -- the terminals are then created without a symbol, and can be
 	drawn later on with whatever symbol is chosen then.
 */
@@ -396,10 +420,15 @@ QString AddTerminalStripDialog::effectiveName() const
 /**
 	@brief AddTerminalStripDialog::refreshPreviewTree
 	Shows what the OK button will create: the strip as the root item of the
-	preview tree, one child per ID of the ID field.
+	preview tree, one child per ID of the ID field, the ID in the first
+	column and the name of its symbol in the second one.
 	The children are rebuilt only when the ID list really changed, since a
 	rebuild throws away the selection the user is looking at; a list which
 	can not be read at all leaves the last known children alone.
+	A terminal the user gave a symbol keeps it across such a rebuild -- only
+	the IDs which are new get the symbol of the moment, so that retyping an
+	ID list never silently gives the terminals another symbol than the one
+	the second column shows.
 */
 void AddTerminalStripDialog::refreshPreviewTree(const ParsedIds &parsed)
 {
@@ -409,6 +438,7 @@ void AddTerminalStripDialog::refreshPreviewTree(const ParsedIds &parsed)
 
 	m_root_item->setText(0, effectiveName());
 	m_root_item->setIcon(0, QET::Icons::TerminalStrip);
+	m_root_item->setFirstColumnSpanned(true);
 
 	if (!parsed.error.isEmpty()) {
 		return;
@@ -421,17 +451,24 @@ void AddTerminalStripDialog::refreshPreviewTree(const ParsedIds &parsed)
 
 	if (current_ids != parsed.ids) {
 		QStringList selected_ids;
+		QHash<QString, QString> kept_symbols;
 		for (int i = 0 ; i < m_root_item->childCount() ; ++i) {
-			if (m_root_item->child(i)->isSelected()) {
-				selected_ids << m_root_item->child(i)->text(0);
+			const auto *child = m_root_item->child(i);
+			if (child->isSelected()) {
+				selected_ids << child->text(0);
 			}
+			kept_symbols.insert(child->text(0),
+								child->data(0, Qt::UserRole).toString());
 		}
 
 		qDeleteAll(m_root_item->takeChildren());
 		for (const auto &id : parsed.ids) {
 				//No icon: those terminals are not drawn in any folio yet,
 				//and the missing symbol is how the trees tell them apart
-			new QTreeWidgetItem(m_root_item, QStringList(id));
+			auto *child = new QTreeWidgetItem(m_root_item, QStringList(id));
+			const auto symbol = kept_symbols.value(id, m_default_symbol);
+			child->setData(0, Qt::UserRole, symbol);
+			child->setText(1, symbolName(symbol));
 		}
 
 		for (int i = 0 ; i < m_root_item->childCount() ; ++i) {
@@ -441,14 +478,80 @@ void AddTerminalStripDialog::refreshPreviewTree(const ParsedIds &parsed)
 		}
 	}
 
-		//The symbol is not part of the text of a child: it follows the
-		//combo box while the IDs stay the same.
-	const auto symbol = symbolLocation();
-	for (int i = 0 ; i < m_root_item->childCount() ; ++i) {
-		m_root_item->child(i)->setData(0, Qt::UserRole, symbol);
+	ui->m_preview_tree->expandItem(m_root_item);
+}
+
+/**
+	@brief AddTerminalStripDialog::onSymbolPicked
+	@param index : the item the symbol combo box just selected
+	Applies the symbol of the combo box to the terminals the user selected
+	in the preview tree. With nothing selected, the value only becomes the
+	symbol the terminals typed next are created with -- it must never
+	change the terminals already listed behind the back of the user, since
+	the second column shows exactly that value.
+*/
+void AddTerminalStripDialog::onSymbolPicked(int index)
+{
+	const auto symbol = index < 0
+			? QString()
+			: ui->m_symbol_cb->itemData(index).toString();
+
+	const auto selected = selectedPreviewChildren();
+	if (selected.isEmpty()) {
+		m_default_symbol = symbol;
+		return;
 	}
 
-	ui->m_preview_tree->expandItem(m_root_item);
+	for (auto *item : selected) {
+		item->setData(0, Qt::UserRole, symbol);
+		item->setText(1, symbolName(symbol));
+	}
+}
+
+/**
+	@brief AddTerminalStripDialog::onPreviewSelectionChanged
+	Follows the selection of the preview tree in the symbol combo box, so
+	that one selected terminal shows the symbol it carries and the user
+	reads what he is about to change. Several selected terminals leave the
+	combo box alone: they may well carry different symbols, and the next
+	value applies to all of them.
+*/
+void AddTerminalStripDialog::onPreviewSelectionChanged()
+{
+	const auto selected = selectedPreviewChildren();
+	if (selected.size() != 1) {
+		return;
+	}
+
+	const auto symbol = selected.first()->data(0, Qt::UserRole).toString();
+	if (symbol == symbolLocation()) {
+		return;
+	}
+
+	const QSignalBlocker blocker(ui->m_symbol_cb);
+	const int index = ui->m_symbol_cb->findData(symbol);
+	ui->m_symbol_cb->setCurrentIndex(index < 0 ? 0 : index);
+}
+
+/**
+	@brief AddTerminalStripDialog::selectedPreviewChildren
+	@return the children of the preview tree the user selected, which are
+	the terminals the next symbol applies to.
+*/
+QList<QTreeWidgetItem *> AddTerminalStripDialog::selectedPreviewChildren() const
+{
+	QList<QTreeWidgetItem *> result;
+	if (!m_root_item) {
+		return result;
+	}
+
+	for (int i = 0 ; i < m_root_item->childCount() ; ++i) {
+		if (auto *child = m_root_item->child(i); child->isSelected()) {
+			result << child;
+		}
+	}
+
+	return result;
 }
 
 /**
@@ -517,6 +620,7 @@ void AddTerminalStripDialog::appendSymbolItem(const ElementsLocation &location)
 	}
 
 	ui->m_symbol_cb->addItem(location.icon(), location.name(), location_string);
+	m_symbol_names.insert(location_string, location.name());
 }
 
 /**
@@ -544,6 +648,30 @@ void AddTerminalStripDialog::onSymbolScanFinished()
 		index = ui->m_symbol_cb->findData(selected);
 	}
 	ui->m_symbol_cb->setCurrentIndex(index < 0 ? 0 : index);
+}
+
+/**
+	@brief AddTerminalStripDialog::symbolName
+	@param symbol : the location string of a symbol
+	@return the name to show for that symbol in the second column of the
+	preview tree: the one the symbol combo box lists when the symbol is
+	there, since an element name is read out of its XML and is worth
+	reading once only -- which is what the cache is for.
+*/
+QString AddTerminalStripDialog::symbolName(const QString &symbol) const
+{
+	if (symbol.isEmpty()) {
+		return QString();
+	}
+	if (!m_symbol_names.contains(symbol)) {
+		const int index = ui->m_symbol_cb->findData(symbol);
+		const auto name = index >= 0
+				? ui->m_symbol_cb->itemText(index)
+				: ElementsLocation(symbol).name();
+		m_symbol_names.insert(symbol, name);
+	}
+
+	return m_symbol_names.value(symbol);
 }
 
 /**

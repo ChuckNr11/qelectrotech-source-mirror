@@ -371,10 +371,11 @@ void TerminalNavigatorWidget::on_m_tree_view_customContextMenuRequested(const QP
  * ID field.
  *
  * The terminals are created as terminals which are not drawn in any folio
- * yet: they hold a label ('strip name:ID') and the symbol the user picked,
- * but no element, which is why isElement() is the marker the tree uses to
- * tell a drawn terminal from a pending one. Nothing needs an active folio
- * here, the terminals get their folio when their symbol is dropped on one.
+ * yet: they hold a label ('strip name:ID') and the symbol the user gave
+ * each of them in the dialog, but no element, which is why isElement() is
+ * the marker the tree uses to tell a drawn terminal from a pending one.
+ * Nothing needs an active folio here, the terminals get their folio when
+ * their symbol is dropped on one.
  *
  * A name which already belongs to a strip of the node means that the
  * terminals are added to that strip rather than to a new one: same node,
@@ -405,23 +406,23 @@ void TerminalNavigatorWidget::createTerminalStrip()
 		return;
 	}
 
-	const auto ids = dialog->terminalIds();
-	auto *macro = new QUndoCommand(ids.isEmpty()
+	const auto described = dialog->describedTerminals();
+	auto *macro = new QUndoCommand(described.isEmpty()
 		? tr("Add a group of terminals")
-		: tr("Add %n terminal(s) to the terminal strip %1", "", ids.count())
+		: tr("Add %n terminal(s) to the terminal strip %1", "", described.count())
 			.arg(strip_->name()));
 
 	if (!existing_strip) {
 		new CreateTerminalStripCommand(strip_, m_project, this, macro);
 	}
 
-	if (!ids.isEmpty())
+	if (!described.isEmpty())
 	{
 		QVector<QSharedPointer<RealTerminal>> terminals;
 		const auto label_prefix = strip_->name() + QStringLiteral(":");
-		for (const auto &id : ids) {
-			terminals.append(
-						RealTerminal::createPending(label_prefix + id, dialog->symbolLocation()));
+		for (const auto &terminal : described) {
+			terminals.append(RealTerminal::createPending(
+						label_prefix + terminal.id, terminal.symbol));
 		}
 		new AddTerminalToStripCommand(terminals, strip_, macro);
 	}
