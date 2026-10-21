@@ -35,6 +35,9 @@
 #include "diagramevent/diagrameventadddimension.h"
 #include "diagramevent/diagrameventaddelement.h"
 #include "diagramevent/diagrameventaddmacro.h"
+#include "TerminalNavigator/diagramevent/diagrameventaddterminal.h"
+#include "TerminalStrip/realterminal.h"
+#include "TerminalStrip/terminalstrip.h"
 #include "dvevent/dveventinterface.h"
 #include "projectview.h"
 #include "qetdiagrameditor.h"
@@ -276,6 +279,12 @@ void DiagramView::dragEnterEvent(QDragEnterEvent *e) {
 		e -> acceptProposedAction();
 	} else if (e -> mimeData() -> hasFormat("application/x-qet-titleblock-uri")) {
 		e -> acceptProposedAction();
+	} else if (e -> mimeData() -> hasFormat(DiagramEventAddTerminal::pendingTerminalMime())) {
+			//A terminal of a strip which is not drawn yet, dragged out of
+			//the terminal navigator: accepted before the text of the
+			//mime is looked at, or such a drag -- which carries no text
+			//of its own -- would be refused here and never reach the drop
+		e -> acceptProposedAction();
 	} else if (e -> mimeData() -> hasText()) {
 		e -> acceptProposedAction();
 	} else {
@@ -290,12 +299,14 @@ void DiagramView::dragEnterEvent(QDragEnterEvent *e) {
 void DiagramView::dragMoveEvent(QDragMoveEvent *e) {
 	if (!ImageDrop::imageFiles(e -> mimeData()).isEmpty()) e -> acceptProposedAction();
 	else if (ImageDrop::hasOnlyOtherUrls(e -> mimeData())) e -> ignore();
+	else if (e -> mimeData() -> hasFormat(DiagramEventAddTerminal::pendingTerminalMime())) e -> acceptProposedAction();
 	else if (e -> mimeData() -> hasFormat("text/plain")) e -> acceptProposedAction();
 	else e-> ignore();
 }
 
 /**
-	Handle the drops accepted on diagram (elements and title block templates).
+	Handle the drops accepted on diagram (elements, title block templates
+	and the terminals of a strip which are not drawn yet).
 	@param e the QDropEvent describing the current drag'n drop
 */
 void DiagramView::dropEvent(QDropEvent *e) {
@@ -308,6 +319,11 @@ void DiagramView::dropEvent(QDropEvent *e) {
 		handleElementDrop(e);
 	} else if (e -> mimeData() -> hasFormat("application/x-qet-titleblock-uri")) {
 		handleTitleBlockDrop(e);
+	} else if (e -> mimeData() -> hasFormat(DiagramEventAddTerminal::pendingTerminalMime())) {
+			//Before the text branch: a terminal dragged out of the
+			//terminal navigator carries no text, and the drop is the
+			//start of the placement of its symbol, not a text drop
+		handleTerminalDrop(e);
 	} else if (e -> mimeData() -> hasText()) {
 		handleTextDrop(e);
 	}
@@ -333,6 +349,67 @@ void DiagramView::handleElementDrop(QDropEvent *event)
 	drop_pos = mapToScene(event->position().toPoint());
 
 	startElementPlacement(location, drop_pos);
+}
+
+/**
+ * @brief DiagramView::handleTerminalDrop
+ * Handle the drop of terminals of strips which are not drawn in any
+ * folio yet, dragged out of the terminal navigator: each strip and
+ * terminal is named by uuid, the strip is reached through the project
+ * and the terminal through the strip, and the drop starts the placement
+ * of their own symbols, one after another (@sa
+ * DiagramView::startTerminalPlacement).
+ *
+ * A drop which can not start the placement says why in the status bar of
+ * the editor: the strip is gone from this project, a terminal has been
+ * drawn in the meantime... This is the place where a refusal is visible,
+ * the event which does not start has no view of its own to say it.
+ *
+ * The whole selection is started or none of it: one terminal which can
+ * not be drawn here refuses every one of them, rather than drawing part
+ * of the selection and leaving the rest of it without a word -- the
+ * user sees which terminal the message names and drops it from the
+ * selection.
+ * @param event the QDropEvent describing the current drag'n'drop
+ */
+void DiagramView::handleTerminalDrop(QDropEvent *event)
+{
+	QVector<QPair<QUuid, QUuid>> carried;
+	if (!DiagramEventAddTerminal::readPendingTerminalsMime(
+			event->mimeData(), &carried)) {
+		return;
+	}
+
+	auto *project_ = m_diagram->project();
+	if (!project_) {
+		return;
+	}
+
+	QVector<QSharedPointer<RealTerminal>> pendings;
+	pendings.reserve(carried.size());
+	for (const auto &terminal_ : std::as_const(carried)) {
+		TerminalStrip *strip_ = nullptr;
+		for (auto *strip : project_->terminalStrip()) {
+			if (strip->uuid() == terminal_.first) {
+				strip_ = strip;
+				break;
+			}
+		}
+		if (!strip_) {
+			showPlacementMessage(tr("This terminal does not belong to this project anymore"));
+			return;
+		}
+
+		const auto pending = strip_->realTerminalForUuid(terminal_.second);
+		if (pending.isNull() || !pending->isPending()) {
+			showPlacementMessage(tr("This terminal does not wait for its symbol anymore"));
+			return;
+		}
+
+		pendings.append(pending);
+	}
+
+	startTerminalPlacement(pendings, mapToScene(event->position().toPoint()));
 }
 
 /**
@@ -379,6 +456,104 @@ bool DiagramView::startElementPlacement(const ElementsLocation &location,
 	//Set focus to the view to get event
 	this->setFocus();
 	return true;
+}
+
+/**
+	@brief DiagramView::startTerminalPlacement
+	Enter the same interactive placement for @a pendings, terminals of
+	strips which are not drawn in any folio yet.
+
+	Where a drop from the elements collection panel starts the placement
+	of a symbol the user picked, this one places the symbols the pending
+	terminals carry themselves (@a RealTerminal::symbol()) -- each
+	terminal says which element draws it -- and every click which drops
+	a symbol binds it to the terminal it was taken for, in the order of
+	the run (@sa DiagramEventAddTerminal).
+
+	Nothing is started when there is nothing to draw a terminal with:
+	no symbol typed for it, a symbol which is not part of the project's
+	collections... Every one of those is said in the status bar of the
+	editor, since the drag did happen and simply leads nowhere. The
+	whole run is started or none of it, the same way the drop
+	resolves it.
+	@param pendings : the terminals which wait for their symbol, in the
+	order they have to be drawn in
+	@param scene_pos : where the first pending symbol appears, in scene
+	coordinates
+	@return true if the placement mode was entered
+*/
+bool DiagramView::startTerminalPlacement(
+		const QVector<QSharedPointer<RealTerminal>> &pendings,
+		const QPointF &scene_pos)
+{
+	if (!diagram() || pendings.isEmpty()) {
+		return false;
+	}
+
+	for (const auto &pending : std::as_const(pendings)) {
+		auto *strip_ = pending->parentStrip();
+		if (!strip_ || strip_->project() != diagram()->project()) {
+			showPlacementMessage(tr("This terminal does not belong to this project"));
+			return false;
+		}
+	}
+	if (diagram()->isReadOnly()) {
+		showPlacementMessage(tr("This folio is read only"));
+		return false;
+	}
+	for (const auto &pending : std::as_const(pendings)) {
+		const auto symbol_ = pending->symbol();
+		if (symbol_.isEmpty()) {
+			showPlacementMessage(tr("The terminal %1 has no symbol to be drawn with")
+						.arg(pending->label()));
+			return false;
+		}
+
+		//Bound to the project of the terminal's own strip: the string
+		//itself carries no session id to resolve it with anymore, and a
+		//location built from it alone would be empty (@sa
+		//RealTerminal::symbolLocation). The empty check above stays on
+		//the string: no project could resolve nothing.
+		const ElementsLocation location = pending->symbolLocation();
+		if (!(location.isElement() && location.exist())) {
+			showPlacementMessage(tr("The symbol of the terminal %1 can not be found")
+						.arg(pending->label()));
+			return false;
+		}
+	}
+
+	auto *event_ = new DiagramEventAddTerminal(pendings, diagram(), scene_pos);
+		//A construction which failed never took the views over, so it is
+		//deleted here, before the running tool of the diagram (if any) is
+		//replaced by it: a drop which leads nowhere changes nothing at all
+		//(@sa DiagramEventAddTerminal::isRunning)
+	if (!event_->isRunning()) {
+		delete event_;
+		showPlacementMessage(tr("The symbol of the terminal %1 can not be added to this project")
+					.arg(pendings.constFirst()->label()));
+		return false;
+	}
+	diagram()->setEventInterface(event_);
+
+	//Set focus to the view to get event
+	this->setFocus();
+	return true;
+}
+
+/**
+	@brief DiagramView::showPlacementMessage
+	Say @a message in the status bar of the editor this view is shown in,
+	if any: the editor is the one asking for a placement which then
+	proves impossible to start.
+	@param message
+*/
+void DiagramView::showPlacementMessage(const QString &message)
+{
+	if (auto *editor_ = diagramEditor()) {
+		if (auto *status_bar_ = editor_->statusBar()) {
+			status_bar_->showMessage(message, 5000);
+		}
+	}
 }
 
 /**
@@ -1732,7 +1907,13 @@ void DiagramView::keyPressEvent(QKeyEvent *e)
 			return;
 	}
 
-	ProjectView *current_project = this->diagramEditor()->currentProjectView();
+		//The tabs of the project are the editor's, and the view of a
+		//test stands on its own with no editor window around it: a key
+		//press must not crash there, so the tabs are only asked for
+		//when there is an editor to ask. Nothing of the app changes by
+		//this -- a view of an editor always has one.
+	ProjectView *current_project = this->diagramEditor()
+			? this->diagramEditor()->currentProjectView() : nullptr;
 	DiagramContent dc(m_diagram);
 	switch(e -> key())
 	{
@@ -1770,15 +1951,21 @@ void DiagramView::keyPressEvent(QKeyEvent *e)
 			if (e->modifiers() == Qt::NoModifier
 			    && !m_diagram->eventInterfaceIsRunning()
 			    && !m_diagram->focusItem()
-			    && diagramEditor()->repeatLastCommand()) {
+			    && diagramEditor() && diagramEditor()->repeatLastCommand()) {
 				return;
 			}
 			break;
 		case Qt::Key_PageUp:
-			current_project->changeTabUp();
+			if (current_project)
+			{
+				current_project->changeTabUp();
+			}
 			return;
 		case Qt::Key_PageDown:
-			current_project->changeTabDown();
+			if (current_project)
+			{
+				current_project->changeTabDown();
+			}
 			return;
 		case Qt::Key_Home:
 			if (dc.selectedTexts().isEmpty()) {
@@ -1788,7 +1975,10 @@ void DiagramView::keyPressEvent(QKeyEvent *e)
 					qgraphicsitem_cast<DiagramTextItem *>(m_diagram->focusItem())
 					)
 					break;
-				current_project->changeFirstTab();
+				if (current_project)
+				{
+					current_project->changeFirstTab();
+				}
 				return;
 			}
 			else break;
@@ -1800,7 +1990,10 @@ void DiagramView::keyPressEvent(QKeyEvent *e)
 					qgraphicsitem_cast<DiagramTextItem *>(m_diagram->focusItem())
 					)
 					break;
-				current_project->changeLastTab();
+				if (current_project)
+				{
+					current_project->changeLastTab();
+				}
 				return;
 			}
 			else break;

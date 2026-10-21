@@ -24,6 +24,8 @@
 #include <QClipboard>
 #include <QGraphicsObject>
 #include <QPointer>
+#include <QSharedPointer>
+#include <QVector>
 #include <memory>
 #include "palettegraphicsview.h"
 
@@ -37,6 +39,7 @@ class DVEventInterface;
 class QInputEvent;
 class QGestureEvent;
 class QMenu;
+class RealTerminal;
 
 /**
 	This class provides a widget to render an electric diagram in an editable,
@@ -147,6 +150,22 @@ class DiagramView : public PaletteGraphicsView
 	
 		bool startElementPlacement(const ElementsLocation &location,
 					   const QPointF &scene_pos);
+			/**
+				Enter the same interactive placement for @a pendings,
+				terminals of strips which are not drawn in any folio
+				yet: the symbol of the first one follows the cursor,
+				the click which drops it binds it to that terminal,
+				and the next one of the run takes the cursor right
+				after -- in the order they come in, which is the order
+				of the selection in the navigator (@sa
+				DiagramEventAddTerminal). Started by the drop of the
+				terminal navigator, refused with a word in the status
+				bar when any one of them has nothing to be drawn with:
+				a selection is started as a whole or not at all.
+				@return true if the placement mode was entered
+			*/
+		bool startTerminalPlacement(const QVector<QSharedPointer<RealTerminal>> &pendings,
+					   const QPointF &scene_pos);
 		QPointF defaultPlacementPos() const;
 		void setCellRulersShown(bool shown);
 		void setCellLinesShown(bool shown);
@@ -208,6 +227,8 @@ class DiagramView : public PaletteGraphicsView
 	private:
 		void setPointedDescription(const QString &description);
 		void handleElementDrop(QDropEvent *);
+		void handleTerminalDrop(QDropEvent *);
+		void showPlacementMessage(const QString &message);
 		void updateFolioReportMenu();
 			/**
 				The menu of one single core: the right button coming down

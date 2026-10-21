@@ -29,7 +29,7 @@
     </widget>
    </item>
    <item>
-    <widget class="QTreeWidget" name="m_tree_view">
+    <widget class="TerminalNavigatorTree" name="m_tree_view">
      <property name="contextMenuPolicy">
       <enum>Qt::CustomContextMenu</enum>
      </property>
@@ -59,6 +59,13 @@
    </property>
   </action>
  </widget>
+ <customwidgets>
+  <customwidget>
+   <class>TerminalNavigatorTree</class>
+   <extends>QTreeWidget</extends>
+   <header>terminalnavigatorwidgettree.h</header>
+  </customwidget>
+ </customwidgets>
  <resources/>
  <connections/>
 </ui>

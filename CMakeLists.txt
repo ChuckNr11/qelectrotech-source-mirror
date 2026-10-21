@@ -393,6 +393,7 @@ target_include_directories(
     ${QET_DIR}/sources/utils
     ${QET_DIR}/sources/dataBase
     ${QET_DIR}/sources/dataBase/ui
+    ${QET_DIR}/sources/TerminalNavigator/ui
     ${QET_DIR}/sources/factory/ui
     ${QET_DIR}/sources/print
     ${QET_DIR}/sources/svg

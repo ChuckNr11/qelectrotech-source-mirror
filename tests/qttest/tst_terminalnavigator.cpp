@@ -18,7 +18,9 @@
 #include "qetapptest.h"
 
 #include "ElementsCollection/elementscollectionwidget.h"
+#include "TerminalNavigator/diagramevent/diagrameventaddterminal.h"
 #include "TerminalNavigator/ui/terminalnavigatorwidget.h"
+#include "TerminalNavigator/ui/terminalnavigatorwidgettree.h"
 #include "TerminalStrip/physicalterminal.h"
 #include "TerminalStrip/realterminal.h"
 #include "TerminalStrip/terminalstrip.h"
@@ -33,6 +35,7 @@
 #include <QDomDocument>
 #include <QLabel>
 #include <QLineEdit>
+#include <QMimeData>
 #include <QTimer>
 #include <QTreeWidget>
 #include <QTreeWidgetItem>
@@ -229,6 +232,9 @@ private slots:
 	void createsTheStripWithItsTerminalsOnOk();
 	void keepsPendingTerminalsInXml();
 	void keepsTheDataOfTerminalsWhichAreNotDrawnInXml();
+	void keepsSavedSymbolsWithoutProjectIds();
+	void dragsPendingTerminalsOnly();
+	void dragsTheSelectionInTreeOrder();
 	void clearsWithoutProject();
 	void followsTheActiveProject();
 	void cleanupTestCase();
@@ -1242,6 +1248,253 @@ void tst_terminalnavigator::keepsTheDataOfTerminalsWhichAreNotDrawnInXml()
 	QCOMPARE(restored_t->function(), ElementData::TFPhase);
 	QVERIFY(restored_t->isLed());
 	QCOMPARE(restored_t->section(), 2.5);
+}
+
+/**
+	Symbols are saved without the runtime project id of the session which
+	wrote them, and read back the same way: such an id is handed out
+	afresh in every session and never reused (@sa
+	QETApp::registerProject), so 'symbol="project0+embed://..."' of an
+	older save names another project, or no project at all, in almost
+	every later session -- and a terminal which could not resolve its own
+	symbol was never drawn again.
+
+	Both directions are checked here. A terminal built with such an old
+	string keeps the plain path, since createPending() is the one place
+	symbols are set; what goes into the file carries no id either, so a
+	project saved once by this code heals itself for every session
+	afterwards.
+*/
+void tst_terminalnavigator::keepsSavedSymbolsWithoutProjectIds()
+{
+	QETProject other(QStringLiteral(QET_TEST_PROJECT_PATH));
+	auto *strip = other.newTerminalStrip(
+				QStringLiteral("KC"), QStringLiteral("Cellar"), QStringLiteral("X902"));
+	QVERIFY(strip);
+
+		//A symbol the way an older version saved it: the id of the
+		//session which wrote it still in front of the path
+	const auto old_symbol_ = QStringLiteral("project0+embed://terminal.elmt");
+	auto pending = RealTerminal::createPending(QStringLiteral("X902:1"), old_symbol_);
+	QVERIFY(pending);
+	QVERIFY2(pending->symbol() == QStringLiteral("embed://terminal.elmt"),
+			 "the id of a session is dropped when the terminal is built");
+	QVERIFY(strip->addTerminal(pending));
+
+		//What is written into the project carries no id either
+	QDomDocument document;
+	auto xml_strip = strip->toXml(document);
+	const auto xml_real = xml_strip.elementsByTagName(RealTerminal::xmlTagName())
+						  .at(0).toElement();
+	QCOMPARE(xml_real.attribute(QStringLiteral("symbol")),
+			 QStringLiteral("embed://terminal.elmt"));
+
+		//And a project saved by an older version reads back the same
+		//way, read path included: fromXml() builds its terminals with
+		//createPending(), which drops the id too. The element is built
+		//here the way an old file holds one, no project registered at
+		//all -- the path is bound back to a project when it is resolved
+		//for a placement, never by the reader.
+	QDomDocument old_document;
+	auto old_elmt = old_document.createElement(RealTerminal::xmlTagName());
+	old_elmt.setAttribute(QStringLiteral("terminal_uuid"),
+						  QUuid::createUuid().toString());
+	old_elmt.setAttribute(QStringLiteral("label"), QStringLiteral("X902:9"));
+	old_elmt.setAttribute(QStringLiteral("symbol"), old_symbol_);
+	const auto restored = RealTerminal::pendingFromXml(old_elmt);
+	QVERIFY(restored);
+	QCOMPARE(restored->symbol(), QStringLiteral("embed://terminal.elmt"));
+	QCOMPARE(restored->label(), QStringLiteral("X902:9"));
+}
+
+/**
+	The tree of the tab drags one thing only: a terminal of a strip which
+	is not drawn in any folio yet. What a drag carries is asked for
+	through pendingTerminalMimeForItem() -- the tree hands the item over
+	to the widget, which refuses every item which is not such a terminal
+	-- and the payload holds the strip and the terminal by uuid, which is
+	what the drop on the folio reads back.
+
+	The item of a strip holds every level of one physical terminal, so
+	the flag which offers the drag is on the item only when one of its
+	terminals waits for its symbol: a strip whose terminals are all
+	drawn answers nothing at all, and drags nothing either.
+*/
+void tst_terminalnavigator::dragsPendingTerminalsOnly()
+{
+	auto *x10 = stripNamed(QStringLiteral("X10"));
+	QVERIFY(x10);
+	const auto terminals_in_x10 = x10->realTerminals().count();
+	auto *strip_item = stripX10();
+	QVERIFY(strip_item);
+	QCOMPARE(strip_item->childCount(), int(terminals_in_x10));
+
+		//Every terminal of X10 is drawn on a folio: their items carry
+		//the icon of a drawn terminal, offer no drag, and the widget
+		//answers nothing to a question about them.
+	QMimeData mime;
+	for (int i = 0 ; i < strip_item->childCount() ; ++i) {
+		auto *item = strip_item->child(i);
+		QVERIFY(!item->icon(0).isNull());
+		QVERIFY2(!(item->flags() & Qt::ItemIsDragEnabled),
+				 "a terminal already drawn drags nothing");
+		QVERIFY(!m_widget->pendingTerminalMimeForItem(item, &mime));
+		QVERIFY(mime.formats().isEmpty());
+	}
+
+		//One terminal of the strip which waits for its symbol: its item
+		//carries no icon -- the missing icon is what tells the two
+		//apart -- offers the drag, and the payload it carries is the
+		//strip and the terminal itself, both by uuid.
+	auto pending = RealTerminal::createPending(
+				QStringLiteral("X10:99"), QStringLiteral("embed://terminal.elmt"));
+	QVERIFY(pending);
+	QVERIFY(x10->addTerminal(pending));
+	m_widget->reload();
+
+	strip_item = stripX10();
+	QVERIFY(strip_item);
+	QCOMPARE(strip_item->childCount(), int(terminals_in_x10) + 1);
+	auto *pending_item = childByText(strip_item, QStringLiteral("X10:99"));
+	QVERIFY2(pending_item, "the terminal waiting for its symbol is in the tree");
+	QVERIFY(pending_item->icon(0).isNull());
+	QVERIFY(pending_item->flags() & Qt::ItemIsDragEnabled);
+
+	QVERIFY(m_widget->pendingTerminalMimeForItem(pending_item, &mime));
+
+	QUuid strip_uuid, terminal_uuid;
+	QVERIFY(DiagramEventAddTerminal::readPendingTerminalMime(
+				&mime, &strip_uuid, &terminal_uuid));
+	QCOMPARE(strip_uuid, x10->uuid());
+	QCOMPARE(terminal_uuid, pending->uuid());
+		//The payload is the format of the event it starts, and nothing
+		//else: no text behind it for another tool to read by mistake
+	QVERIFY(!mime.formats().contains(QStringLiteral("text/plain")));
+
+		//And the strip is left the way this test found it: the terminal
+		//taken out again, no undo to keep the project of the tests
+		//below as it was. The tree is rebuilt by the reload, so every
+		//item held before is deleted and has to be taken again.
+	QVERIFY(x10->removeTerminal(pending));
+	m_widget->reload();
+	strip_item = stripX10();
+	QVERIFY(strip_item);
+	QCOMPARE(strip_item->childCount(), int(terminals_in_x10));
+	QVERIFY(!m_widget->pendingTerminalMimeForItem(strip_item->child(0), &mime));
+}
+
+/**
+	Several terminals of the tree are marked to be drawn in one run, and
+	the drag carries them all in the order the tree shows them -- top to
+	bottom, whatever order the clicks marked them in, which is the order
+	the run draws them in.
+
+	The items which hold no terminal to be drawn leave no line of
+	payload: a selection may well cover the strip itself, and terminals
+	already drawn besides the ones waiting, and still only those waiting
+	are carried.
+*/
+void tst_terminalnavigator::dragsTheSelectionInTreeOrder()
+{
+		//The selection itself: several items at once, taken with Ctrl
+		//and Shift, is what makes a run draggable at all
+	QVERIFY2(m_tree->selectionMode() == QAbstractItemView::ExtendedSelection,
+			 "the tree takes a selection of several items");
+	auto *tree_ = qobject_cast<TerminalNavigatorTree *>(m_tree);
+	QVERIFY2(tree_, "the tree of the navigator is the one which drags");
+
+	auto *x10 = stripNamed(QStringLiteral("X10"));
+	QVERIFY(x10);
+	auto *strip_item = stripX10();
+	QVERIFY(strip_item);
+	const int terminals_in_x10 = strip_item->childCount();
+
+	auto pending_a = RealTerminal::createPending(
+				QStringLiteral("X10:98"), QStringLiteral("embed://terminal.elmt"));
+	auto pending_b = RealTerminal::createPending(
+				QStringLiteral("X10:99"), QStringLiteral("embed://terminal.elmt"));
+	QVERIFY(pending_a);
+	QVERIFY(pending_b);
+	QVERIFY(x10->addTerminal(pending_a));
+	QVERIFY(x10->addTerminal(pending_b));
+	m_widget->reload();
+
+	strip_item = stripX10();
+	QVERIFY(strip_item);
+	QCOMPARE(strip_item->childCount(), terminals_in_x10 + 2);
+	auto *item_a = childByText(strip_item, QStringLiteral("X10:98"));
+	auto *item_b = childByText(strip_item, QStringLiteral("X10:99"));
+	QVERIFY2(item_a, "the terminal waiting for its symbol is in the tree");
+	QVERIFY2(item_b, "the terminal waiting for its symbol is in the tree");
+
+		//The marks come in bottom first, the way a user picks the
+		//lower terminal before going back up to the higher one, and the
+		//strip is marked as well: the answer is still the order of the
+		//tree, parents before children.
+	m_tree->clearSelection();
+	item_b->setSelected(true);
+	item_a->setSelected(true);
+	strip_item->setSelected(true);
+
+		//What the tree order is for those marks, read the way the tree
+		//walks itself: the strip first, then its selected children in
+		//their own order -- whatever that order is, and whatever order
+		//the marks came in.
+	QList<QTreeWidgetItem *> expected_children;
+	for (int i = 0 ; i < strip_item->childCount() ; ++i) {
+		auto *child = strip_item->child(i);
+		if (child == item_a || child == item_b) {
+			expected_children.append(child);
+		}
+	}
+	QCOMPARE(expected_children.count(), 2);
+
+	const auto ordered = tree_->selectedItemsInOrder();
+	QCOMPARE(ordered.count(), 3);
+	QVERIFY2(ordered.constFirst() == strip_item,
+			 "the tree order puts a parent before its children");
+	QVERIFY(ordered.at(1) == expected_children.constFirst());
+	QVERIFY(ordered.at(2) == expected_children.constLast());
+
+		//The payload follows that very order, and only the two
+		//terminals which wait for their symbol leave a line: the strip
+		//which is marked above them drags nothing of its own.
+	QMimeData mime;
+	QVERIFY(m_widget->pendingTerminalsMimeForItems(ordered, &mime));
+
+	QVector<QPair<QUuid, QUuid>> carried;
+	QVERIFY(DiagramEventAddTerminal::readPendingTerminalsMime(&mime, &carried));
+	QCOMPARE(carried.count(), 2);
+	const auto first_pending = expected_children.constFirst() == item_a
+			? pending_a : pending_b;
+	const auto second_pending = expected_children.constFirst() == item_a
+			? pending_b : pending_a;
+	QCOMPARE(carried.at(0).first, x10->uuid());
+	QCOMPARE(carried.at(0).second, first_pending->uuid());
+	QCOMPARE(carried.at(1).first, x10->uuid());
+	QCOMPARE(carried.at(1).second, second_pending->uuid());
+		//No text behind the payload for another tool to read by mistake
+	QVERIFY(!mime.formats().contains(QStringLiteral("text/plain")));
+
+		//And a selection which holds nothing to draw drags nothing: no
+		//answer to the tree at all, so no drag is even offered.
+	m_tree->clearSelection();
+	strip_item->setSelected(true);
+	QMimeData empty;
+	QVERIFY(!m_widget->pendingTerminalsMimeForItems(
+				tree_->selectedItemsInOrder(), &empty));
+	QVERIFY(empty.formats().isEmpty());
+
+		//The strip is left the way this test found it: the two
+		//terminals taken out again, no undo to keep the project of the
+		//tests below as it was. The tree is rebuilt by the reload, so
+		//every item held before is deleted and has to be taken again.
+	QVERIFY(x10->removeTerminal(pending_a));
+	QVERIFY(x10->removeTerminal(pending_b));
+	m_widget->reload();
+	strip_item = stripX10();
+	QVERIFY(strip_item);
+	QCOMPARE(strip_item->childCount(), terminals_in_x10);
 }
 
 void tst_terminalnavigator::clearsWithoutProject()

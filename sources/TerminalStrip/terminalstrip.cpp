@@ -310,6 +310,68 @@ bool TerminalStrip::removeTerminal(Element *terminal)
 }
 
 /**
+ * @brief TerminalStrip::replaceRealTerminal
+ * Replace @a old_terminal by @a new_terminal at the very place it holds
+ * in this strip: the physical terminal keeps its position in the strip,
+ * the new terminal gets the level of the old one, and the bridge they
+ * were part of carries on with the terminal which takes the place.
+ *
+ * This is how a terminal which is drawn in no folio yet gives its place
+ * to the terminal element drawn with its symbol (@sa
+ * RealTerminal::isPending()): nothing else of the strip moves, the
+ * terminals around keep their place and their level, and calling it the
+ * other way round is exactly the undo of it -- which is what
+ * BindTerminalCommand does, one redo and one undo around one pair of
+ * these.
+ *
+ * @a old_terminal has to belong to this strip and @a new_terminal to no
+ * strip at all. A terminal drawn in two strips at once is drawn nowhere
+ * in particular, so both checks are what refuses it.
+ * @param old_terminal : the terminal which leaves its place
+ * @param new_terminal : the terminal which takes it
+ * @return true when the two were swapped
+ */
+bool TerminalStrip::replaceRealTerminal(const QSharedPointer<RealTerminal> &old_terminal,
+										const QSharedPointer<RealTerminal> &new_terminal)
+{
+	if (old_terminal.isNull() || new_terminal.isNull()) {
+		return false;
+	}
+	if (old_terminal->parentStrip() != this || new_terminal->parentStrip()) {
+		return false;
+	}
+
+	auto phy_t = old_terminal->physicalTerminal();
+	if (!phy_t) {
+		return false;
+	}
+	const int level = phy_t->levelOf(old_terminal);
+	if (level < 0) {
+		return false;
+	}
+
+		//The bridge the old terminal is part of carries on with the one
+		//taking its place: they are the same physical contact, so what
+		//was bridged stays bridged. It has to be read before the swap
+		//and written after it: a bridge only takes terminals of its own
+		//strip, which the new terminal becomes with the swap
+		//(@sa TerminalStripBridge::addTerminals)
+	auto bridge_ = old_terminal->bridge();
+
+	phy_t->removeTerminal(old_terminal);
+	phy_t->addTerminal(new_terminal);
+	phy_t->setLevelOf(new_terminal, level);
+
+	if (bridge_) {
+		bridge_->removeTerminal(old_terminal);
+		bridge_->addTerminals({new_terminal});
+	}
+
+	emit orderChanged();
+	return true;
+}
+
+/**
  * @brief TerminalStrip::addTerminal
  * Add @a phy_t in this terminal strip.
  * @param phy_t

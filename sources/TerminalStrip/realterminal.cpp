@@ -17,6 +17,7 @@
 */
 #include "realterminal.h"
 #include "terminalstrip.h"
+#include "../ElementsCollection/elementslocation.h"
 #include "../qetgraphicsitem/terminalelement.h"
 #include "physicalterminal.h"
 #include "terminalstriplabels.h"
@@ -74,6 +75,8 @@ namespace
 		return cores;
 	}
 }
+
+#include <QRegularExpression>
 
 /**
  * @brief RealTerminal
@@ -273,7 +276,15 @@ QSharedPointer<RealTerminal> RealTerminal::createPending(const QString &label,
 {
 	auto *real_t = new RealTerminal(nullptr);
 	real_t->m_label = label;
-	real_t->m_symbol = symbol;
+		//The symbol lives without the runtime project id of the session
+		//which handed it over, whatever the caller passes: a saved
+		//'project0+embed://...' names another project -- or none at all --
+		//in every later session, and the symbol could not be found for
+		//the terminal anymore. This is the one place symbols are set
+		//(@sa pendingFromXml, the strip creation dialog), so keeping the
+		//plain path here keeps it everywhere; the readers bind it back to
+		//their own project instead (@sa symbolLocation).
+	real_t->m_symbol = symbolWithoutProjectId(symbol);
 	real_t->m_uuid = uuid.isNull() ? QUuid::createUuid() : uuid;
 		//Its data are its own the way a spare terminal's are, stored in
 		//the same place: the strip editor edits them before the terminal
@@ -382,7 +393,11 @@ QDomElement RealTerminal::toXml(QDomDocument &parent_document) const
 			root_elmt.setAttribute(QStringLiteral("label"), label_);
 		}
 		if (!m_symbol.isEmpty()) {
-			root_elmt.setAttribute(QStringLiteral("symbol"), m_symbol);
+				//Id-free, as it already is in memory (@sa
+				//createPending): what is read back from the file later
+				//on must not depend on the session which saved it
+			root_elmt.setAttribute(QStringLiteral("symbol"),
+								   symbolWithoutProjectId(m_symbol));
 		}
 			//The data the terminal strip editor edited for it, before its
 			//symbol is drawn anywhere: label included, since label() reads
@@ -467,9 +482,76 @@ QString RealTerminal::label() const {
  * @return the location string of the element this terminal should be drawn
  * with, for a terminal which is not drawn yet. A drawn terminal takes its
  * symbol from its own element and has nothing to say here.
+ * The string never carries the runtime project id of a session -- it was
+ * dropped when the terminal was built and is not written back either
+ * (@sa symbolWithoutProjectId, symbolLocation).
  */
 QString RealTerminal::symbol() const {
 	return m_symbol;
+}
+
+/**
+ * @brief RealTerminal::symbolWithoutProjectId
+ * @param symbol : a location string of a terminal symbol, the way it was
+ * saved in a project or handed around
+ * @return @a symbol without the runtime project id some projects still
+ * save in it: 'project0+embed://...' becomes 'embed://...'.
+ *
+ * That id is the number the application gave the project while the file
+ * was written, and numbers are handed out with an ever increasing
+ * counter which never reuses one (@sa QETApp::registerProject). Reading
+ * such a string back in a later session resolves it against another
+ * project, or against none -- ElementsLocation::setPath even reads a
+ * single digit only, so 'project10+' never resolved at all. Every
+ * symbol is therefore stripped here, in memory as well as on the way
+ * into the file, and the project it belongs to is told apart by the
+ * strip the terminal lives in instead (@sa symbolLocation).
+ */
+QString RealTerminal::symbolWithoutProjectId(const QString &symbol)
+{
+	static const QRegularExpression project_id_prefix(
+				QStringLiteral("^project[0-9]+\\+"));
+	return QString(symbol).remove(project_id_prefix);
+}
+
+/**
+ * @brief RealTerminal::symbolLocation
+ * @param symbol : location string of a terminal symbol, with or without
+ * a runtime project id in it
+ * @param project : the project the symbol belongs to, may be null
+ * @return the location @a symbol names, resolved through @p project for
+ * a symbol of that project's own collection.
+ *
+ * Only 'embed://...' needs the project: it names a path inside the
+ * embedded collection of one project, which no session-wide registry
+ * can answer for once the id is gone. 'common://...' and the other file
+ * system collections name a file and resolve on their own -- and the
+ * two-argument constructor would take such a path for an embedded one
+ * and wrongly prepend 'embed://' to it (@sa ElementsLocation::setPath),
+ * which is why the project is only passed on for an embedded symbol.
+ */
+ElementsLocation RealTerminal::symbolLocation(
+		const QString &symbol,
+		QETProject *project)
+{
+	const auto path_ = symbolWithoutProjectId(symbol);
+	if (project && path_.startsWith(QLatin1String("embed://"))) {
+		return ElementsLocation(path_, project);
+	}
+	return ElementsLocation(path_);
+}
+
+/**
+ * @brief RealTerminal::symbolLocation
+ * @return the location this terminal's symbol names, resolved through
+ * the project of the strip this terminal belongs to (@sa parentStrip()),
+ * or a location which resolves nothing when the terminal is in no strip
+ * yet -- no project could answer for an embedded symbol then.
+ */
+ElementsLocation RealTerminal::symbolLocation() const
+{
+	auto *strip_ = parentStrip();
+	return symbolLocation(m_symbol, strip_ ? strip_->project() : nullptr);
 }
 
 /**

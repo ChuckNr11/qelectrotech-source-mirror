@@ -774,6 +774,12 @@ set(QET_SRC_FILES
   ${QET_DIR}/sources/TerminalNavigator/ui/terminalnavigatorwidget.h
   ${QET_DIR}/sources/TerminalNavigator/UndoCommand/createterminalstripcommand.cpp
   ${QET_DIR}/sources/TerminalNavigator/UndoCommand/createterminalstripcommand.h
+  ${QET_DIR}/sources/TerminalNavigator/UndoCommand/bindterminalcommand.cpp
+  ${QET_DIR}/sources/TerminalNavigator/UndoCommand/bindterminalcommand.h
+  ${QET_DIR}/sources/TerminalNavigator/diagramevent/diagrameventaddterminal.cpp
+  ${QET_DIR}/sources/TerminalNavigator/diagramevent/diagrameventaddterminal.h
+  ${QET_DIR}/sources/TerminalNavigator/ui/terminalnavigatorwidgettree.cpp
+  ${QET_DIR}/sources/TerminalNavigator/ui/terminalnavigatorwidgettree.h
 
   ${QET_DIR}/sources/TerminalStrip/physicalterminal.cpp
   ${QET_DIR}/sources/TerminalStrip/physicalterminal.h

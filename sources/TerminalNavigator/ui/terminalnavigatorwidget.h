@@ -28,6 +28,7 @@
 
 class Element;
 class QETProject;
+class QMimeData;
 class QTreeWidgetItem;
 class TerminalStrip;
 class RealTerminal;
@@ -48,8 +49,14 @@ namespace Ui {
 	are read from the project itself (QETProject::terminalStrip()), the
 	free terminals from the folios (ElementProvider::freeTerminal()).
 
-	Unlike the dock this is a plain tab, so it has no drag and drop of
-	its own: free terminals are moved in the terminal strip editor.
+	Unlike the dock this is a plain tab, so free terminals are moved in
+	the terminal strip editor -- but terminals of a strip which are not
+	drawn in any folio yet can be dragged onto a folio, which places
+	their own symbols there and binds them to the terminals, one after
+	another: the tree asks what a drag carries
+	(pendingTerminalMimeForItems()), and only such terminals get an
+	answer, so they are the only ones which drag
+	(@sa TerminalNavigatorTree, DiagramEventAddTerminal).
 
 	The tree follows what the folios hold: a terminal placed on a folio
 	shows up below the free terminals, and one taken off leaves again --
@@ -64,6 +71,7 @@ namespace Ui {
 	lands in the project through its own undo command --
 	CreateTerminalStripCommand, in sources/TerminalNavigator/UndoCommand/ --
 	so it can be taken back with a single undo, tree included.
+
 */
 class TerminalNavigatorWidget : public QWidget
 {
@@ -96,6 +104,34 @@ class TerminalNavigatorWidget : public QWidget
 		void setSelectedStrip(TerminalStrip *strip);
 		QSharedPointer<RealTerminal> currentRealTerminal() const;
 
+		/**
+			@brief pendingTerminalMimeForItem
+			Fill @a mime with the payload which drags @a item onto a
+			folio: the strip it hangs below and the terminal of it
+			which waits for its symbol, both by uuid. Every other item
+			of the tree -- an installation, a strip, a free terminal,
+			one already drawn -- leaves @a mime empty and drags
+			nothing at all.
+			@return true when @a item holds a terminal to be drawn
+		*/
+		bool pendingTerminalMimeForItem(QTreeWidgetItem *item, QMimeData *mime);
+
+		/**
+			@brief pendingTerminalsMimeForItems
+			Fill @a mime with the payload which drags every terminal to
+			be drawn of @a items onto a folio: one line per item which
+			holds one, in the order the items come in -- which is the
+			order of the tree, top to bottom, and the order the run
+			draws them in. The items which hold no such terminal (an
+			installation, a strip, a free terminal, one already drawn)
+			simply leave no line.
+			@return true when at least one item holds a terminal to be
+			drawn
+		*/
+		bool pendingTerminalsMimeForItems(const QList<QTreeWidgetItem *> &items,
+										   QMimeData *mime);
+
+
 	signals:
 		void currentStripChanged(TerminalStrip *strip);
 
@@ -109,6 +145,9 @@ class TerminalNavigatorWidget : public QWidget
 		void buildTree();
 		QTreeWidgetItem* addTerminalStrip(TerminalStrip *terminal_strip);
 		void addFreeTerminal();
+		bool pendingTerminalOfItem(QTreeWidgetItem *item,
+								   QUuid *strip_uuid,
+								   QUuid *terminal_uuid) const;
 		void setCurrentStrip(TerminalStrip *strip);
 		void connectElementSignals();
 		void disconnectElementSignals();

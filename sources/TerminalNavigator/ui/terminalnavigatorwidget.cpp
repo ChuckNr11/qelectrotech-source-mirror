@@ -29,9 +29,12 @@
 #include "../../TerminalStrip/UndoCommand/addterminaltostripcommand.h"
 #include "../../utils/qetutils.h"
 #include "../UndoCommand/createterminalstripcommand.h"
+#include "../diagramevent/diagrameventaddterminal.h"
 #include "addterminalstripdialog.h"
+#include "terminalnavigatorwidgettree.h"
 
 #include <QMenu>
+#include <QMimeData>
 #include <QScopedPointer>
 #include <QUndoStack>
 
@@ -45,6 +48,25 @@ TerminalNavigatorWidget::TerminalNavigatorWidget(QWidget *parent) :
 	ui->setupUi(this);
 
 	ui->m_tree_view->expandRecursively(ui->m_tree_view->rootIndex());
+
+		//Several terminals are marked at once to be drawn in one run:
+		//Ctrl and Shift extend the selection, and the drag carries every
+		//selected terminal, in the order the tree shows them
+		//(@sa TerminalNavigatorTree::selectedItemsInOrder).
+	ui->m_tree_view->setSelectionMode(QAbstractItemView::ExtendedSelection);
+
+		//The tab drags its own payload: terminals of a strip which are
+		//not drawn in any folio yet, onto a folio of the project. The
+		//tree asks what the selected items carry, and only such a
+		//terminal gets an answer -- every other item drags nothing at
+		//all, which is all DragOnly needs to let go of the drops:
+		//nothing falls into this tree, free terminals are moved in the
+		//strip editor.
+	ui->m_tree_view->setDragEnabled(true);
+	ui->m_tree_view->setDragDropMode(QAbstractItemView::DragOnly);
+	connect(ui->m_tree_view, &TerminalNavigatorTree::itemsDragged,
+			this, &TerminalNavigatorWidget::pendingTerminalsMimeForItems);
+
 
 		//No project yet: adding a strip has nowhere to go until the
 		//panel hands one over. setProject() switches it on again.
@@ -360,6 +382,8 @@ void TerminalNavigatorWidget::on_m_tree_view_customContextMenuRequested(const QP
 
 	QMenu menu(this);
 	menu.addAction(ui->m_add_strip);
+
+
 	menu.exec(ui->m_tree_view->viewport()->mapToGlobal(pos));
 }
 
@@ -529,6 +553,7 @@ QTreeWidgetItem* TerminalNavigatorWidget::addTerminalStrip(TerminalStrip *termin
 		{
 			QString text_;
 			bool drawn_ = false;
+			bool pending_ = false;
 			for (const auto &real_t : phy_t->realTerminals())
 			{
 				if (text_.isEmpty())
@@ -538,11 +563,21 @@ QTreeWidgetItem* TerminalNavigatorWidget::addTerminalStrip(TerminalStrip *termin
 					//A terminal which is not drawn in any folio yet holds no
 					//symbol, and the missing icon is what tells the two apart
 				drawn_ = drawn_ || real_t->isElement();
+				pending_ = pending_ || real_t->isPending();
 			}
 			auto terminal_item = new QTreeWidgetItem(strip_item, QStringList(text_), Terminal);
 			terminal_item->setData(0, UUID_USER_ROLE, phy_t->uuid());
 			if (drawn_) {
 				terminal_item->setIcon(0, QET::Icons::ElementTerminal);
+			}
+				//Only a terminal which still waits for its symbol can be
+				//dragged onto a folio -- one already drawn is where it
+				//belongs, and the rest of the tree answers nothing to
+				//pendingTerminalMimeForItem() either way: the flag only
+				//keeps Qt from offering a drag which would lead nowhere.
+			terminal_item->setFlags(terminal_item->flags() & ~Qt::ItemIsDragEnabled);
+			if (pending_) {
+				terminal_item->setFlags(terminal_item->flags() | Qt::ItemIsDragEnabled);
 			}
 		}
 	}
@@ -586,6 +621,131 @@ void TerminalNavigatorWidget::addFreeTerminal()
 
 		m_uuid_terminal_H.insert(uuid_, terminal->realTerminal());
 	}
+}
+
+/**
+ * @brief TerminalNavigatorWidget::pendingTerminalOfItem
+ * Read the terminal a drag of @a item would carry: the strip the item
+ * hangs below and the first terminal of it which waits for its symbol,
+ * both by uuid -- the same question both drag payloads ask, one item
+ * at a time (@sa pendingTerminalMimeForItem,
+ * pendingTerminalsMimeForItems).
+ *
+ * The item holds every level of one physical terminal: the first of
+ * them which waits for its symbol is the one carried, so the next
+ * drags of the same item take the next level.
+ * @param item
+ * @param strip_uuid : receives the uuid of the strip
+ * @param terminal_uuid : receives the uuid of the terminal
+ * @return true when @a item holds a terminal to be drawn
+ */
+bool TerminalNavigatorWidget::pendingTerminalOfItem(QTreeWidgetItem *item,
+													QUuid *strip_uuid,
+													QUuid *terminal_uuid) const
+{
+	if (!item || !m_project) {
+		return false;
+	}
+	if (item->type() != Terminal) {
+		return false;
+	}
+
+		//The strip the item hangs below: walked up from the item, since
+		//the tree holds the strip per strip item, not per terminal. A
+		//free terminal hangs below its own root and has no strip, and
+		//is drawn on a folio already anyway.
+	QTreeWidgetItem *strip_item = item;
+	while (strip_item && strip_item->type() != Strip) {
+		strip_item = strip_item->parent();
+	}
+	auto *strip = strip_item ? m_item_strip_H.value(strip_item).data() : nullptr;
+	if (!strip) {
+		return false;
+	}
+
+	const auto phy_t = strip->physicalTerminal(item->data(0, UUID_USER_ROLE).toUuid());
+	if (!phy_t) {
+		return false;
+	}
+	for (const auto &real_t : phy_t->realTerminals()) {
+		if (real_t->isPending()) {
+			if (strip_uuid) {
+				*strip_uuid = strip->uuid();
+			}
+			if (terminal_uuid) {
+				*terminal_uuid = real_t->uuid();
+			}
+			return true;
+		}
+	}
+
+	return false;
+}
+
+/**
+ * @brief TerminalNavigatorWidget::pendingTerminalMimeForItem
+ * Fill @a mime with what a drag of @a item carries: the strip the item
+ * hangs below and the terminal of it which waits for its symbol, both
+ * by uuid. The drag reads them back through the project, which is where
+ * both are known -- a terminal can not travel by pointer, the tree is
+ * rebuilt by every reload and the strip editor undoes while the drag is
+ * on its way.
+ * @param item
+ * @param mime
+ * @return true when @a item holds a terminal to be drawn
+ */
+bool TerminalNavigatorWidget::pendingTerminalMimeForItem(QTreeWidgetItem *item, QMimeData *mime)
+{
+	if (!mime) {
+		return false;
+	}
+
+	QUuid strip_, terminal_;
+	if (!pendingTerminalOfItem(item, &strip_, &terminal_)) {
+		return false;
+	}
+
+	mime->setData(DiagramEventAddTerminal::pendingTerminalMime(),
+				  DiagramEventAddTerminal::pendingTerminalPayload(strip_, terminal_));
+	return true;
+}
+
+/**
+ * @brief TerminalNavigatorWidget::pendingTerminalsMimeForItems
+ * Fill @a mime with what a drag of @a items carries: one line of
+ * payload per item which holds a terminal waiting for its symbol, in
+ * the order the items come in -- the order of the tree, which is the
+ * order the run draws the terminals in.
+ *
+ * The items which hold no terminal to be drawn (an installation, a
+ * strip, a free terminal, one already drawn) leave no line: a
+ * selection of everything may still drag the terminals below it.
+ * @param items
+ * @param mime
+ * @return true when at least one of @a items holds a terminal to be
+ * drawn
+ */
+bool TerminalNavigatorWidget::pendingTerminalsMimeForItems(
+		const QList<QTreeWidgetItem *> &items, QMimeData *mime)
+{
+	if (!mime || !m_project) {
+		return false;
+	}
+
+	QVector<QPair<QUuid, QUuid>> carried;
+	for (auto *item : items) {
+		QUuid strip_, terminal_;
+		if (pendingTerminalOfItem(item, &strip_, &terminal_)) {
+			carried.append(qMakePair(strip_, terminal_));
+		}
+	}
+	if (carried.isEmpty()) {
+		return false;
+	}
+
+	mime->setData(DiagramEventAddTerminal::pendingTerminalMime(),
+				  DiagramEventAddTerminal::pendingTerminalsPayload(carried));
+	return true;
 }
 
 void TerminalNavigatorWidget::setCurrentStrip(TerminalStrip *strip)

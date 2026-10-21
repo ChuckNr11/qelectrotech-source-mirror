@@ -130,7 +130,12 @@ AddTerminalStripDialog::AddTerminalStripDialog(QETProject *project, QWidget *par
 	ui->m_symbol_cb->addItem(QIcon(), tr("(no symbol)"), QString());
 	const auto preselected = preselectedSymbolOfTheProject();
 	if (!preselected.isEmpty()) {
-		const ElementsLocation location(preselected);
+			//The string is the id-free one this combo stores its symbols
+			//in (@sa appendSymbolItem), so only the project can tell
+			//which location it names -- icon and name are read from that
+			//resolved location, the string itself is stored as it is
+		const ElementsLocation location =
+				RealTerminal::symbolLocation(preselected, m_project);
 		ui->m_symbol_cb->addItem(location.icon(), location.name(), preselected);
 		ui->m_symbol_cb->setCurrentIndex(ui->m_symbol_cb->count() - 1);
 	}
@@ -266,6 +271,12 @@ QList<AddTerminalStripDialog::TerminalDescription> AddTerminalStripDialog::descr
 	of the standard collection), or an empty string when that box shows
 	none -- the terminals are then created without a symbol, and can be
 	drawn later on with whatever symbol is chosen then.
+
+	That string holds no runtime project id, whatever session wrote it
+	last: every symbol comparison of this dialog goes by this very value
+	(findData, the preview tree, the terminals created on OK), so the
+	value has to be the same one in every session
+	(@sa RealTerminal::symbolWithoutProjectId).
 */
 QString AddTerminalStripDialog::symbolLocation() const
 {
@@ -611,7 +622,13 @@ void AddTerminalStripDialog::fillSymbolCombo()
 */
 void AddTerminalStripDialog::appendSymbolItem(const ElementsLocation &location)
 {
-	const auto location_string = location.toString();
+		//collectionPath() and not toString(): toString() prefixes the
+		//path of a project symbol with the runtime id of the project
+		//'project0+...' -- an id which is handed out afresh in every
+		//session and would make every comparison of this dialog miss the
+		//entry it added itself. The plain path is what the combo stores
+		//in every session (@sa symbolLocation()).
+	const auto location_string = location.collectionPath();
 	if (location_string.isEmpty()) {
 		return;
 	}
@@ -643,8 +660,10 @@ void AddTerminalStripDialog::onSymbolScanFinished()
 	int index = ui->m_symbol_cb->findData(selected);
 	if (index < 0 && !selected.isEmpty()) {
 			//A symbol of the project which belongs to none of the
-			//collections: keep it listed, since it is selected all the same
-		appendSymbolItem(ElementsLocation(selected));
+			//collections: keep it listed, since it is selected all the
+			//same. The string is the id-free one, so the project is what
+			//resolves it back into a location (@sa symbolLocation())
+		appendSymbolItem(RealTerminal::symbolLocation(selected, m_project));
 		index = ui->m_symbol_cb->findData(selected);
 	}
 	ui->m_symbol_cb->setCurrentIndex(index < 0 ? 0 : index);
@@ -665,9 +684,13 @@ QString AddTerminalStripDialog::symbolName(const QString &symbol) const
 	}
 	if (!m_symbol_names.contains(symbol)) {
 		const int index = ui->m_symbol_cb->findData(symbol);
+			//The project resolves an id-free symbol of its own
+			//collection; a 'common://...' one does not need it and must
+			//not be given it, or it would be taken for an embedded path
+			//(@sa RealTerminal::symbolLocation)
 		const auto name = index >= 0
 				? ui->m_symbol_cb->itemText(index)
-				: ElementsLocation(symbol).name();
+				: RealTerminal::symbolLocation(symbol, m_project).name();
 		m_symbol_names.insert(symbol, name);
 	}
 
@@ -713,7 +736,11 @@ QString AddTerminalStripDialog::preselectedSymbolOfTheProject() const
 			return QETUtils::naturalLessThan(a.name(), b.name());
 		});
 
-	return locations.first().toString();
+		//The plain path and not toString(): the runtime project id
+		//toString() would add means nothing in a later session, and every
+		//symbol comparison of this dialog goes by the id-free value
+		//(@sa symbolLocation())
+	return locations.first().collectionPath();
 }
 
 /**
