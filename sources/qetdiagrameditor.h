@@ -97,6 +97,14 @@ class QETDiagramEditor : public QETMainWindow
 
 	  protected:
 		bool event(QEvent *) override;
+			///What a deletion of terminals which belong to a strip
+			///takes with it: the symbols alone -- the rows stay in
+			///their strips, marked as not drawn --, the rows with
+			///them -- gone from the drawings, the strips, the
+			///navigator and the terminal block manager at once --, or
+			///nothing at all.
+		enum class TerminalDeletionScope {DrawingOnly, WholeProject, Cancelled};
+		TerminalDeletionScope askTerminalDeletionScope();
 	private:
 		bool offerToRecover(const QString &filepath, const QString &reason);
 		QetDbFile::OutsideEdit askOutsideEdit(const QString &filepath, const QetDbFile::Repair &repair,

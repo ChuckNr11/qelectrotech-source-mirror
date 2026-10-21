@@ -21,6 +21,7 @@
 #include <QList>
 #include <QTreeWidget>
 
+class QKeyEvent;
 class QMimeData;
 
 /**
@@ -59,9 +60,18 @@ class TerminalNavigatorTree : public QTreeWidget
 		void itemsDragged(const QList<QTreeWidgetItem *> &items,
 						  QMimeData *mime);
 
+		/**
+			@brief deleteRequested
+			The user asked to delete what is selected, with the Delete
+			key: whoever knows what the items of this tree stand for
+			does it -- this class knows nothing of strips, the same way
+			it knows nothing of folios for the drag.
+		*/
+		void deleteRequested();
 
 	protected:
 		void startDrag(Qt::DropActions supportedActions) override;
+		void keyPressEvent(QKeyEvent *event) override;
 
 	private:
 		void collectSelected(QTreeWidgetItem *item,

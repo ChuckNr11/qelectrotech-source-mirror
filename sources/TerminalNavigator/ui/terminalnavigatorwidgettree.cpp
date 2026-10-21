@@ -19,6 +19,7 @@
 #include "../diagramevent/diagrameventaddterminal.h"
 
 #include <QDrag>
+#include <QKeyEvent>
 #include <QMimeData>
 
 TerminalNavigatorTree::TerminalNavigatorTree(QWidget *parent) :
@@ -104,4 +105,22 @@ void TerminalNavigatorTree::startDrag(Qt::DropActions supportedActions)
 		drag->setPixmap(icon_.pixmap(32, 32));
 	}
 	drag->exec(Qt::CopyAction);
+}
+
+/**
+ * @brief TerminalNavigatorTree::keyPressEvent
+ * The Delete key asks for what is selected to be deleted
+ * (deleteRequested()); every other key goes to the tree itself, so
+ * the arrows and the space still move through it and expand it.
+ * @param event
+ */
+void TerminalNavigatorTree::keyPressEvent(QKeyEvent *event)
+{
+	if (event->key() == Qt::Key_Delete && !event->isAutoRepeat()) {
+		emit deleteRequested();
+		event->accept();
+		return;
+	}
+
+	QTreeWidget::keyPressEvent(event);
 }

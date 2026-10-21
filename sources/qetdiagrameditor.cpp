@@ -112,6 +112,7 @@
 #include "undocommand/mirrorselectioncommand.h"
 #include "undocommand/rotateselectioncommand.h"
 #include "undocommand/rotatetextscommand.h"
+#include "TerminalStrip/UndoCommand/terminalstripdeletion.h"
 #include "diagram.h"
 #include "TerminalStrip/ui/terminalstripeditorwindow.h"
 #include "ui/diagrameditorhandlersizewidget.h"
@@ -3476,6 +3477,38 @@ void QETDiagramEditor::addItemGroupTriggered(QAction *action)
 }
 
 /**
+ * @brief QETDiagramEditor::askTerminalDeletionScope
+ * What to delete when the selection holds terminals which belong to a
+ * strip: from the drawing only -- the rows stay in their strips, drawn
+ * nowhere anymore, and the terminal strip editor shows them as such --,
+ * or from the whole project -- the rows leave the strips too, wherever
+ * their symbols are drawn.
+ * @return what the user answered
+ */
+QETDiagramEditor::TerminalDeletionScope QETDiagramEditor::askTerminalDeletionScope()
+{
+	QMessageBox box(QMessageBox::Warning,
+					tr("Delete a drawn terminal"),
+					tr("The selected terminals belong to a terminal strip.\n"
+					   "Delete them from the drawing only, leaving the strip without their symbol, "
+					   "or delete them from the project as well?"),
+					QMessageBox::NoButton,
+					this);
+	auto *from_drawing = box.addButton(tr("From the drawing only"), QMessageBox::AcceptRole);
+	auto *from_project = box.addButton(tr("From the project"), QMessageBox::DestructiveRole);
+	box.addButton(QMessageBox::Cancel);
+	box.exec();
+
+	if (box.clickedButton() == from_drawing) {
+		return TerminalDeletionScope::DrawingOnly;
+	}
+	if (box.clickedButton() == from_project) {
+		return TerminalDeletionScope::WholeProject;
+	}
+	return TerminalDeletionScope::Cancelled;
+}
+
+/**
 	@brief QETDiagramEditor::selectionGroupTriggered
 	This slot is called when an action should be made on the current selection
 	@param action : Action that describe the action to do.
@@ -3484,10 +3517,11 @@ void QETDiagramEditor::selectionGroupTriggered(QAction *action)
 {
 	QString value = action->data().toString();
 	DiagramView *dv = currentDiagramView();
-	Diagram *diagram = dv->diagram();
-	DiagramContent dc(diagram);
 
 	if (!dv || value.isEmpty()) return;
+
+	Diagram *diagram = dv->diagram();
+	DiagramContent dc(diagram);
 
         if (value == "delete_selection")
         {
@@ -3514,40 +3548,35 @@ void QETDiagramEditor::selectionGroupTriggered(QAction *action)
 						bridge_parts << part;
 					}
 				}
-				const bool other_items = dc.hasDeletableItems();
+
+					//A terminal which belongs to a strip is more than a
+					//symbol: it is a row of a strip, and deleting it asks
+					//what goes -- the drawing alone, leaving the row
+					//marked as not drawn, or the row with it, off the
+					//drawings, out of the strips, the navigator and the
+					//manager at once. Both answers are one undo step.
+				QVector<QPair<TerminalStrip *, QVector<QUuid>>> rows;
+				QString deletion_text;
+				if (TerminalStripDeletion::hasDrawnTerminal(dc)) {
+					const auto scope = askTerminalDeletionScope();
+					if (scope == TerminalDeletionScope::Cancelled) {
+						return;
+					}
+					if (scope == TerminalDeletionScope::WholeProject) {
+						rows = TerminalStripDeletion::rowsOf(dc);
+						int count_{0};
+						for (const auto &row : rows) {
+							count_ += row.second.count();
+						}
+						deletion_text = tr("Delete %n terminal(s) from the project",
+										  "", count_);
+					}
+				}
 
                 diagram->clearSelection();
 
-				if (cable_parts.isEmpty() && bridge_parts.isEmpty() && AutoConnect::isOn(diagram)) {
-						//The terminals the removed symbols stood between, or
-						//were wired to, look for a new partner in the same step
-					auto *undo = new QUndoCommand(QObject::tr("Delete"));
-					auto *del = new DeleteQGraphicsItemCommand(diagram, dc, undo);
-					undo->setText(del->text());
-					const QList<Element *> elements = dc.m_elements;
-					AutoConnect::update(diagram, {}, {}, undo,
-										QSet<Element *>(elements.begin(), elements.end()));
-					diagram->undoStack().push(undo);
-				} else {
-					QList<QUndoCommand *> steps;
-					if (other_items || (cable_parts.isEmpty() && bridge_parts.isEmpty())) {
-						steps << new DeleteQGraphicsItemCommand(diagram, dc);
-					}
-					if (!cable_parts.isEmpty()) {
-						steps << new RemoveCableCommand(diagram, cable_parts);
-					}
-					if (!bridge_parts.isEmpty()) {
-						steps << new RemoveBridgeCommand(bridge_parts);
-					}
-
-						//One single step, so a selection holding both a line
-						//and ordinary drawings comes back whole.
-					if (steps.size() == 1) {
-						diagram->undoStack().push(steps.first());
-					} else {
-						diagram->undoStack().push(new BatchCommand(steps, tr("Delete")));
-					}
-				}
+				diagram->undoStack().push(TerminalStripDeletion::drawingDeletionCommand(
+							diagram, dc, cable_parts, bridge_parts, rows, deletion_text));
                 dv->adjustSceneRect();
             }
         }

@@ -73,6 +73,10 @@ void TerminalStripTreeDockWidget::setProject(QETProject *project)
     if(m_project && m_project_destroy_connection) {
         disconnect(m_project_destroy_connection);
     }
+	for (const auto &connection_ : std::as_const(m_project_strip_connection)) {
+		disconnect(connection_);
+	}
+	m_project_strip_connection.clear();
     m_project = project;
     if (m_project) {
             //`this` as context: this dock can be deleted before the project
@@ -81,6 +85,20 @@ void TerminalStripTreeDockWidget::setProject(QETProject *project)
             this->m_current_strip.clear();
             this->reload();
         });
+
+			//A strip which joins or leaves the project -- created or
+			//deleted in the terminal navigator, deleted here, taken
+			//out by the script API -- rebuilds this tree the same way
+			//the strips of the project already rebuild it when they
+			//change (orderChanged). Without them the tree only
+			//followed what was deleted from this window itself, and
+			//stayed stale for every other way.
+		m_project_strip_connection.append(connect(
+					m_project, &QETProject::terminalStripAdded,
+					this, &TerminalStripTreeDockWidget::reload));
+		m_project_strip_connection.append(connect(
+					m_project, &QETProject::terminalStripRemoved,
+					this, &TerminalStripTreeDockWidget::reload));
     }
     m_current_strip.clear();
     reload();

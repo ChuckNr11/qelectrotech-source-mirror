@@ -5594,6 +5594,7 @@ bool QETProject::addTerminalStrip(TerminalStrip *strip)
 
 	m_terminal_strip_vector.append(strip);
 	watchTerminalStrip(strip);
+	emit terminalStripAdded(strip);
 	return true;
 }
 
@@ -5609,6 +5610,7 @@ bool QETProject::removeTerminalStrip(TerminalStrip *strip)
 	const bool removed_ = m_terminal_strip_vector.removeOne(strip);
 	if (removed_) {
 		watchTerminalStrip(strip, false);
+		emit terminalStripRemoved(strip);
 	}
 	return removed_;
 }

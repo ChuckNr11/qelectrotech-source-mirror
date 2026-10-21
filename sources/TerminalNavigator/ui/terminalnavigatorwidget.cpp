@@ -22,11 +22,13 @@
 #include "../../qetgraphicsitem/terminalelement.h"
 #include "../../qeticons.h"
 #include "../../qetinformation.h"
+#include "../../qetmessagebox.h"
 #include "../../qetproject.h"
 #include "../../TerminalStrip/physicalterminal.h"
 #include "../../TerminalStrip/realterminal.h"
 #include "../../TerminalStrip/terminalstrip.h"
 #include "../../TerminalStrip/UndoCommand/addterminaltostripcommand.h"
+#include "../../TerminalStrip/UndoCommand/terminalstripdeletion.h"
 #include "../../utils/qetutils.h"
 #include "../UndoCommand/createterminalstripcommand.h"
 #include "../diagramevent/diagrameventaddterminal.h"
@@ -34,6 +36,7 @@
 #include "terminalnavigatorwidgettree.h"
 
 #include <QMenu>
+#include <QMessageBox>
 #include <QMimeData>
 #include <QScopedPointer>
 #include <QUndoStack>
@@ -67,6 +70,10 @@ TerminalNavigatorWidget::TerminalNavigatorWidget(QWidget *parent) :
 	connect(ui->m_tree_view, &TerminalNavigatorTree::itemsDragged,
 			this, &TerminalNavigatorWidget::pendingTerminalsMimeForItems);
 
+		//The Delete key deletes what is selected, the way the context
+		//menu does (@sa deleteSelection).
+	connect(ui->m_tree_view, &TerminalNavigatorTree::deleteRequested,
+			this, &TerminalNavigatorWidget::deleteSelection);
 
 		//No project yet: adding a strip has nowhere to go until the
 		//panel hands one over. setProject() switches it on again.
@@ -151,6 +158,27 @@ void TerminalNavigatorWidget::connectElementSignals()
 				connect(m_project, &QETProject::elementAdded, this, on_element));
 	m_element_changed_connection.append(
 				connect(m_project, &QETProject::elementRemoved, this, on_element));
+
+		//A strip which joins or leaves the project -- created here,
+		//deleted here, deleted in the terminal block manager or taken
+		//out by the script API -- rebuilds the tree right away, and
+		//they are the only way the tree learns of a strip which went
+		//elsewhere: before them each view refreshed only itself.
+		//
+		//Directly, unlike the element signals above: those come in
+		//flurries (one per element, e.g. when a folio is deleted) and
+		//are worth batching into the timer, while a strip signal comes
+		//exactly once per gesture. A pending timer rebuild would also
+		//fire inside a dialog opened later on, and reload() only
+		//restores the selection of a strip -- a location picked in the
+		//tree would be lost under the feet of whoever prefills such a
+		//dialog from it.
+	m_element_changed_connection.append(
+				connect(m_project, &QETProject::terminalStripAdded,
+						this, &TerminalNavigatorWidget::reload));
+	m_element_changed_connection.append(
+				connect(m_project, &QETProject::terminalStripRemoved,
+						this, &TerminalNavigatorWidget::reload));
 }
 
 /**
@@ -383,6 +411,15 @@ void TerminalNavigatorWidget::on_m_tree_view_customContextMenuRequested(const QP
 	QMenu menu(this);
 	menu.addAction(ui->m_add_strip);
 
+		//Deleting is for what can leave the project from here: a strip
+		//or a terminal row of one. The free terminals belong to no
+		//strip, and deleteSelection() alone knows what each item of
+		//the selection is worth -- the entry is only greyed out when
+		//there is nothing selected at all.
+	auto *delete_ = menu.addAction(QET::Icons::EditDelete, tr("Delete"));
+	delete_->setEnabled(!ui->m_tree_view->selectedItems().isEmpty());
+	connect(delete_, &QAction::triggered,
+			this, &TerminalNavigatorWidget::deleteSelection);
 
 	menu.exec(ui->m_tree_view->viewport()->mapToGlobal(pos));
 }
@@ -569,6 +606,11 @@ QTreeWidgetItem* TerminalNavigatorWidget::addTerminalStrip(TerminalStrip *termin
 			terminal_item->setData(0, UUID_USER_ROLE, phy_t->uuid());
 			if (drawn_) {
 				terminal_item->setIcon(0, QET::Icons::ElementTerminal);
+			} else {
+					//The missing icon already tells the row is drawn
+					//nowhere; the tooltip says it in words, the way the
+					//terminal strip editor's table does ("Not drawn yet")
+				terminal_item->setToolTip(0, tr("Not drawn in any folio yet"));
 			}
 				//Only a terminal which still waits for its symbol can be
 				//dragged onto a folio -- one already drawn is where it
@@ -752,4 +794,193 @@ void TerminalNavigatorWidget::setCurrentStrip(TerminalStrip *strip)
 {
 	m_current_strip = strip;
 	emit currentStripChanged(strip);
+}
+
+/**
+ * @brief TerminalNavigatorWidget::deleteSelection
+ * Take what the tree has selected off the project. One undo step
+ * brings everything back: the symbols leave the folios they are drawn
+ * on, the rows leave their strips, the strips leave the project -- the
+ * navigator, the terminal block manager and the drawings all follow,
+ * through the signals of the project and of the strips
+ * (@sa TerminalStripDeletion, which builds the macros).
+ *
+ * Only what belongs to a strip can go from here: a terminal row with
+ * its symbols, or a whole branch (the project, an installation, a
+ * location, a strip) with the strips it holds, their symbols and their
+ * plans. The free terminals are left alone -- they belong to no strip,
+ * and a symbol taken off a folio is the drawing editor's business.
+ */
+void TerminalNavigatorWidget::deleteSelection()
+{
+	if (!m_project) {
+		return;
+	}
+
+	const auto items = ui->m_tree_view->selectedItemsInOrder();
+	if (items.isEmpty()) {
+		return;
+	}
+
+		//Collected first, asked after: a strip taken as a whole eats
+		//the rows below it, and a row whose strip goes with it is one
+		//deletion less to describe. The tree walks parents before
+		//children, so a strip is known before its rows are looked at.
+	QVector<TerminalStrip *> strips;
+	QHash<TerminalStrip *, QVector<QUuid>> rows;
+	bool group_selected{false};
+
+		//Collects every strip below @a item: the branch of the project,
+		//an installation or a location is the strips it holds, all of
+		//them -- and the rows below a strip go with the strip.
+	const auto collect_strips = [&](auto &&self, QTreeWidgetItem *item) -> void {
+		if (!item) {
+			return;
+		}
+		if (item->type() == Strip) {
+			if (auto *strip = m_item_strip_H.value(item).data();
+				strip && !strips.contains(strip)) {
+				strips << strip;
+			}
+			return;
+		}
+		for (int i = 0 ; i < item->childCount() ; ++i) {
+			self(self, item->child(i));
+		}
+	};
+
+	for (auto *item : items)
+	{
+		switch (item->type())
+		{
+			case Root:
+			case Installation:
+			case Location:
+				group_selected = true;
+				collect_strips(collect_strips, item);
+				break;
+			case Strip:
+			{
+				group_selected = true;
+				if (auto *strip = m_item_strip_H.value(item).data();
+					strip && !strips.contains(strip)) {
+					strips << strip;
+				}
+				break;
+			}
+			case Terminal:
+			{
+					//A row of a strip: the row goes, the strip stays.
+					//A free terminal hangs below the second root and
+					//belongs to no strip -- not deletable from here.
+				auto *parent_item = item->parent();
+				if (!parent_item || parent_item->type() != Strip) {
+					break;
+				}
+				auto *strip = m_item_strip_H.value(parent_item).data();
+				if (!strip || strips.contains(strip)) {
+					break;		//Its strip goes as a whole: covered
+				}
+				const auto uuid_ = item->data(0, UUID_USER_ROLE).toUuid();
+				auto &uuids = rows[strip];
+				if (!uuids.contains(uuid_)) {
+					uuids << uuid_;
+				}
+				break;
+			}
+			default:
+				break;			//Nothing of the free terminals' root
+		}
+	}
+
+	if (strips.isEmpty() && rows.isEmpty()) {
+		return;					//Nothing here leaves the project
+	}
+
+		//The reason a deletion is refused, the way the drawing editor
+		//has always refused the same terminals
+		//(DeleteQGraphicsItemCommand::hasNonDeletableTerminal): a row
+		//taken here would take the bridge it is part of with it, and a
+		//multi-level row is deleted level by level in the strip editor.
+		//Unbridge it and take its levels off first.
+	const auto refuse = [this]() {
+		QET::QetMessageBox::information(this,
+										tr("Unable to delete the terminal"),
+										tr("The deletion cannot be performed because the selection contains one or more "
+										   "terminals that are bridged and/or belong to a multi-level terminal.\n"
+										   "Unbridge and/or remove the levels from the affected terminals so that they "
+										   "can be deleted"));
+	};
+	for (auto it = rows.cbegin() ; it != rows.cend() ; ++it)
+	{
+		for (const auto &uuid_ : it.value())
+		{
+			const auto phy_t = it.key()->physicalTerminal(uuid_);
+			if (!phy_t) {
+				continue;
+			}
+			if (phy_t->levelCount() != 1) {
+				refuse();
+				return;
+			}
+			for (const auto &real_t : phy_t->realTerminals()) {
+				if (real_t->isBridged()) {
+					refuse();
+					return;
+				}
+			}
+		}
+	}
+
+	int row_count{0};
+	for (auto it = rows.cbegin() ; it != rows.cend() ; ++it) {
+		row_count += it.value().count();
+	}
+	if (group_selected && !confirmGroupDeletion(strips.count(), row_count)) {
+		return;
+	}
+
+	QVector<QPair<TerminalStrip *, QVector<QUuid>>> row_list;
+	for (auto it = rows.cbegin() ; it != rows.cend() ; ++it) {
+		row_list.append(qMakePair(it.key(), it.value()));
+	}
+
+	QUndoCommand *macro = nullptr;
+	if (!strips.isEmpty() && !row_list.isEmpty()) {
+			//Both kinds in one step: the strips first, the rows of
+			//other strips after them
+		macro = new QUndoCommand(tr("Delete terminals"));
+		TerminalStripDeletion::stripsDeletionMacro(m_project, strips, macro);
+		TerminalStripDeletion::terminalsDeletionMacro(m_project, row_list, macro);
+	} else if (!strips.isEmpty()) {
+		macro = TerminalStripDeletion::stripsDeletionMacro(m_project, strips);
+	} else {
+		macro = TerminalStripDeletion::terminalsDeletionMacro(m_project, row_list);
+	}
+
+	if (macro) {
+			//The tree follows through the signals of the project and
+			//of the strips: no reload to run here.
+		m_project->undoStack()->push(macro);
+	}
+}
+
+/**
+ * @brief TerminalNavigatorWidget::confirmGroupDeletion
+ * @param strip_count
+ * @param terminal_count
+ * @return the answer to the question, true being "delete it all"
+ */
+bool TerminalNavigatorWidget::confirmGroupDeletion(int strip_count, int terminal_count)
+{
+	const auto answer = QMessageBox::question(this,
+											  tr("Delete"),
+											  tr("Delete %1 terminal strip(s) and %2 terminal(s) from the project?\n"
+												 "Their symbols and their plans in the drawings are deleted too. "
+												 "This can be undone.")
+											  .arg(strip_count)
+											  .arg(terminal_count),
+											  QMessageBox::Yes | QMessageBox::No,
+											  QMessageBox::No);
+	return answer == QMessageBox::Yes;
 }

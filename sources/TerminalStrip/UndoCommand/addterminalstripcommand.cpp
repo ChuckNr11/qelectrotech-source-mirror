@@ -19,9 +19,12 @@
 #include "../../qetproject.h"
 #include "../physicalterminal.h"
 #include "../terminalstrip.h"
+#include "../terminalstripbridge.h"
 #include "../realterminal.h"
 
 #include <QObject>
+
+#include <utility>
 
 /**
  * @brief AddTerminalStripCommand::AddTerminalStripCommand
@@ -72,6 +75,31 @@ RemoveTerminalStripCommand::RemoveTerminalStripCommand(TerminalStrip *strip,
 	for (const auto &phy_t : strip->physicalTerminal()) {
 		m_terminals.append(phy_t->realTerminals());
 	}
+
+		//The bridges those terminals are part of go with them, or undo()
+		//would give the strip back with its bridges silently gone:
+		//redo() takes every terminal out of its bridge, and
+		//addAndGroupTerminals() only rebuilds the physical terminals.
+	for (const auto &real_t : strip->realTerminals())
+	{
+		const auto bridge_ = real_t->bridge();
+		if (!bridge_) {
+			continue;
+		}
+		bool known_ = false;
+		for (auto &pair_ : m_bridges) {
+			if (pair_.first == bridge_) {
+				pair_.second.append(real_t);
+				known_ = true;
+				break;
+			}
+		}
+		if (!known_) {
+			m_bridges.append(qMakePair(bridge_,
+									   QVector<QSharedPointer<RealTerminal>>{real_t}));
+		}
+	}
+
 	setText(QObject::tr("Delete a group of terminals"));
 }
 
@@ -83,6 +111,13 @@ void RemoveTerminalStripCommand::undo()
 	if (m_project && m_strip) {
 		m_strip->addAndGroupTerminals(m_terminals);
 		m_project->addTerminalStrip(m_strip);
+
+			//The bridges the terminals were part of are back on too:
+			//addAndGroupTerminals() rebuilt the physical terminals, but
+			//the terminals it rebuilt are not in any bridge until here.
+		for (const auto &pair_ : std::as_const(m_bridges)) {
+			m_strip->setBridge(pair_.first, pair_.second);
+		}
 	}
 }
 

@@ -72,6 +72,16 @@ namespace Ui {
 	CreateTerminalStripCommand, in sources/TerminalNavigator/UndoCommand/ --
 	so it can be taken back with a single undo, tree included.
 
+	The tab also deletes, with the context menu and the Delete key: a
+	terminal row takes its symbols off the drawings and itself out of
+	its strip in one undo step, without asking -- which is what the
+	drawing editor does with a terminal too, once its own delete dialog
+	answered "from the project". Anything above a row (the project, an
+	installation, a location, a strip) says what it takes with it and
+	asks first, since a whole strip goes with its symbols and its plans
+	on every folio (@sa TerminalStripDeletion, in
+	sources/TerminalStrip/UndoCommand/). The free terminals are never
+	touched: they belong to no strip.
 */
 class TerminalNavigatorWidget : public QWidget
 {
@@ -131,6 +141,34 @@ class TerminalNavigatorWidget : public QWidget
 		bool pendingTerminalsMimeForItems(const QList<QTreeWidgetItem *> &items,
 										   QMimeData *mime);
 
+	public slots:
+		/**
+			@brief deleteSelection
+			Take what the tree has selected off the project: a
+			terminal row goes without asking -- its symbols leave the
+			drawings with it, one undo step --, anything above a row
+			(the project, an installation, a location, a strip) says
+			what it takes with it and asks first, because a whole
+			strip goes with its symbols and its plans on every folio.
+			The free terminals are not touched: they belong to no
+			strip, and taking a symbol off a folio is the drawing
+			editor's business.
+		*/
+		void deleteSelection();
+
+	protected:
+		/**
+			@brief confirmGroupDeletion
+			Ask before @p strip_count strips and @p terminal_count
+			terminal rows leave the project the way deleteSelection()
+			asked for it: more than a single row goes -- the symbols
+			and the plans of the strips on the folios too --, so the
+			answer is wanted before anything moves. A single terminal
+			row, which the drawing editor deletes without asking
+			either, does not come through here.
+			@return true to go on with the deletion
+		*/
+		virtual bool confirmGroupDeletion(int strip_count, int terminal_count);
 
 	signals:
 		void currentStripChanged(TerminalStrip *strip);

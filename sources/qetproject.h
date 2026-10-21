@@ -463,6 +463,20 @@ class QETProject : public QObject
 			/// bridges listen to both to work their rows out again.
 		void bridgeAdded(Bridge *bridge);
 		void bridgeRemoved(Bridge *bridge);
+			/// A terminal strip joined or left this project: through the
+			/// undoable ways (creating one in the terminal navigator,
+			/// deleting one from the navigator or from the terminal
+			/// block manager) and through the script API alike, since
+			/// both go through addTerminalStrip()/removeTerminalStrip()
+			/// -- the one funnel a strip enters and leaves by. The views
+			/// over the strips -- the terminal navigator tab, the dock
+			/// of the terminal strip editor -- listen to them to
+			/// rebuild their tree: a strip carries a whole branch
+			/// (installation, location, terminals), so no narrower
+			/// signal says what changed, and before them each view
+			/// refreshed only itself, leaving the others stale.
+		void terminalStripAdded(TerminalStrip *strip);
+		void terminalStripRemoved(TerminalStrip *strip);
 			/// An element was placed on a folio, or taken off one. They
 			/// answer "did the content of a folio gain or lose an
 			/// element", which no other signal does: the database's own
