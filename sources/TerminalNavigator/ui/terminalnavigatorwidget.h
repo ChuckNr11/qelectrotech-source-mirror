@@ -72,16 +72,28 @@ namespace Ui {
 	CreateTerminalStripCommand, in sources/TerminalNavigator/UndoCommand/ --
 	so it can be taken back with a single undo, tree included.
 
-	The tab also deletes, with the context menu and the Delete key: a
-	terminal row takes its symbols off the drawings and itself out of
-	its strip in one undo step, without asking -- which is what the
-	drawing editor does with a terminal too, once its own delete dialog
-	answered "from the project". Anything above a row (the project, an
-	installation, a location, a strip) says what it takes with it and
-	asks first, since a whole strip goes with its symbols and its plans
-	on every folio (@sa TerminalStripDeletion, in
+	The tab also deletes, with the context menu, the Delete key and a
+	delete button of the toolbar: a terminal row takes its symbols off
+	the drawings and itself out of its strip in one undo step, without
+	asking -- which is what the drawing editor does with a terminal
+	too, once its own delete dialog answered "from the project".
+	Anything above a row (the project, an installation, a location, a
+	strip) says what it takes with it and asks first, since a whole
+	strip goes with its symbols and its plans on every folio
+	(@sa TerminalStripDeletion, in
 	sources/TerminalStrip/UndoCommand/). The free terminals are never
-	touched: they belong to no strip.
+	touched: they belong to no strip. The toolbar button waits for a
+	terminal row to be marked -- deleting a strip or a whole branch
+	asks its question and stays in the context menu and on the Delete
+	key, and both buttons follow the selection
+	(@sa updateActionsState).
+
+	Drawing the terminals which wait for their symbol is the drag
+	onto a folio, and the context menu says the same in words
+	("Draw"): the selection is taken the way the drag takes it, in
+	the order of the tree, and the symbols are placed on the drawing
+	the editor shows, one click each
+	(@sa drawSelection, DiagramEventAddTerminal).
 */
 class TerminalNavigatorWidget : public QWidget
 {
@@ -156,6 +168,17 @@ class TerminalNavigatorWidget : public QWidget
 		*/
 		void deleteSelection();
 
+		/**
+			@brief drawSelection
+			Draw the terminals of the selection which wait for their
+			symbol, the way a drag of the same selection does: one run
+			of placements on the drawing the editor shows, one click
+			per terminal, in the order of the tree. The entry of the
+			context menu for it is greyed out as long as no row of the
+			selection waits for its symbol.
+		*/
+		void drawSelection();
+
 	protected:
 		/**
 			@brief confirmGroupDeletion
@@ -163,9 +186,12 @@ class TerminalNavigatorWidget : public QWidget
 			terminal rows leave the project the way deleteSelection()
 			asked for it: more than a single row goes -- the symbols
 			and the plans of the strips on the folios too --, so the
-			answer is wanted before anything moves. A single terminal
-			row, which the drawing editor deletes without asking
-			either, does not come through here.
+			answer is wanted before anything moves. @p terminal_count
+			is everything the drawings lose a symbol by: the rows
+			marked on their own plus the rows of the strips which go
+			as a whole. A single terminal row, which the drawing
+			editor deletes without asking either, does not come
+			through here.
 			@return true to go on with the deletion
 		*/
 		virtual bool confirmGroupDeletion(int strip_count, int terminal_count);
@@ -178,6 +204,17 @@ class TerminalNavigatorWidget : public QWidget
 		void on_m_tree_view_customContextMenuRequested(const QPoint &pos);
 		void on_m_add_strip_triggered();
 		void onElementChanged();
+		/**
+			@brief updateActionsState
+			Say what the selection is worth to the two buttons which
+			follow it (@sa the constructor): the delete button of the
+			toolbar waits for a terminal row of a strip to be marked,
+			the "Draw" entry of the context menu for one which waits
+			for its symbol. Called on every selection change and after
+			every rebuild: a rebuild marks nothing, and a button must
+			not stay enabled for a selection which is gone.
+		*/
+		void updateActionsState();
 
 	private:
 		void buildTree();
@@ -185,7 +222,8 @@ class TerminalNavigatorWidget : public QWidget
 		void addFreeTerminal();
 		bool pendingTerminalOfItem(QTreeWidgetItem *item,
 								   QUuid *strip_uuid,
-								   QUuid *terminal_uuid) const;
+								   QUuid *terminal_uuid,
+								   QSharedPointer<RealTerminal> *real = nullptr) const;
 		void setCurrentStrip(TerminalStrip *strip);
 		void connectElementSignals();
 		void disconnectElementSignals();

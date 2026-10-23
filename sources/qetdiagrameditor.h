@@ -66,6 +66,7 @@ class QETDiagramEditor : public QETMainWindow
 	Q_OBJECT
 
         friend class TerminalStripEditorWindow;
+        friend class TerminalNavigatorWidget;
         friend class LiveServer;
         friend class MacroRecorder;
 	

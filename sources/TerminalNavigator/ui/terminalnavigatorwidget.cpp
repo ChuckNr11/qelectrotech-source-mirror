@@ -18,7 +18,11 @@
 #include "terminalnavigatorwidget.h"
 #include "ui_terminalnavigatorwidget.h"
 
+#include "../../diagram.h"
+#include "../../diagramview.h"
 #include "../../elementprovider.h"
+#include "../../qetapp.h"
+#include "../../qetdiagrameditor.h"
 #include "../../qetgraphicsitem/terminalelement.h"
 #include "../../qeticons.h"
 #include "../../qetinformation.h"
@@ -71,9 +75,19 @@ TerminalNavigatorWidget::TerminalNavigatorWidget(QWidget *parent) :
 			this, &TerminalNavigatorWidget::pendingTerminalsMimeForItems);
 
 		//The Delete key deletes what is selected, the way the context
-		//menu does (@sa deleteSelection).
+		//menu and the toolbar button do (@sa deleteSelection), and the
+		//selection also says what the two toolbar buttons are worth:
+		//the delete button waits for a terminal row of a strip to be
+		//marked, the "Draw" entry of the context menu for one which
+		//waits for its symbol. Both start disabled, in the .ui file.
 	connect(ui->m_tree_view, &TerminalNavigatorTree::deleteRequested,
 			this, &TerminalNavigatorWidget::deleteSelection);
+	connect(ui->m_tree_view, &QTreeWidget::itemSelectionChanged,
+			this, &TerminalNavigatorWidget::updateActionsState);
+	connect(ui->m_delete_selection, &QAction::triggered,
+			this, &TerminalNavigatorWidget::deleteSelection);
+	connect(ui->m_draw_selection, &QAction::triggered,
+			this, &TerminalNavigatorWidget::drawSelection);
 
 		//No project yet: adding a strip has nowhere to go until the
 		//panel hands one over. setProject() switches it on again.
@@ -240,6 +254,11 @@ void TerminalNavigatorWidget::reload()
 	buildTree();
 
 	ui->m_tree_view->expandRecursively(ui->m_tree_view->rootIndex());
+
+		//clear() above marked nothing anymore, so the toolbar buttons
+		//say so too: none of them stays enabled for a selection which
+		//is gone.
+	updateActionsState();
 
 		//Reselect the tree widget item of the strip which was current
 	auto item = m_item_strip_H.key(current_);
@@ -410,6 +429,11 @@ void TerminalNavigatorWidget::on_m_tree_view_customContextMenuRequested(const QP
 
 	QMenu menu(this);
 	menu.addAction(ui->m_add_strip);
+
+		//Drawing a terminal which waits for its symbol is the drag
+		//onto a folio; this entry is the same run without the drag,
+		//and follows the selection the same way (@sa drawSelection).
+	menu.addAction(ui->m_draw_selection);
 
 		//Deleting is for what can leave the project from here: a strip
 		//or a terminal row of one. The free terminals belong to no
@@ -669,9 +693,10 @@ void TerminalNavigatorWidget::addFreeTerminal()
  * @brief TerminalNavigatorWidget::pendingTerminalOfItem
  * Read the terminal a drag of @a item would carry: the strip the item
  * hangs below and the first terminal of it which waits for its symbol,
- * both by uuid -- the same question both drag payloads ask, one item
- * at a time (@sa pendingTerminalMimeForItem,
- * pendingTerminalsMimeForItems).
+ * both by uuid -- the same question both drag payloads and the "Draw"
+ * of the context menu ask, one item at a time
+ * (@sa pendingTerminalMimeForItem, pendingTerminalsMimeForItems,
+ * drawSelection).
  *
  * The item holds every level of one physical terminal: the first of
  * them which waits for its symbol is the one carried, so the next
@@ -679,11 +704,15 @@ void TerminalNavigatorWidget::addFreeTerminal()
  * @param item
  * @param strip_uuid : receives the uuid of the strip
  * @param terminal_uuid : receives the uuid of the terminal
+ * @param real : receives the terminal itself, for the run the context
+ * menu's "Draw" starts without a drag reading it back through uuids,
+ * may be null
  * @return true when @a item holds a terminal to be drawn
  */
 bool TerminalNavigatorWidget::pendingTerminalOfItem(QTreeWidgetItem *item,
 													QUuid *strip_uuid,
-													QUuid *terminal_uuid) const
+													QUuid *terminal_uuid,
+													QSharedPointer<RealTerminal> *real) const
 {
 	if (!item || !m_project) {
 		return false;
@@ -716,6 +745,9 @@ bool TerminalNavigatorWidget::pendingTerminalOfItem(QTreeWidgetItem *item,
 			}
 			if (terminal_uuid) {
 				*terminal_uuid = real_t->uuid();
+			}
+			if (real) {
+				*real = real_t;
 			}
 			return true;
 		}
@@ -932,9 +964,18 @@ void TerminalNavigatorWidget::deleteSelection()
 		}
 	}
 
+		//What the question says it takes: the rows marked on their
+		//own plus the rows of the strips which go as a whole -- a
+		//strip eats the rows below it before this point, and the
+		//question said "0 terminal(s)" for a strip of four, which is
+		//what every one of its symbols costs the drawings
+		//(@sa confirmGroupDeletion).
 	int row_count{0};
 	for (auto it = rows.cbegin() ; it != rows.cend() ; ++it) {
 		row_count += it.value().count();
+	}
+	for (auto *strip : std::as_const(strips)) {
+		row_count += strip->physicalTerminalCount();
 	}
 	if (group_selected && !confirmGroupDeletion(strips.count(), row_count)) {
 		return;
@@ -983,4 +1024,91 @@ bool TerminalNavigatorWidget::confirmGroupDeletion(int strip_count, int terminal
 											  QMessageBox::Yes | QMessageBox::No,
 											  QMessageBox::No);
 	return answer == QMessageBox::Yes;
+}
+
+/**
+ * @brief TerminalNavigatorWidget::updateActionsState
+ * Say what the selection is worth to the two buttons which follow it:
+ * the delete button of the toolbar is for a terminal row of a strip,
+ * which goes without asking, and the "Draw" entry of the context menu
+ * for a row which waits for its symbol -- strips and branches are
+ * deleted from the context menu and the Delete key, which ask their
+ * question first, and a free terminal is deleted nowhere from here
+ * and drawn nowhere, being drawn already.
+ */
+void TerminalNavigatorWidget::updateActionsState()
+{
+	bool deletable{false};
+	bool drawable{false};
+	const auto items = ui->m_tree_view->selectedItems();
+	for (auto *item : items) {
+		if (!drawable && pendingTerminalOfItem(item, nullptr, nullptr)) {
+			drawable = true;
+		}
+
+			//A row of a strip, and not a free terminal: the parent of
+			//the item is the strip, while the free terminals hang
+			//below their own root and belong to no strip.
+		if (item->type() == Terminal
+			&& item->parent() && item->parent()->type() == Strip) {
+			deletable = true;
+		}
+		if (deletable && drawable) {
+			break;
+		}
+	}
+
+	ui->m_delete_selection->setEnabled(bool(m_project) && deletable);
+	ui->m_draw_selection->setEnabled(bool(m_project) && drawable);
+}
+
+/**
+ * @brief TerminalNavigatorWidget::drawSelection
+ * Draw the terminals of the selection which wait for their symbol, the
+ * way a drag of the same selection does: one run of placements on the
+ * drawing the editor shows, one click per terminal, in the order of
+ * the tree, which is the order the drag carries them in
+ * (@sa DiagramEventAddTerminal, DiagramView::startTerminalPlacement).
+ *
+ * The tab lives inside the elements collection panel of a drawing
+ * editor window, which is where the drawing is -- reached the same way
+ * the strip editor reaches its editor window, by being a friend of
+ * QETDiagramEditor for currentDiagramView().
+ */
+void TerminalNavigatorWidget::drawSelection()
+{
+	if (!m_project) {
+		return;
+	}
+
+		//The terminals of the selection which wait for their symbol,
+		//in the order the tree shows them -- an item which holds none
+		//(a strip, an installation, a row already drawn) leaves
+		//nothing behind, the way the drag does.
+	QVector<QSharedPointer<RealTerminal>> pendings;
+	for (auto *item : ui->m_tree_view->selectedItemsInOrder()) {
+		QSharedPointer<RealTerminal> pending;
+		if (pendingTerminalOfItem(item, nullptr, nullptr, &pending)) {
+			pendings.append(pending);
+		}
+	}
+	if (pendings.isEmpty()) {
+		return;
+	}
+
+	auto *editor = QETApp::diagramEditorAncestorOf(this);
+	DiagramView *view = editor ? editor->currentDiagramView() : nullptr;
+	if (!view || view->diagram()->project() != m_project) {
+		QET::QetMessageBox::information(this,
+										tr("Nothing to draw on"),
+										tr("The symbols of the selected terminals are placed on a "
+										   "drawing of this project: open one first."));
+		return;
+	}
+
+		//No drop point here, unlike the drag: the run starts in the
+		//middle of the drawing, and the symbol follows the cursor
+		//from there.
+	view->startTerminalPlacement(pendings,
+								 view->mapToScene(view->viewport()->rect().center()));
 }

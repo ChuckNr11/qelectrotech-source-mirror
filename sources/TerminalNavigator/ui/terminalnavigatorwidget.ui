@@ -20,12 +20,13 @@
       <bool>false</bool>
      </property>
      <property name="toolButtonStyle">
-      <enum>Qt::ToolButtonTextBesideIcon</enum>
+      <enum>Qt::ToolButtonIconOnly</enum>
      </property>
      <property name="windowTitle">
       <string>toolBar</string>
      </property>
      <addaction name="m_add_strip"/>
+     <addaction name="m_delete_selection"/>
     </widget>
    </item>
    <item>
@@ -56,6 +57,31 @@
    </property>
    <property name="toolTip">
     <string>Add a terminal strip to the project</string>
+   </property>
+  </action>
+  <action name="m_delete_selection">
+   <property name="enabled">
+    <bool>false</bool>
+   </property>
+   <property name="icon">
+    <iconset theme="edit-delete"/>
+   </property>
+   <property name="text">
+    <string>Delete</string>
+   </property>
+   <property name="toolTip">
+    <string>Delete the selected terminals from the project, symbols included</string>
+   </property>
+  </action>
+  <action name="m_draw_selection">
+   <property name="enabled">
+    <bool>false</bool>
+   </property>
+   <property name="text">
+    <string>Draw</string>
+   </property>
+   <property name="toolTip">
+    <string>Place the symbols of the selected terminals which wait for one on the current drawing, one after the other</string>
    </property>
   </action>
  </widget>
