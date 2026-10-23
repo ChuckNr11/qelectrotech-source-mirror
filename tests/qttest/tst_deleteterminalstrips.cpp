@@ -168,6 +168,7 @@ private slots:
 	void deletesAPlanWithItsStrip();
 	void refusesBridgedRowsAndKeepsThem();
 	void deletesOnlyTheDrawingWhenAsked();
+	void marksTheRowAsNotDrawnWhenOnlyTheDrawingGoes();
 	void deletesTheRowFromTheProjectWhenAsked();
 	void saysTheStripsInAndOutThroughTheProjectSignals();
 	void followsTheStripsInTheManagerTree();
@@ -492,6 +493,55 @@ void tst_deleteterminalstrips::deletesOnlyTheDrawingWhenAsked()
 	QCOMPARE(x10->physicalTerminalCount(), 4);
 	QCOMPARE(real->element(), element);
 	flushTheTrees();
+}
+
+void tst_deleteterminalstrips::marksTheRowAsNotDrawnWhenOnlyTheDrawingGoes()
+{
+	auto *x10 = stripNamed(QStringLiteral("X10"));
+	QVERIFY(x10);
+	auto real = x10->realTerminals().first();
+	auto *element = real->element();
+	QVERIFY(element);
+	auto *diagram = element->diagram();
+	QVERIFY(diagram);
+
+	auto *strip_item = treeItem(QStringLiteral("X10"));
+	QVERIFY(strip_item);
+	auto *drawn_row = findByText(strip_item, real->label());
+	QVERIFY(drawn_row);
+		//Drawn: the symbol is on a folio, and the row says so with
+		//its icon and without the tooltip of an undrawn one.
+	QVERIFY(!drawn_row->icon(0).isNull());
+	QVERIFY(drawn_row->toolTip(0).isEmpty());
+
+		//The drawing alone goes: the element stays alive and bound --
+		//the undo command holds it so that undo finds it back --, but
+		//off every folio, and the row says so the next time the tree
+		//is built through the elementRemoved() signal of the project.
+	element->setSelected(true);
+	DiagramContent content(diagram);
+	QVERIFY(TerminalStripDeletion::hasDrawnTerminal(content));
+	diagram->undoStack().push(TerminalStripDeletion::drawingDeletionCommand(
+								  diagram, content, {}, {}, QStringLiteral("t")));
+	QVERIFY(!onItsFolio(element));
+	flushTheTrees();
+
+	QCOMPARE(x10->physicalTerminalCount(), 4);
+	auto *undrawn_row = findByText(treeItem(QStringLiteral("X10")), real->label());
+	QVERIFY(undrawn_row);
+	QVERIFY(undrawn_row->icon(0).isNull());
+	QCOMPARE(undrawn_row->toolTip(0), QStringLiteral("Not drawn in any folio yet"));
+
+		//Undo puts the symbol back on its folio, and the row is a
+		//drawn one again.
+	diagram->undoStack().undo();
+	flushTheTrees();
+
+	QVERIFY(onItsFolio(element));
+	auto *back_row = findByText(treeItem(QStringLiteral("X10")), real->label());
+	QVERIFY(back_row);
+	QVERIFY(!back_row->icon(0).isNull());
+	QVERIFY(back_row->toolTip(0).isEmpty());
 }
 
 void tst_deleteterminalstrips::deletesTheRowFromTheProjectWhenAsked()
