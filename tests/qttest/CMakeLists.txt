@@ -1714,7 +1714,9 @@ endif()
 
 # A symbol's kind information (NO/NC/SW/power) is queryable from the
 # project database once it is placed, not only from a live Element*.
-# QETZ-DB-FIRST 2d-2a.
+# QETZ-DB-FIRST 2d-2a. Driven through the real binary's --run, so only
+# where --run exists: a build without the Qt Qml module has no scripting
+# (see QET_HAS_SCRIPTING in the top-level CMakeLists.txt).
 if(QET_HAS_SCRIPTING)
   add_executable(
     tst_elementkindinformation
