@@ -27,6 +27,7 @@
 #include "elementprovider.h"
 #include "qetgraphicsitem/terminalelement.h"
 #include "qetproject.h"
+#include "undocommand/changeelementinformationcommand.h"
 
 #include <QApplication>
 #include <QComboBox>
@@ -226,6 +227,7 @@ private slots:
 	void selectsStripAndTerminal();
 	void reloadKeepsTheSelectedStrip();
 	void followsElementsOfTheFolios();
+	void followsEditedTerminalsInTheTree();
 	void createsStripThroughTheToolbar();
 	void checksTheStripDialog();
 	void previewsTheTerminalsInTheTree();
@@ -482,6 +484,105 @@ void tst_terminalnavigator::followsElementsOfTheFolios()
 	QCoreApplication::processEvents();
 	QCOMPARE(freeTerminalCount(), free_before);
 	QCOMPARE(other_folio->elements().count(), others_before);
+}
+
+/**
+	The rows of the tree are named by the symbols they are drawn with: a
+	terminal edited on a folio renames its row, and a strip renamed in the
+	terminal block manager renames its branch. Both arrive through the
+	project (@sa QETProject::elementDataChanged, terminalStripChanged) and
+	both rebuild the tree the way an element arriving does -- through the
+	timer the event loop turns.
+*/
+void tst_terminalnavigator::followsEditedTerminalsInTheTree()
+{
+		//A terminal of a strip, renamed the way the properties dialog
+		//renames it: through the undo command, so one undo names it
+		//back. A terminal which follows a numbering scheme is named by
+		//its formula and not by what is typed here, so the row to pick
+		//is one named by its label alone.
+	auto *x10_strip = stripNamed(QStringLiteral("X10"));
+	QVERIFY(x10_strip);
+	QSharedPointer<RealTerminal> real_t;
+	for (int i = 0 ; i < x10_strip->physicalTerminalCount() && real_t.isNull() ; ++i)
+	{
+		const auto candidate = x10_strip->physicalTerminal(i)->realTerminals().first();
+		auto *candidate_element = candidate ? candidate->element() : nullptr;
+		if (candidate_element
+			&& candidate_element->elementInformations().value(QStringLiteral("formula")).toString().isEmpty()) {
+			real_t = candidate;
+		}
+	}
+	QVERIFY2(real_t, "a terminal named by its label, not by a formula");
+	auto *element = real_t->element();
+	QVERIFY(element);
+
+	const QString before = real_t->label();
+	QVERIFY(!before.isEmpty());
+	QVERIFY(childrenTexts(stripX10()).contains(before));
+
+	auto old_info = element->elementInformations();
+	auto new_info = old_info;
+	new_info.addValue(QStringLiteral("label"), QStringLiteral("X10:42"));
+	m_project->undoStack()->push(new ChangeElementInformationCommand(element, old_info, new_info));
+	QCoreApplication::processEvents();
+
+	QCOMPARE(real_t->label(), QStringLiteral("X10:42"));
+	QVERIFY(!childrenTexts(stripX10()).contains(before));
+	QVERIFY(childrenTexts(stripX10()).contains(QStringLiteral("X10:42")));
+
+		//One undo takes the name back and the tree with it.
+	m_project->undoStack()->undo();
+	QCoreApplication::processEvents();
+	QCOMPARE(real_t->label(), before);
+	QVERIFY(childrenTexts(stripX10()).contains(before));
+	QVERIFY(!childrenTexts(stripX10()).contains(QStringLiteral("X10:42")));
+
+		//A strip renamed is a branch renamed, its own item and nothing
+		//else: the rows below it are named after their terminals. The
+		//terminal block manager hands the whole data of the strip over
+		//after renaming it (ChangeTerminalStripData -> setData); the
+		//setter alone says nothing of the change.
+	auto *x201 = stripNamed(QStringLiteral("X201"));
+	QVERIFY(x201);
+	auto *roof = rootChild(0, QStringLiteral("KB"));
+	roof = childByText(roof, QStringLiteral("Roof"));
+	QVERIFY(roof);
+	auto *strip_item = childByText(roof, QStringLiteral("X201"));
+	QVERIFY(strip_item);
+	const QStringList rows = childrenTexts(strip_item);
+
+	x201->setName(QStringLiteral("X202"));
+	x201->setData(x201->data());
+	QCoreApplication::processEvents();
+
+	roof = rootChild(0, QStringLiteral("KB"));
+	roof = childByText(roof, QStringLiteral("Roof"));
+	QVERIFY(roof);
+	QVERIFY(childByText(roof, QStringLiteral("X202")));
+	QVERIFY(childByText(roof, QStringLiteral("X201")) == nullptr);
+	QCOMPARE(childrenTexts(childByText(roof, QStringLiteral("X202"))), rows);
+
+		//Named back, the branch is back under its old name with the
+		//same rows -- and the project is left the way the tests after
+		//this one find it.
+	x201->setName(QStringLiteral("X201"));
+	x201->setData(x201->data());
+	QCoreApplication::processEvents();
+
+	roof = rootChild(0, QStringLiteral("KB"));
+	roof = childByText(roof, QStringLiteral("Roof"));
+	QVERIFY(roof);
+	QVERIFY(childByText(roof, QStringLiteral("X201")));
+	QVERIFY(childByText(roof, QStringLiteral("X202")) == nullptr);
+	QCOMPARE(childrenTexts(childByText(roof, QStringLiteral("X201"))), rows);
+
+		//The tests after this one take the undo stack as they found it:
+		//empty, and holding nothing undone. What this one pushed and
+		//undone is dropped here on purpose -- a push drops the undone
+		//commands of a stack, and the counts below would stop matching
+		//(@sa createsTheStripWithItsTerminalsOnOk).
+	m_project->undoStack()->clear();
 }
 
 /**

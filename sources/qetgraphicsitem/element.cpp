@@ -2335,15 +2335,25 @@ void Element::setUuid(const QUuid &uuid)
 
 namespace {
 /**
-	@brief notifyTerminalStrip
-	If @a element is a terminal of a terminal strip, tell the strip that the
-	data of the terminal changed, so that the strip is redrawn on the folios.
+	@brief notifyDataChange
+	The data or the information of @a element changed (Element::
+	setElementData(), Element::setElementInformations()) : tell the strip
+	which draws it, so that the strip is redrawn on the folios, and tell
+	the project, so that the views over the symbols work their content
+	out again -- the terminal navigator renames the row of a terminal
+	whose label changed (@sa QETProject::elementDataWasChanged).
 */
-void notifyTerminalStrip(Element *element)
+void notifyDataChange(Element *element)
 {
 	if (auto terminal_ = dynamic_cast<TerminalElement *>(element)) {
 		if (auto strip_ = terminal_->parentTerminalStrip()) {
 			strip_->terminalDataChanged();
+		}
+	}
+
+	if (auto *diagram_ = element->diagram()) {
+		if (auto *project_ = diagram_->project()) {
+			project_->elementDataWasChanged(element);
 		}
 	}
 }
@@ -2378,7 +2388,7 @@ void Element::setElementInformations(DiagramContext dc)
 	}
 	storeInformation();
 	emit elementInfoChange(old_info, m_data.m_informations);
-	notifyTerminalStrip(this);
+	notifyDataChange(this);
 
 	bool label_changed = old_info.value("label").toString() != dc.value("label").toString();
 	if (label_changed && (linkType() & Element::AllReport)) {
@@ -2733,7 +2743,7 @@ void Element::setElementData(ElementData data)
 		emit elementInfoChange(old_info, m_data.m_informations);
 	}
 		//Type, function, led... of a terminal are not informations
-	notifyTerminalStrip(this);
+	notifyDataChange(this);
 
 	// Propagate PLC master data changes to linked slaves
 	if (m_data.m_type == ElementData::Master && m_data.m_master_type == ElementData::PLC)

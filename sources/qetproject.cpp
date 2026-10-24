@@ -5554,8 +5554,10 @@ TerminalStrip *QETProject::newTerminalStrip(QString installation, QString locati
 
 /**
  * @brief QETProject::watchTerminalStrip
- * The spare terminals of @a strip (on no folio) are lines of the
- * nomenclature : keep the database up to date with them.
+ * Keep this project up to date with @a strip: the spare terminals of a
+ * strip (on no folio) are lines of the nomenclature, and the views over
+ * the strips -- the terminal navigator tab among them -- are told when
+ * the strip changes (@sa terminalStripChanged).
  * @param strip
  * @param watch : false to stop watching @a strip
  */
@@ -5565,6 +5567,7 @@ void QETProject::watchTerminalStrip(TerminalStrip *strip, bool watch)
 		return;
 	}
 	disconnect(strip, nullptr, &m_data_base, nullptr);
+	disconnect(strip, nullptr, this, nullptr);
 	if (watch) {
 		connect(strip, &TerminalStrip::orderChanged, &m_data_base, &projectDataBase::spareTerminalsChanged);
 		connect(strip, &TerminalStrip::dataChanged, &m_data_base, &projectDataBase::spareTerminalsChanged);
@@ -5575,6 +5578,16 @@ void QETProject::watchTerminalStrip(TerminalStrip *strip, bool watch)
 		connect(strip, &TerminalStrip::bridgeChanged, &m_data_base, store);
 		connect(strip, &TerminalStrip::bridgeColorChanged, &m_data_base, store);
 		store();
+
+			//The data of the strip -- its own, or those of a terminal
+			//it draws, which a symbol edited on a folio renames -- are
+			//broadcast to the views over the strips (@sa
+			//terminalStripDataChanged), which the database's own
+			//connections above do not reach for. The rows moving are
+			//not part of it: orderChanged() says so and every view
+			//watches that one already.
+		connect(strip, &TerminalStrip::dataChanged, this,
+				[this, strip]() { emit terminalStripDataChanged(strip); });
 	}
 	if (!watch) {
 		m_data_base.forgetTerminalStrip(strip->uuid());
@@ -5788,6 +5801,27 @@ void QETProject::elementWasRemoved(Element *element)
 	if (!element) return;
 
 	emit elementRemoved(element);
+}
+
+/**
+ * @brief QETProject::elementDataWasChanged
+ * Broadcast that the data or the information of @p element changed -- its
+ * label among them, which is what names a terminal row in the views over
+ * the strips. Called by Element::setElementData() and
+ * Element::setElementInformations(), the one funnel every change of a
+ * symbol goes through: the properties dialog, a search and replace, the
+ * nomenclature table, an undo alike. Nothing is stored here, the way
+ * elementWasAdded() stores nothing.
+ *
+ * One signal per symbol, so a listener rebuilding something should
+ * bounce it through a timer -- a search and replace sends one per symbol.
+ * @param element
+ */
+void QETProject::elementDataWasChanged(Element *element)
+{
+	if (!element) return;
+
+	emit elementDataChanged(element);
 }
 
 /**

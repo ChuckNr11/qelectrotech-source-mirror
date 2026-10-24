@@ -418,6 +418,12 @@ class QETProject : public QObject
 			//belong to that folio, this only reports the change.
 		void elementWasAdded(Element *element);
 		void elementWasRemoved(Element *element);
+			//Emit elementDataChanged() for @p element, the way
+			//elementWasAdded() reports an element arriving: called by
+			//the one funnel every change of a symbol goes through
+			//(Element::setElementData() and Element::setElementInformations()),
+			//a C++ signal being emit-able from its own class only.
+		void elementDataWasChanged(Element *element);
 		Diagram *diagramByUuid(const QUuid &uuid);
 
 	public slots:
@@ -477,6 +483,19 @@ class QETProject : public QObject
 			/// refreshed only itself, leaving the others stale.
 		void terminalStripAdded(TerminalStrip *strip);
 		void terminalStripRemoved(TerminalStrip *strip);
+			/// The data of a strip of this project changed: its own name,
+			/// plant and location, or the data of one of its terminals
+			/// (TerminalStrip::terminalDataChanged()), which is what a
+			/// symbol edited on a folio does to the row it draws -- the
+			/// label of a terminal is read from its element (@sa
+			/// elementDataChanged, which says the same for a symbol of no
+			/// strip at all). The views over the strips follow it to work
+			/// their branches out again. What a strip holds is not part of
+			/// it: the rows moving say so through the strip's own
+			/// orderChanged(), which every view watches already.
+			/// Bounce what you get through a timer if you rebuild, the way
+			/// the element signals below are handled.
+		void terminalStripDataChanged(TerminalStrip *strip);
 			/// An element was placed on a folio, or taken off one. They
 			/// answer "did the content of a folio gain or lose an
 			/// element", which no other signal does: the database's own
@@ -493,6 +512,13 @@ class QETProject : public QObject
 			/// element.
 		void elementAdded(Element *element);
 		void elementRemoved(Element *element);
+			/// A placed symbol's data or information changed -- its label
+			/// among them, which is what names a terminal row in the views
+			/// over the strips (@sa elementDataWasChanged, the funnel it
+			/// comes from). Bounce it through a timer if you rebuild, the
+			/// way the two signals above are handled: a search and replace
+			/// sends one per symbol.
+		void elementDataChanged(Element *element);
 
 	private slots:
 		void updateDiagramsFolioData();

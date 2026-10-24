@@ -173,6 +173,25 @@ void TerminalNavigatorWidget::connectElementSignals()
 	m_element_changed_connection.append(
 				connect(m_project, &QETProject::elementRemoved, this, on_element));
 
+		//A symbol edited on a folio renames the row it draws -- the
+		//label of a terminal is read from its element --, and the data
+		//of a strip renamed are the same thing for a whole branch.
+		//Both are told through the project (@sa QETProject::
+		//elementDataChanged, terminalStripDataChanged), and both
+		//rebuild through the timer like the element signals above: a
+		//search and replace sends one signal per symbol. The rows
+		//moving say nothing here on purpose -- the tree is rebuilt
+		//under whoever works with its marked rows only when something
+		//they show changes; the strip's own orderChanged(), which
+		//reload() takes from every strip of the tree, covers those.
+	m_element_changed_connection.append(
+				connect(m_project, &QETProject::elementDataChanged, this, on_element));
+	m_element_changed_connection.append(
+				connect(m_project, &QETProject::terminalStripDataChanged,
+						this, [this](TerminalStrip *) {
+							this->onElementChanged();
+						}));
+
 		//A folio which leaves the project takes the drawings of the
 		//terminals of the strips it holds with it: those terminals go
 		//back to waiting in their rows (@sa
