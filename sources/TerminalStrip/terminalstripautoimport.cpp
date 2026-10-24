@@ -58,63 +58,46 @@ namespace
 		return element_->elementData().m_informations.value(key).toString().trimmed();
 	}
 
-		//An empty plant is saved and read back as "=" and an empty
-		//location as "+" (the placeholders of the title block) : all
-		//three spellings mean "no plant" / "no location"
-	QString normalizedPlant(const QString &plant_)
-	{
-		const auto value_ = plant_.trimmed();
-		return (value_.isEmpty() || value_ == QLatin1String("="))
-				? QString() : value_;
-	}
-
-	QString normalizedLocation(const QString &location_)
-	{
-		const auto value_ = location_.trimmed();
-		return (value_.isEmpty() || value_ == QLatin1String("+"))
-				? QString() : value_;
-	}
-
 	QString groupKey(const QString &name, const QString &plant, const QString &location) {
 		return name + QChar(0x1f) + plant + QChar(0x1f) + location;
 	}
+}
 
-	/**
-	 * @brief stripOf
-	 * The strip of the group : same name, and same plant and location
-	 * when the terminals carry some. Empty plant and location on the
-	 * terminals mean "no opinion" : any strip of the name is reused,
-	 * the one already holding terminals winning over an empty one.
-	 * @return the strip to work on, null when none has to exist yet.
-	 */
-	TerminalStrip *stripOf(QETProject *project, const QString &name,
-						   const QString &plant, const QString &location)
+/**
+ * @brief TerminalStripAutoImport::stripOf
+ * The strip of the group : same name, and same plant and location
+ * when the terminals carry some. Empty plant and location on the
+ * terminals mean "no opinion" : any strip of the name is reused,
+ * the one already holding terminals winning over an empty one.
+ * @return the strip to work on, null when none has to exist yet.
+ */
+TerminalStrip *TerminalStripAutoImport::stripOf(QETProject *project, const QString &name,
+											   const QString &plant, const QString &location)
+{
+	const bool strict_ = !plant.isEmpty() || !location.isEmpty();
+	TerminalStrip *best_ = nullptr;
+	int best_score_ = -1;
+	for (auto strip_ : project->terminalStrip())
 	{
-		const bool strict_ = !plant.isEmpty() || !location.isEmpty();
-		TerminalStrip *best_ = nullptr;
-		int best_score_ = -1;
-		for (auto strip_ : project->terminalStrip())
-		{
-			if (!strip_ || strip_->name() != name) {
-				continue;
-			}
-			const bool same_ =
-				normalizedPlant(strip_->installation()) == plant &&
-				normalizedLocation(strip_->location())  == location;
-			if (strict_ && !same_) {
-				continue;
-			}
-				//Same plant and location first, then the strip already
-				//holding terminals over an empty one
-			const int score_ = (same_ ? 4 : 0)
-					+ (strip_->realTerminals().isEmpty() ? 0 : 1);
-			if (score_ > best_score_) {
-				best_ = strip_;
-				best_score_ = score_;
-			}
+		if (!strip_ || strip_->name() != name) {
+			continue;
 		}
-		return best_;
+		const bool same_ =
+			normalizedPlant(strip_->installation()) == plant &&
+			normalizedLocation(strip_->location())  == location;
+		if (strict_ && !same_) {
+			continue;
+		}
+			//Same plant and location first, then the strip already
+			//holding terminals over an empty one
+		const int score_ = (same_ ? 4 : 0)
+				+ (strip_->realTerminals().isEmpty() ? 0 : 1);
+		if (score_ > best_score_) {
+			best_ = strip_;
+			best_score_ = score_;
+		}
 	}
+	return best_;
 }
 
 /**

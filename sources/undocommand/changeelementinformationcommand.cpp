@@ -57,6 +57,14 @@ bool ChangeElementInformationCommand::mergeWith(const QUndoCommand *other)
 
 	ChangeElementInformationCommand const *other_undo = static_cast<const ChangeElementInformationCommand*>(other);
 
+		//A row this command moved out of its strip is remembered here
+		//and given back by undo(); merging would keep the move standing
+		//while the merged command forgets it, so a change which moves a
+		//row stays the two steps it was typed as.
+	if (!m_rehomes.isEmpty() || !other_undo->m_rehomes.isEmpty()) {
+		return false;
+	}
+
 		//In case of other undo_undo have the same elements as keys
 	if (m_map.size() == other_undo->m_map.size())
 	{
@@ -88,6 +96,7 @@ bool ChangeElementInformationCommand::mergeWith(const QUndoCommand *other)
 */
 void ChangeElementInformationCommand::undo()
 {
+	unhome();
 	for (auto element : m_map.keys()) {
 		if (element) {
 			element->setElementInformations(m_map.value(element).first);
@@ -107,6 +116,14 @@ void ChangeElementInformationCommand::undo()
 */
 void ChangeElementInformationCommand::redo()
 {
+		//The labels before the change, so that only a name the user
+		//really changed moves a row out of its strip
+		//(@sa TerminalStripRehome).
+	QVector<QPair<Element *, QString>> labels;
+	for (const auto &element : m_map.keys()) {
+		labels << qMakePair(element.data(), TerminalStripRehome::labelOf(element.data()));
+	}
+
 	for (auto element : m_map.keys()) {
 		if (element) {
 			if (element->linkType() & Element::AllReport) {
@@ -127,6 +144,42 @@ void ChangeElementInformationCommand::redo()
 		}
 	}
 	updateProjectDB();
+	rehome(labels);
+}
+
+/**
+	@brief ChangeElementInformationCommand::rehome
+	@param labels : the label of each element before the change
+	What the new names do to the rows of the terminals this command
+	names (@sa TerminalStripRehome): a name calling for another strip
+	takes its row there, one no strip answers to takes it out of its
+	strip, and the rows are remembered for undo (@sa unhome).
+*/
+void ChangeElementInformationCommand::rehome(const QVector<QPair<Element *, QString>> &labels)
+{
+	m_rehomes.clear();
+	for (const auto &label_ : labels)
+	{
+		const auto plan = TerminalStripRehome::planFor(label_.first, label_.second);
+		if (plan.isEmpty()) {
+			continue;
+		}
+		TerminalStripRehome::apply(plan);
+		m_rehomes << plan;
+	}
+}
+
+/**
+	@brief ChangeElementInformationCommand::unhome
+	The undo of rehome(): every row goes back to the strip this command
+	took it from, before the names themselves go back.
+*/
+void ChangeElementInformationCommand::unhome()
+{
+	for (auto it = m_rehomes.crbegin() ; it != m_rehomes.crend() ; ++it) {
+		TerminalStripRehome::revert(*it);
+	}
+	m_rehomes.clear();
 }
 
 void ChangeElementInformationCommand::updateProjectDB()

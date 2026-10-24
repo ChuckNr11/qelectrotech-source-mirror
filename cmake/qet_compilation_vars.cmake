@@ -794,6 +794,8 @@ set(QET_SRC_FILES
   ${QET_DIR}/sources/TerminalStrip/terminalstriplabels.h
   ${QET_DIR}/sources/TerminalStrip/terminalstripautoimport.cpp
   ${QET_DIR}/sources/TerminalStrip/terminalstripautoimport.h
+  ${QET_DIR}/sources/TerminalStrip/terminalstriprehome.cpp
+  ${QET_DIR}/sources/TerminalStrip/terminalstriprehome.h
   ${QET_DIR}/sources/TerminalStrip/terminalstripdata.cpp
   ${QET_DIR}/sources/TerminalStrip/terminalstripdata.h
   ${QET_DIR}/sources/TerminalStrip/ui/addterminalstripitemdialog.cpp

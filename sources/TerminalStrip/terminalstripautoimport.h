@@ -21,6 +21,7 @@
 #include <QString>
 
 class QETProject;
+class TerminalStrip;
 
 /**
  * The TerminalStripAutoImport namespace works out the terminal strips of a
@@ -83,6 +84,46 @@ namespace TerminalStripAutoImport
 		}
 		return label_;	//No colon : the whole label names the strip
 	}
+
+	/**
+	 * @brief normalizedPlant
+	 * @param plant : the plant of a terminal or of a strip
+	 * @return the plant as the two are compared: an empty plant is saved
+	 * and read back as "=" (the placeholder of the title block), and
+	 * both spellings mean "no plant". The location works the same way
+	 * with its "+" (@sa normalizedLocation).
+	 */
+	inline QString normalizedPlant(const QString &plant)
+	{
+		const auto value_ = plant.trimmed();
+		return (value_.isEmpty() || value_ == QLatin1String("="))
+				? QString() : value_;
+	}
+
+	/**
+	 * @brief normalizedLocation
+	 * @param location : the location of a terminal or of a strip
+	 * @return the location as the two are compared (@sa normalizedPlant)
+	 */
+	inline QString normalizedLocation(const QString &location)
+	{
+		const auto value_ = location.trimmed();
+		return (value_.isEmpty() || value_ == QLatin1String("+"))
+				? QString() : value_;
+	}
+
+	/**
+	 * @brief stripOf
+	 * @return the strip of @a project @p name names, the way a group of
+	 * terminals is matched to one: same name, and same plant and
+	 * location when the terminals carry some -- an empty one accepts
+	 * every strip of the name (in most projects the plant and the
+	 * location live on the strip, not on the terminals), the one already
+	 * holding terminals winning over an empty one. Null when no strip of
+	 * that name exists.
+	 */
+	TerminalStrip *stripOf(QETProject *project, const QString &name,
+						   const QString &plant, const QString &location);
 
 	/**
 	 * @brief importFreeTerminals
