@@ -133,7 +133,11 @@ class DiagramEventAddTerminal : public DiagramEventInterface
 		QSharedPointer<RealTerminal> m_pending;
 		ElementsLocation m_location;
 		Element *m_element;
-		QString m_integrate_path;
+			/// Where the symbol of the terminal was imported to in the
+			/// collection of the project, null until buildElement() ran
+			/// for the terminal placed right now -- kept as a location
+			/// and not as the string form of it (@sa buildElement)
+		ElementsLocation m_integrate_loc;
 		QPointer<QStatusBar> m_status_bar;
 			/// true once init() took the context menus of the views away:
 			/// only then the destructor gives them back, so a construction

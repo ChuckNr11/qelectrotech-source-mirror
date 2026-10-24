@@ -401,7 +401,14 @@ bool DiagramEventAddTerminal::buildElement()
 {
 	ElementsLocation import_loc = m_diagram->project()->importElement(m_location);
 	if (import_loc.exist()) {
-		m_integrate_path = import_loc.projectCollectionPath();
+			//The location itself and not its string form
+			//(@sa ElementsLocation::projectCollectionPath): a location
+			//rebuilt from that string goes and asks QETApp for the
+			//project it names by session id, and a project which is
+			//opened in no session of this run -- a test, a script --
+			//would find its symbols refused here. The location carries
+			//the project itself, whoever built it.
+		m_integrate_loc = import_loc;
 	}
 	else {
 		qDebug() << "DiagramEventAddTerminal : Impossible to add the symbol "
@@ -410,8 +417,7 @@ bool DiagramEventAddTerminal::buildElement()
 	}
 
 	int state;
-	ElementsLocation loc(m_integrate_path);
-	m_element = ElementFactory::Instance() -> createElement(loc, nullptr, &state);
+	m_element = ElementFactory::Instance() -> createElement(m_integrate_loc, nullptr, &state);
 		//The creation of element failed, we delete it. The pointer is
 		//cleared as well: unlike the sibling event, whose destructor
 		//would keep the failed construction's pointer, this one is only
@@ -465,10 +471,10 @@ void DiagramEventAddTerminal::addElement()
 
 	int state;
 	Element *element;
-	if (m_integrate_path.isEmpty())
+	if (m_integrate_loc.isNull())
 		element = ElementFactory::Instance() -> createElement(m_location, nullptr, &state);
 	else
-		element = ElementFactory::Instance() -> createElement(ElementsLocation(m_integrate_path), nullptr, &state);
+		element = ElementFactory::Instance() -> createElement(m_integrate_loc, nullptr, &state);
 
 		//Build failed: keep the placement, the user can click again
 	if (state)
@@ -600,7 +606,7 @@ void DiagramEventAddTerminal::advance()
 			//own project the same way the first one was
 			//(@sa RealTerminal::symbolLocation)
 		m_location = m_pending->symbolLocation();
-		m_integrate_path.clear();
+		m_integrate_loc = ElementsLocation();
 		if (buildElement()) {
 			m_element->setPos(pos_);
 			m_element->setRotation(rotation_);
