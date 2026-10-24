@@ -159,6 +159,30 @@ class TerminalStripDeletion
 		using BoundTerminals = QVector<BoundTerminal>;
 
 		/**
+			@brief terminalsDrawnOn
+			@param diagram
+			@return the terminals of the strips @a diagram draws, each
+			one with the element it is bound to.
+
+			A folio is a drawing of the terminals of a strip, and what
+			leaves the project with it are those symbols, never the
+			rows. So the terminals are taken off their symbols before
+			the folio goes (@sa unbindTerminals, and
+			RemoveDiagramCommand, which is the one caller of this), and
+			they wait in their strips the way "delete from the drawing
+			only" leaves them (@sa drawingOnlyDeletionCommand) -- for
+			the same reason: a terminal left bound to a symbol which is
+			off every folio keeps no identity of its own, says nothing
+			of the symbol it was drawn with, and is dropped by the
+			project at the next save (@sa RealTerminal::toXml).
+
+			Only the terminals a strip holds are collected: a free
+			terminal has no row to go back to, and stays with its
+			symbol until that goes.
+		*/
+		static BoundTerminals terminalsDrawnOn(Diagram *diagram);
+
+		/**
 			@brief unbindTerminals
 			Take each terminal of @a terminals off the element it is
 			drawn with (@sa RealTerminal::unbindFromElement): the

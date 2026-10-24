@@ -255,6 +255,37 @@ QVector<QPair<TerminalStrip *, QVector<QUuid>>> TerminalStripDeletion::rowsOf(
 }
 
 /**
+ * @brief TerminalStripDeletion::terminalsDrawnOn
+ * @param diagram
+ * @return the terminals of the strips @a diagram draws, each one with
+ * the element it is bound to. The why of it is told at the declaration
+ * (@sa TerminalStripDeletion::terminalsDrawnOn): this is what a folio
+ * gives back when it leaves a project.
+ */
+TerminalStripDeletion::BoundTerminals TerminalStripDeletion::terminalsDrawnOn(
+		Diagram *diagram)
+{
+	BoundTerminals bound;
+	if (!diagram) {
+		return bound;
+	}
+
+	for (auto *element : diagram->elements())
+	{
+		if (!element || element->elementData().m_type != ElementData::Terminal) {
+			continue;
+		}
+		auto *terminal_element = static_cast<TerminalElement *>(element);
+		const auto real_t = terminal_element->realTerminal();
+		if (real_t.isNull() || !real_t->parentStrip()) {
+			continue;
+		}
+		bound << qMakePair(real_t, element);
+	}
+	return bound;
+}
+
+/**
  * @brief TerminalStripDeletion::unbindTerminals
  * @param terminals
  * Take each of them off the element it is drawn with

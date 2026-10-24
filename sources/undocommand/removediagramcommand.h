@@ -21,6 +21,8 @@
 #include <QUndoCommand>
 #include <QPointer>
 
+#include "../TerminalStrip/UndoCommand/terminalstripdeletion.h"
+
 class QETProject;
 class Diagram;
 
@@ -32,6 +34,13 @@ class Diagram;
 	original position. The diagram is only actually destroyed when this
 	command itself is destroyed while the diagram is detached (i.e. while
 	the removal is still in effect).
+
+	What the folio draws of the terminals of a strip goes with it: redo()
+	takes those terminals off their symbols, so they wait in their rows
+	and can be drawn again elsewhere (@sa
+	TerminalStripDeletion::terminalsDrawnOn), and undo() binds them back
+	to the symbols this command keeps alive with the folio. Leaving them
+	bound would cost the project their rows at the next save.
 */
 class RemoveDiagramCommand : public QUndoCommand
 {
@@ -48,6 +57,9 @@ class RemoveDiagramCommand : public QUndoCommand
 		int m_position;
 		/// true while the diagram is detached from the project (i.e. the removal is in effect)
 		bool m_owns_diagram = false;
+		/// the strip terminals the folio drew, taken off their symbols
+		/// while the removal is in effect (@sa TerminalStripDeletion::terminalsDrawnOn)
+		TerminalStripDeletion::BoundTerminals m_unbound;
 };
 
 #endif // REMOVEDIAGRAMCOMMAND_H

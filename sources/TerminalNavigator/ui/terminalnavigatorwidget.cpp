@@ -173,6 +173,20 @@ void TerminalNavigatorWidget::connectElementSignals()
 	m_element_changed_connection.append(
 				connect(m_project, &QETProject::elementRemoved, this, on_element));
 
+		//A folio which leaves the project takes the drawings of the
+		//terminals of the strips it holds with it: those terminals go
+		//back to waiting in their rows (@sa
+		//TerminalStripDeletion::terminalsDrawnOn) and nothing says so
+		//through the elements -- their symbols stay alive with the
+		//folio, for the undo which may bring both back. Batched like
+		//the element signals above, since a gesture over several
+		//folios sends one of these per folio.
+	m_element_changed_connection.append(
+				connect(m_project, &QETProject::diagramRemoved,
+						this, [this](QETProject *, Diagram *) {
+							this->onElementChanged();
+						}));
+
 		//A strip which joins or leaves the project -- created here,
 		//deleted here, deleted in the terminal block manager or taken
 		//out by the script API -- rebuilds the tree right away, and
@@ -624,7 +638,8 @@ QTreeWidgetItem* TerminalNavigatorWidget::addTerminalStrip(TerminalStrip *termin
 					//Drawn means drawn on a folio, and the folio is
 					//what says so: a symbol kept alive by the command
 					//which took it off its folio -- deleting a
-					//terminal "from the drawing only" -- is off every
+					//terminal "from the drawing only", or the folio
+					//itself gone with its drawings -- is off every
 					//folio, and its terminal is unbound from it
 					//(@sa RealTerminal::unbindFromElement), so
 					//isElement() alone would keep such a row drawn.
