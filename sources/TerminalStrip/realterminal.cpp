@@ -311,6 +311,74 @@ bool RealTerminal::isPending() const {
 }
 
 /**
+ * @brief RealTerminal::unbindFromElement
+ * @return true if there was an element to unbind from, false if this
+ * terminal was already unbound.
+ *
+ * Everything the terminal takes from its element becomes its own, kept
+ * exactly the way a pending terminal keeps it (@sa createPending()), so
+ * that nothing changes for the user between the drawn terminal and the
+ * same terminal not drawn anymore: the label it shows, the symbol it is
+ * drawn with, the data the terminal strip editor edits, and an identity
+ * of its own to be saved and dragged by. The data of the element are
+ * copied as a whole -- type and function included -- the way
+ * terminalData() would have answered for the drawn terminal, so the
+ * strip editor shows the same values before and after.
+ *
+ * The element itself is only let go, never touched: it stays alive and
+ * bound to the drawing until that is deleted (or put back by the undo of
+ * this, @sa rebindToElement()).
+ */
+bool RealTerminal::unbindFromElement()
+{
+	if (m_element.isNull()) {
+		return false;
+	}
+	Element *element_ = m_element.data();
+
+		//Read the label and the symbol while the element is still
+		//there: both are answered by the element for a drawn
+		//terminal (@sa label(), symbol()).
+	m_label = label();
+	m_symbol = symbolWithoutProjectId(element_->location().toString());
+	m_spare_data = element_->elementData();
+	m_uuid = QUuid::createUuid();
+
+	m_element = nullptr;
+	if (auto strip_ = parentStrip()) {
+		strip_->terminalDataChanged();
+	}
+	return true;
+}
+
+/**
+ * @brief RealTerminal::rebindToElement
+ * @param element : the element this terminal belongs to, must not be null.
+ *
+ * The undo of unbindFromElement(): the terminal goes back to being the
+ * terminal of @a element, told apart by that element again -- the
+ * identity of its own and the label, symbol and data copied out of the
+ * element go away, since they belong to no terminal of a strip anymore
+ * and must not be saved with it (@sa toXml, which writes the element
+ * uuid then).
+ */
+void RealTerminal::rebindToElement(Element *element)
+{
+	if (!element) {
+		return;
+	}
+	m_element = element;
+	m_uuid = QUuid();
+	m_label.clear();
+	m_symbol.clear();
+	m_spare_data = ElementData();
+
+	if (auto strip_ = parentStrip()) {
+		strip_->terminalDataChanged();
+	}
+}
+
+/**
  * @brief RealTerminal::sharedRef
  * @return a QSharedPointer of this
  */

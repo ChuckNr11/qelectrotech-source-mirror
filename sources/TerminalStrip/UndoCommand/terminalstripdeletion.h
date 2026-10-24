@@ -30,8 +30,10 @@ class BridgePart;
 class CablePart;
 class Diagram;
 class DiagramContent;
+class Element;
 class QETProject;
 class QUndoCommand;
+class RealTerminal;
 class TerminalStrip;
 
 /**
@@ -115,6 +117,25 @@ class TerminalStripDeletion
 				const QString &text);
 
 		/**
+			@brief drawingOnlyDeletionCommand
+			The command the drawing editor pushes when the user deletes
+			what is selected but answers "from the drawing only" to the
+			question about a terminal of a strip: the symbols of @a
+			selection leave their folio -- cable lines and bridge lines
+			and all, exactly like a plain deletion --, but the terminals
+			they draw stay in their strips, unbound from those symbols
+			(@sa RealTerminal::unbindFromElement). Such a terminal waits
+			in its row like one which is not drawn yet, and the terminal
+			navigator can draw it on a folio again.
+			@return the command to push, never nullptr.
+		*/
+		static QUndoCommand *drawingOnlyDeletionCommand(
+				Diagram *diagram,
+				const DiagramContent &selection,
+				const QList<CablePart *> &cable_parts,
+				const QList<BridgePart *> &bridge_parts);
+
+		/**
 			@brief hasDrawnTerminal
 			@return true when @a content holds a terminal element which
 			is bound to a strip: such a symbol is the drawing of a
@@ -132,6 +153,29 @@ class TerminalStripDeletion
 		*/
 		static QVector<QPair<TerminalStrip *, QVector<QUuid>>> rowsOf(
 				const DiagramContent &content);
+
+		/// A terminal of a strip with the element which draws it.
+		using BoundTerminal = QPair<QSharedPointer<RealTerminal>, Element *>;
+		using BoundTerminals = QVector<BoundTerminal>;
+
+		/**
+			@brief unbindTerminals
+			Take each terminal of @a terminals off the element it is
+			drawn with (@sa RealTerminal::unbindFromElement): the
+			terminal keeps the label, the symbol and the data of that
+			element as its own and waits in its row, while the element
+			itself is left alone.
+		*/
+		static void unbindTerminals(const BoundTerminals &terminals);
+
+		/**
+			@brief rebindTerminals
+			The undo of unbindTerminals(): each terminal of @a
+			terminals goes back to being the terminal of the element it
+			was collected with (@sa RealTerminal::rebindToElement), and
+			says nothing of its own anymore.
+		*/
+		static void rebindTerminals(const BoundTerminals &terminals);
 };
 
 #endif // TERMINALSTRIPDELETION_H

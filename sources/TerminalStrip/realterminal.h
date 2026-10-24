@@ -102,6 +102,36 @@ class RealTerminal
 		bool isPending() const;
 
 		/**
+		 * @brief unbindFromElement
+		 * Take this terminal off the element it is drawn with, leaving it in
+		 * the state of a terminal which is not drawn yet (@sa isPending()):
+		 * it keeps the label, the symbol and the data of that element as its
+		 * own, carries an identity of its own again, and can be drawn on any
+		 * folio later, like any terminal of the terminal navigator.
+		 *
+		 * This is what "delete from the drawing only" does with a terminal
+		 * of the drawing: the symbol leaves the folio, but the terminal
+		 * itself stays in its strip, waiting to be drawn again -- instead of
+		 * leaving the strip with its symbol, which is what deleting the row
+		 * does. The reverse is rebindToElement(), which the undo of this
+		 * calls.
+		 *
+		 * @return true if there was an element to unbind from, false if
+		 * this terminal was already unbound
+		 */
+		bool unbindFromElement();
+		/**
+		 * @brief rebindToElement
+		 * @param element : the element this terminal belongs to, must not be
+		 * null. Bind this terminal back to @a element, undoing
+		 * unbindFromElement(): the label, the symbol and the data of the
+		 * terminal are the ones of the element again, and the identity of
+		 * its own goes away, since a terminal drawn on a folio is told
+		 * apart by its element.
+		 */
+		void rebindToElement(Element *element);
+
+		/**
 		 * @brief createPending
 		 * Build a terminal which belongs to a strip but which is not drawn
 		 * in any folio yet -- the terminals the terminal navigator creates

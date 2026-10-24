@@ -255,6 +255,34 @@ QVector<QPair<TerminalStrip *, QVector<QUuid>>> TerminalStripDeletion::rowsOf(
 }
 
 /**
+ * @brief TerminalStripDeletion::unbindTerminals
+ * @param terminals
+ * Take each of them off the element it is drawn with
+ * (@sa RealTerminal::unbindFromElement). A terminal which is unbound
+ * already keeps what it has, the same way the elements are left alone.
+ */
+void TerminalStripDeletion::unbindTerminals(const BoundTerminals &terminals)
+{
+	for (const auto &bound : terminals) {
+		bound.first->unbindFromElement();
+	}
+}
+
+/**
+ * @brief TerminalStripDeletion::rebindTerminals
+ * @param terminals
+ * The undo of unbindTerminals(): each terminal goes back to being the
+ * terminal of the element it was collected with
+ * (@sa RealTerminal::rebindToElement).
+ */
+void TerminalStripDeletion::rebindTerminals(const BoundTerminals &terminals)
+{
+	for (const auto &bound : terminals) {
+		bound.first->rebindToElement(bound.second);
+	}
+}
+
+/**
  * @brief TerminalStripDeletion::stripsDeletionMacro
  * @param project
  * @param strips
@@ -424,4 +452,148 @@ QUndoCommand *TerminalStripDeletion::drawingDeletionCommand(
 	return new BatchCommand(steps, text.isEmpty()
 			? QCoreApplication::translate("BatchCommand", "Delete")
 			: text);
+}
+
+/**
+	@brief UnbindRealTerminalCommand
+	Takes the terminals off the elements they are drawn with, without
+	touching those elements themselves : each terminal keeps the label,
+	the symbol and the data of its element as its own, carries an
+	identity of its own again, and waits in its strip like a terminal
+	which is not drawn yet (@sa RealTerminal::unbindFromElement).
+
+	This is the other half of "delete from the drawing only" : the
+	symbols leave the folio -- the DeleteQGraphicsItemCommand of the same
+	batch does that --, but the terminals stay in their strips, from
+	where the terminal navigator can draw them again. Deleting a whole
+	row would take both the terminal and its symbol, which is what makes
+	the difference between the two answers to the question of the
+	editor.
+
+	Both directions are one step each, so the gesture stays one undo
+	step : the undo binds the terminals back to their symbols, and the
+	delete command of the batch puts those back on their folio. The
+	elements stay alive the whole time -- the delete command keeps them
+	for its own undo, and both commands live and die together as steps
+	of the same batch.
+*/
+class UnbindRealTerminalCommand : public QUndoCommand
+{
+	public:
+		UnbindRealTerminalCommand(
+				const QVector<QSharedPointer<RealTerminal>> &reals,
+				QUndoCommand *parent = nullptr) :
+			QUndoCommand(parent)
+		{
+			for (const auto &real_t : reals)
+			{
+				if (real_t && real_t->element()) {
+					m_reals << qMakePair(real_t, real_t->element());
+				}
+			}
+			setText(QObject::tr("Take %n terminal(s) off their symbol",
+								"", m_reals.count()));
+		}
+		~UnbindRealTerminalCommand() override = default;
+
+		void undo() override
+		{
+				//The batch undoes its steps the other way round, so
+				//the symbols are still off their folio here -- which
+				//costs nothing: binding a terminal is only about the
+				//terminal and its element, folio or not.
+			TerminalStripDeletion::rebindTerminals(m_reals);
+		}
+		void redo() override
+		{
+			TerminalStripDeletion::unbindTerminals(m_reals);
+		}
+
+	private:
+		TerminalStripDeletion::BoundTerminals m_reals;
+};
+
+/**
+ * @brief TerminalStripDeletion::drawingOnlyDeletionCommand
+ * @param diagram
+ * @param selection
+ * @param cable_parts
+ * @return the command the drawing editor pushes when the user deletes
+ * what is selected and answers "from the drawing only" to the question
+ * about a terminal of a strip: a plain deletion of the selection, cable
+ * lines and all, plus the unbinding of every terminal of a strip the
+ * selection draws. Such a terminal waits in its row like one which was
+ * never drawn, and the terminal navigator draws it on a folio again
+ * later -- which is what "from the drawing only" should mean: the
+ * drawing goes, the terminal stays.
+ *
+ * A terminal element which belongs to no strip has nothing to wait in
+ * and simply goes with its symbol, as it always did.
+ */
+QUndoCommand *TerminalStripDeletion::drawingOnlyDeletionCommand(
+		Diagram *diagram,
+		const DiagramContent &selection,
+		const QList<CablePart *> &cable_parts,
+		const QList<BridgePart *> &bridge_parts)
+{
+	QVector<QSharedPointer<RealTerminal>> reals;
+	for (const auto &element : selection.m_terminal_elements)
+	{
+		if (!element || !element->parentTerminalStrip()) {
+			continue;
+		}
+		const auto real_t = element->realTerminal();
+		if (real_t) {
+			reals << real_t;
+		}
+	}
+
+		//Nothing to wait for later: the plain deletion, unchanged.
+	if (reals.isEmpty()) {
+		return drawingDeletionCommand(diagram, selection, cable_parts,
+									  bridge_parts,
+									  QVector<QPair<TerminalStrip *, QVector<QUuid>>>(),
+									  QString());
+	}
+
+		//A line of a cable or of a bridge is not held by
+		//DiagramContent: each is removed by its own command, and the
+		//cable or the bridge goes with it when no line of it is left
+		//anywhere.
+	const bool no_lines = cable_parts.isEmpty() && bridge_parts.isEmpty();
+
+	if (no_lines && AutoConnect::isOn(diagram))
+	{
+			//The terminals the removed symbols stood between, or were
+			//wired to, look for a new partner in the same step: one
+			//macro, so the wires it makes and the deletion undo
+			//together. The unbinding is last, the way the strip model
+			//always goes last (@sa TerminalStripDeletion).
+		auto *undo = new QUndoCommand(
+					QObject::tr("Take %n terminal(s) off their symbol",
+								"", reals.count()));
+		auto *del = new DeleteQGraphicsItemCommand(diagram, selection, undo);
+		const QList<Element *> elements = selection.m_elements;
+		AutoConnect::update(diagram, {}, {}, undo,
+							QSet<Element *>(elements.begin(), elements.end()));
+		new UnbindRealTerminalCommand(reals, undo);
+		return undo;
+	}
+
+	QList<QUndoCommand *> steps;
+	if (selection.hasDeletableItems() || no_lines) {
+		steps << new DeleteQGraphicsItemCommand(diagram, selection);
+	}
+	if (!cable_parts.isEmpty()) {
+		steps << new RemoveCableCommand(diagram, cable_parts);
+	}
+	if (!bridge_parts.isEmpty()) {
+		steps << new RemoveBridgeCommand(bridge_parts);
+	}
+	steps << new UnbindRealTerminalCommand(reals);
+
+	return new BatchCommand(
+				steps,
+				QObject::tr("Take %n terminal(s) off their symbol",
+							"", reals.count()));
 }

@@ -3551,12 +3551,15 @@ void QETDiagramEditor::selectionGroupTriggered(QAction *action)
 
 					//A terminal which belongs to a strip is more than a
 					//symbol: it is a row of a strip, and deleting it asks
-					//what goes -- the drawing alone, leaving the row
-					//marked as not drawn, or the row with it, off the
-					//drawings, out of the strips, the navigator and the
-					//manager at once. Both answers are one undo step.
+					//what goes -- the drawing alone, which leaves the
+					//terminal in its row like one which is not drawn yet,
+					//so the navigator draws it again later, or the row
+					//with it, off the drawings, out of the strips, the
+					//navigator and the manager at once. Both answers are
+					//one undo step.
 				QVector<QPair<TerminalStrip *, QVector<QUuid>>> rows;
 				QString deletion_text;
+				bool drawing_only = false;
 				if (TerminalStripDeletion::hasDrawnTerminal(dc)) {
 					const auto scope = askTerminalDeletionScope();
 					if (scope == TerminalDeletionScope::Cancelled) {
@@ -3570,13 +3573,21 @@ void QETDiagramEditor::selectionGroupTriggered(QAction *action)
 						}
 						deletion_text = tr("Delete %n terminal(s) from the project",
 										  "", count_);
+					} else {
+						drawing_only = true;
 					}
 				}
 
                 diagram->clearSelection();
 
-				diagram->undoStack().push(TerminalStripDeletion::drawingDeletionCommand(
-							diagram, dc, cable_parts, bridge_parts, rows, deletion_text));
+				if (drawing_only) {
+					diagram->undoStack().push(
+								TerminalStripDeletion::drawingOnlyDeletionCommand(
+									diagram, dc, cable_parts, bridge_parts));
+				} else {
+					diagram->undoStack().push(TerminalStripDeletion::drawingDeletionCommand(
+								diagram, dc, cable_parts, bridge_parts, rows, deletion_text));
+				}
                 dv->adjustSceneRect();
             }
         }

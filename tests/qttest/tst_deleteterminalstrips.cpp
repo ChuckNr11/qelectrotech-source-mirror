@@ -17,6 +17,7 @@
 */
 #include "qetapptest.h"
 
+#include "TerminalNavigator/diagramevent/diagrameventaddterminal.h"
 #include "TerminalNavigator/ui/terminalnavigatorwidget.h"
 #include "TerminalStrip/GraphicsItem/terminalstripitem.h"
 #include "TerminalStrip/physicalterminal.h"
@@ -35,6 +36,7 @@
 #include <QAction>
 #include <QApplication>
 #include <QCoreApplication>
+#include <QGraphicsSceneMouseEvent>
 #include <QMessageBox>
 #include <QSignalSpy>
 #include <QTimer>
@@ -126,6 +128,18 @@ class tst_deleteterminalstrips : public QObject
 		return elements;
 	}
 
+	/// Every terminal element of @p folio, drawn in a strip or not
+	static int terminalElementsOf(Diagram *folio)
+	{
+		int count = 0;
+		for (const auto &element : folio->elements()) {
+			if (element->elementData().m_type == ElementData::Terminal) {
+				++count;
+			}
+		}
+		return count;
+	}
+
 	static bool onItsFolio(Element *element)
 	{
 		return element && element->diagram()
@@ -169,6 +183,7 @@ private slots:
 	void refusesBridgedRowsAndKeepsThem();
 	void deletesOnlyTheDrawingWhenAsked();
 	void marksTheRowAsNotDrawnWhenOnlyTheDrawingGoes();
+	void drawsTheTerminalAgainAfterItsDrawingGoes();
 	void deletesTheRowFromTheProjectWhenAsked();
 	void saysTheStripsInAndOutThroughTheProjectSignals();
 	void followsTheStripsInTheManagerTree();
@@ -478,20 +493,26 @@ void tst_deleteterminalstrips::deletesOnlyTheDrawingWhenAsked()
 	QCOMPARE(rows.constFirst().second.count(), 1);
 
 		//The drawing alone goes, the way the dialog's "from the
-		//drawing only" answers: the row stays in the strip, and the
-		//element is kept alive by the command on the stack so that
-		//undo() finds it back where it was.
-	diagram->undoStack().push(TerminalStripDeletion::drawingDeletionCommand(
-								  diagram, content, {}, {}, {}, QStringLiteral("t")));
+		//drawing only" answers: the symbol leaves the folio, but the
+		//terminal stays in its row -- unbound, with an identity and a
+		//symbol of its own, waiting to be drawn again.
+	diagram->undoStack().push(TerminalStripDeletion::drawingOnlyDeletionCommand(
+								  diagram, content, {}, {}));
 	QVERIFY(!onItsFolio(element));
 	QCOMPARE(x10->physicalTerminalCount(), 4);
-	QCOMPARE(real->element(), element);
+	QVERIFY(!real->element());
+	QVERIFY(real->isPending());
+	QVERIFY(!real->uuid().isNull());
+	QVERIFY(!real->symbol().isEmpty());
 
+		//One undo step gives the symbol its folio back and binds the
+		//terminal to it again, the way it was.
 	diagram->undoStack().undo();
 
 	QVERIFY(onItsFolio(element));
 	QCOMPARE(x10->physicalTerminalCount(), 4);
 	QCOMPARE(real->element(), element);
+	QVERIFY(!real->isPending());
 	flushTheTrees();
 }
 
@@ -514,34 +535,118 @@ void tst_deleteterminalstrips::marksTheRowAsNotDrawnWhenOnlyTheDrawingGoes()
 	QVERIFY(!drawn_row->icon(0).isNull());
 	QVERIFY(drawn_row->toolTip(0).isEmpty());
 
-		//The drawing alone goes: the element stays alive and bound --
-		//the undo command holds it so that undo finds it back --, but
-		//off every folio, and the row says so the next time the tree
-		//is built through the elementRemoved() signal of the project.
+		//The drawing alone goes: the terminal is unbound and waits in
+		//its row like one which was never drawn -- the row says so the
+		//next time the tree is built through the elementRemoved()
+		//signal of the project. The label of the row does not change:
+		//the terminal took it along when it left its element.
 	element->setSelected(true);
 	DiagramContent content(diagram);
 	QVERIFY(TerminalStripDeletion::hasDrawnTerminal(content));
-	diagram->undoStack().push(TerminalStripDeletion::drawingDeletionCommand(
-								  diagram, content, {}, {}, QStringLiteral("t")));
+	diagram->undoStack().push(TerminalStripDeletion::drawingOnlyDeletionCommand(
+								  diagram, content, {}, {}));
 	QVERIFY(!onItsFolio(element));
 	flushTheTrees();
 
 	QCOMPARE(x10->physicalTerminalCount(), 4);
+	QVERIFY(real->isPending());
 	auto *undrawn_row = findByText(treeItem(QStringLiteral("X10")), real->label());
 	QVERIFY(undrawn_row);
 	QVERIFY(undrawn_row->icon(0).isNull());
 	QCOMPARE(undrawn_row->toolTip(0), QStringLiteral("Not drawn in any folio yet"));
 
-		//Undo puts the symbol back on its folio, and the row is a
-		//drawn one again.
+		//Undo binds the terminal back to its symbol, which goes back on
+		//its folio, and the row is a drawn one again.
 	diagram->undoStack().undo();
 	flushTheTrees();
 
 	QVERIFY(onItsFolio(element));
+	QCOMPARE(real->element(), element);
 	auto *back_row = findByText(treeItem(QStringLiteral("X10")), real->label());
 	QVERIFY(back_row);
 	QVERIFY(!back_row->icon(0).isNull());
 	QVERIFY(back_row->toolTip(0).isEmpty());
+}
+
+/**
+	The heart of "from the drawing only": a terminal whose drawing was
+	deleted waits in its row, and the very tool the navigator starts for
+	any terminal which is not drawn yet draws it again -- the click which
+	drops the symbol binds it to a new element of the folio, and the row
+	is a drawn one afterwards.
+
+	The terminal is a new RealTerminal object after that, the way it
+	always is when a waiting terminal is drawn (@sa
+	TerminalStrip::replaceRealTerminal), so the checks read the strip
+	rather than the terminal the deletion left behind.
+*/
+void tst_deleteterminalstrips::drawsTheTerminalAgainAfterItsDrawingGoes()
+{
+	auto *x10 = stripNamed(QStringLiteral("X10"));
+	QVERIFY(x10);
+	auto real = x10->realTerminals().first();
+	auto *element = real->element();
+	QVERIFY(element);
+	auto *diagram = element->diagram();
+	QVERIFY(diagram);
+	const auto uuid_ = real->physicalTerminal()->uuid();
+
+	element->setSelected(true);
+	DiagramContent content(diagram);
+	QVERIFY(TerminalStripDeletion::hasDrawnTerminal(content));
+	diagram->undoStack().push(TerminalStripDeletion::drawingOnlyDeletionCommand(
+								  diagram, content, {}, {}));
+	QVERIFY(!onItsFolio(element));
+	QVERIFY(real->isPending());
+	flushTheTrees();
+
+		//The row waits the way a terminal which was never drawn does,
+		//symbol included: that is what the navigator reads to offer a
+		//draw for it (@sa TerminalNavigatorWidget::drawSelection).
+	QCOMPARE(x10->physicalTerminalCount(), 4);
+	QVERIFY(!real->symbol().isEmpty());
+	const auto terminals_before = terminalElementsOf(diagram);
+	auto *row = findByText(treeItem(QStringLiteral("X10")), real->label());
+	QVERIFY(row);
+	QVERIFY(row->icon(0).isNull());
+
+		//The tool of the navigator, started the way the drag or the
+		//"Draw" of the context menu starts it: one click drops the
+		//symbol, and the terminal of the strip is the one of the
+		//element just placed.
+	const QVector<QSharedPointer<RealTerminal>> run{real};
+	auto *event = new DiagramEventAddTerminal(run, diagram, QPointF(30, 40));
+	QVERIFY2(event->isRunning(),
+			 qPrintable(QStringLiteral("the symbol of %1 is built and placed")
+						.arg(real->symbol())));
+	diagram->setEventInterface(event);
+	QVERIFY(diagram->eventInterfaceIsRunning());
+
+	QGraphicsSceneMouseEvent release(QEvent::GraphicsSceneMouseRelease);
+	release.setButton(Qt::LeftButton);
+	release.setScenePos(QPointF(30, 40));
+	event->mouseReleaseEvent(&release);
+	QVERIFY(!diagram->eventInterfaceIsRunning());
+
+		//The symbol is back on a folio, the row still stands, and the
+		//terminal of that row is drawn again -- bound to the element
+		//just placed, with the label of the strip.
+	QCOMPARE(terminalElementsOf(diagram), terminals_before + 1);
+	QCOMPARE(x10->physicalTerminalCount(), 4);
+	const auto phy_t = x10->physicalTerminal(uuid_);
+	QVERIFY(phy_t);
+	QCOMPARE(phy_t->realTerminals().count(), 1);
+	const auto bound = phy_t->realTerminals().constFirst();
+	QVERIFY(bound->element());
+	QVERIFY(!bound->isPending());
+	QVERIFY(onItsFolio(bound->element()));
+	flushTheTrees();
+
+		//The row is a drawn one in the tree again.
+	auto *drawn_row = findByText(treeItem(QStringLiteral("X10")), bound->label());
+	QVERIFY(drawn_row);
+	QVERIFY(!drawn_row->icon(0).isNull());
+	QVERIFY(drawn_row->toolTip(0).isEmpty());
 }
 
 void tst_deleteterminalstrips::deletesTheRowFromTheProjectWhenAsked()

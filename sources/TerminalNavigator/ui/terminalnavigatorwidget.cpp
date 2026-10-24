@@ -621,15 +621,17 @@ QTreeWidgetItem* TerminalNavigatorWidget::addTerminalStrip(TerminalStrip *termin
 					text_ = real_t->label();
 				else
 					text_.append(QStringLiteral(", ")).append(real_t->label());
-					//Drawn means drawn on a folio, and the folio is what
-					//says so: deleting a terminal "from the drawing only"
-					//leaves the element alive and bound on purpose -- the
-					//undo command holds it so that undo finds it back
-					//where it was --, and isElement() alone would keep
-					//the row drawn although the symbol is off every
-					//folio. The binding itself stays, which is why such
-					//a row says "not drawn" but drags nothing either
-					//(@sa isPending).
+					//Drawn means drawn on a folio, and the folio is
+					//what says so: a symbol kept alive by the command
+					//which took it off its folio -- deleting a
+					//terminal "from the drawing only" -- is off every
+					//folio, and its terminal is unbound from it
+					//(@sa RealTerminal::unbindFromElement), so
+					//isElement() alone would keep such a row drawn.
+					//What waits after that drags again; a terminal an
+					//older version left with no element and no
+					//identity of its own says "not drawn" and drags
+					//nothing (@sa isPending).
 				drawn_ = drawn_ || (real_t->isElement() && real_t->element()->diagram());
 				pending_ = pending_ || real_t->isPending();
 			}
