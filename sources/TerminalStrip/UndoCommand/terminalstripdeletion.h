@@ -95,6 +95,39 @@ class TerminalStripDeletion
 				QUndoCommand *parent = nullptr);
 
 		/**
+			@brief freeTerminalsDeletionMacro
+			The macro which takes the symbols of @a elements off the
+			folios they are drawn on, for the terminal navigator to
+			delete what it calls the independent terminals: those
+			elements belong to no strip, so there is no row to take
+			off anywhere and nothing but the drawing goes -- which is
+			what the drawing editor has always done with such a
+			symbol, wires included (@sa appendElementsTo, and
+			DeleteQGraphicsItemCommand, which is one command per
+			folio here).
+
+			Every element which holds a strip is left out on purpose:
+			the symbol of a terminal of a strip draws a row of it, and
+			what takes such a symbol off a project is
+			terminalsDeletionMacro(), row included. For the same
+			reason the bridge and level checks of
+			hasNonDeletableTerminal() do not apply here: those only
+			concern a row of a strip, and a free terminal has none.
+
+			@param project
+			@param elements the terminal elements to take off their
+			folio, normally read from the tree through their uuid
+			(@sa TerminalNavigatorWidget::deleteSelection)
+			@return the macro to push, or nullptr when there is
+			nothing to delete. With @a parent, the macro is one of
+			its children instead, and also returned.
+		*/
+		static QUndoCommand *freeTerminalsDeletionMacro(
+				QETProject *project,
+				const QVector<Element *> &elements,
+				QUndoCommand *parent = nullptr);
+
+		/**
 			@brief drawingDeletionCommand
 			The command the drawing editor pushes for a deletion on
 			@a diagram: what @a selection holds, the @a cable_parts and

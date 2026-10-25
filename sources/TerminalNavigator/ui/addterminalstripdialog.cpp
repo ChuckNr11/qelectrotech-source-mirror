@@ -20,6 +20,7 @@
 #include "../../elementprovider.h"
 #include "../../qet.h"
 #include "../../qetapp.h"
+#include "../../qetgraphicsitem/element.h"
 #include "../../qeticons.h"
 #include "../../qetproject.h"
 #include "../../utils/qetutils.h"
@@ -197,6 +198,42 @@ void AddTerminalStripDialog::setLocation(const QString &location)
 }
 
 /**
+ * @brief AddTerminalStripDialog::setName
+ * @param name : the strip name (structure designation 'Name') to pre-select
+ * The name is set after setInstallation() and setLocation(), which is the
+ * order the caller of this dialog has to keep: those two reload the names
+ * of the node they select, and empty the name field with them
+ * (@sa fillNamesOfTheCurrentNode).
+ * The preview tree follows through validate(): a name which designates a
+ * strip of the node already holding terminals shows them, ahead of the IDs
+ * typed below (@sa fillExistingTerminals).
+ */
+void AddTerminalStripDialog::setName(const QString &name)
+{
+	if (name.isEmpty()) {
+		return;
+	}
+
+		//Picked from the list when the name is one of it: setting the
+		//text of an editable combo box only fills its line edit, which
+		//reads exactly like a name typed by hand. The list of this
+		//field holds the strips of the node -- which was just filled by
+		//setInstallation()/setLocation() --, so the strip this dialog
+		//is about is in it.
+	const int index = ui->m_name_cb->findText(name);
+	if (index >= 0) {
+		ui->m_name_cb->setCurrentIndex(index);
+	} else {
+		ui->m_name_cb->setCurrentText(name);
+	}
+
+		//A combo box whose text did not really change says nothing, and
+		//the two setters above have already validated a dialog without
+		//this name: the preview is asked for here in any case.
+	validate();
+}
+
+/**
 	@brief AddTerminalStripDialog::generatedTerminalStrip
 	Creates and returns the terminal strip described by this dialog, or null.
 	The terminals themselves are not created here: the caller gets their IDs
@@ -244,10 +281,14 @@ TerminalStrip *AddTerminalStripDialog::terminalStripOfTheDialog() const
 	gave it.
 	The preview tree is read and not the ID field, because it is the only
 	place which knows the symbol of each single terminal, and because it is
-	what the user looked at before pressing OK. A list which can not be
-	read at all leaves the tree on its last valid state, and the dialog
-	refuses that state with its notice label, so the OK button is disabled
-	before this could return something the user did not see.
+	what the user looked at before pressing OK. The rows of the terminals
+	the strip already holds are read out of it as well, being display only
+	(@sa fillExistingTerminals): those exist already, and the OK button must
+	not create them a second time.
+	A list which can not be read at all leaves the tree on its last valid
+	state, and the dialog refuses that state with its notice label, so the
+	OK button is disabled before this could return something the user did
+	not see.
 */
 QList<AddTerminalStripDialog::TerminalDescription> AddTerminalStripDialog::describedTerminals() const
 {
@@ -258,6 +299,13 @@ QList<AddTerminalStripDialog::TerminalDescription> AddTerminalStripDialog::descr
 
 	for (int i = 0 ; i < m_root_item->childCount() ; ++i) {
 		const auto *child = m_root_item->child(i);
+			//The rows of the terminals the strip already holds are
+			//display only (@sa fillExistingTerminals): they exist
+			//already, and the OK button must not create them a second
+			//time.
+		if (child->data(0, ExistingTerminalRole).toBool()) {
+			continue;
+		}
 		result.append({child->text(0), child->data(0, Qt::UserRole).toString()});
 	}
 
@@ -429,10 +477,140 @@ QString AddTerminalStripDialog::effectiveName() const
 }
 
 /**
+	@brief AddTerminalStripDialog::fillExistingTerminals
+	Shows what the strip of the current node already holds: one greyed out
+	row per physical terminal of it which really holds terminals, at the top
+	of the preview tree and ahead of the IDs typed below them -- the user
+	reads what is there before he types the ID which continues it. The row
+	shows the ID alone, the strip itself being the root item above it, and
+	the name of the symbol the terminal is drawn with in the second column,
+	empty when it is drawn with none -- the very reading the terminals typed
+	below get (@sa symbolName). A drawn terminal keeps no symbol of its own,
+	its element being the one to ask (@sa RealTerminal::symbol).
+	Nothing to show when the name designates a strip which does not exist
+	yet, or one which holds no terminal at all.
+
+	Those rows carry ExistingTerminalRole, are not selectable and are left
+	out of describedTerminals(): they are the display of what exists, never
+	one of the terminals the OK button creates, and no symbol of the combo
+	box ever reaches them -- a terminal drawn in a folio keeps the symbol it
+	was drawn with (@sa selectedPreviewChildren).
+
+	The rows are only rebuilt when they really say something else than what
+	the tree shows: this runs on every keystroke in the ID field, and
+	rebuilding them there would throw the list below them around for
+	nothing.
+*/
+void AddTerminalStripDialog::fillExistingTerminals()
+{
+	if (!m_root_item) {
+		return;
+	}
+
+		//The rows as they should be: one per physical terminal of the
+		//strip which really holds terminals, in the order of the strip
+		//-- the very order the navigator gives the items of a strip
+		//(@sa checkIdsAgainstTheStrip).
+	QStringList ids, symbol_names;
+	if (auto *strip = stripOfTheCurrentNode())
+	{
+			//The ID only: the root item above those rows already says
+			//which strip they belong to, and the ID is what the field
+			//below them asks for. The label of a terminal is
+			//'strip name:ID' (@sa RealTerminal::label), so everything
+			//up to and including the last colon goes; a label which
+			//holds no colon at all is an ID of its own already -- a
+			//terminal of an example project can well be labelled
+			//"XPE" -- and stays the way it is.
+		for (int i = 0 ; i < strip->physicalTerminalCount() ; ++i)
+		{
+			const auto physical_terminal = strip->physicalTerminal(i);
+			if (!physical_terminal || physical_terminal->realTerminalCount() == 0) {
+				continue;
+			}
+
+			QStringList terminal_ids;
+			QStringList terminal_symbols;
+			for (const auto &real_terminal : physical_terminal->realTerminals()) {
+				const auto label = real_terminal->label();
+				terminal_ids << label.mid(
+							label.lastIndexOf(QLatin1Char(':')) + 1);
+					//The name of the symbol the terminal is drawn
+					//with, the very way the terminals typed get
+					//theirs -- and nothing at all when it is drawn
+					//with none (@sa symbolName). A drawn terminal
+					//keeps no symbol string of its own: its symbol
+					//is the one of its element, which is read out
+					//of it the same way the symbol of a terminal
+					//to be drawn is read out of its data (@sa
+					//RealTerminal::unbindFromElement, which reads
+					//it that way before letting the element go).
+				auto symbol = real_terminal->symbol();
+				if (symbol.isEmpty()
+					&& real_terminal->isElement()
+					&& real_terminal->element())
+				{
+					symbol = real_terminal->element()->location().toString();
+				}
+				const auto name = symbolName(symbol);
+				if (!name.isEmpty() && !terminal_symbols.contains(name)) {
+					terminal_symbols << name;
+				}
+			}
+			ids << terminal_ids.join(QStringLiteral(", "));
+			symbol_names << terminal_symbols.join(QStringLiteral(", "));
+		}
+	}
+
+		//What the tree shows of them by now: the rows carrying the
+		//marker, in the order they are shown in.
+	QStringList shown_ids, shown_symbols;
+	for (int i = 0 ; i < m_root_item->childCount() ; ++i) {
+		const auto *child = m_root_item->child(i);
+		if (child->data(0, ExistingTerminalRole).toBool()) {
+			shown_ids << child->text(0);
+			shown_symbols << child->text(1);
+		}
+	}
+	if (ids == shown_ids && symbol_names == shown_symbols) {
+		return;
+	}
+
+		//They are replaced: only those rows are taken away, the IDs
+		//typed so far stay where they are -- with their symbols and
+		//their selection, which the rebuild below keeps.
+	for (int i = m_root_item->childCount() - 1 ; i >= 0 ; --i) {
+		if (m_root_item->child(i)->data(0, ExistingTerminalRole).toBool()) {
+			delete m_root_item->child(i);
+		}
+	}
+	if (ids.isEmpty()) {
+		return;
+	}
+
+		//Everything left is an ID typed by the user: the rows of what
+		//exists go in front of them.
+	for (int i = 0 ; i < ids.count() ; ++i)
+	{
+		auto *child = new QTreeWidgetItem(QStringList(ids.at(i)));
+		child->setText(1, symbol_names.at(i));
+		child->setData(0, ExistingTerminalRole, true);
+			//Display only: without flags the row is greyed out and
+			//kept out of every selection, so that the symbol combo
+			//box never changes a terminal which is drawn already
+		child->setFlags(Qt::NoItemFlags);
+		m_root_item->insertChild(i, child);
+	}
+}
+
+/**
 	@brief AddTerminalStripDialog::refreshPreviewTree
 	Shows what the OK button will create: the strip as the root item of the
 	preview tree, one child per ID of the ID field, the ID in the first
 	column and the name of its symbol in the second one.
+	The terminals the strip of the current node already holds come first,
+	whatever the ID field says (@sa fillExistingTerminals): they are not
+	one of the IDs below them, and are left out of every reading of it.
 	The children are rebuilt only when the ID list really changed, since a
 	rebuild throws away the selection the user is looking at; a list which
 	can not be read at all leaves the last known children alone.
@@ -451,13 +629,22 @@ void AddTerminalStripDialog::refreshPreviewTree(const ParsedIds &parsed)
 	m_root_item->setIcon(0, QET::Icons::TerminalStrip);
 	m_root_item->setFirstColumnSpanned(true);
 
+	fillExistingTerminals();
+
 	if (!parsed.error.isEmpty()) {
 		return;
 	}
 
 	QStringList current_ids;
 	for (int i = 0 ; i < m_root_item->childCount() ; ++i) {
-		current_ids << m_root_item->child(i)->text(0);
+		const auto *child = m_root_item->child(i);
+			//Only the IDs typed so far are compared, never the rows
+			//of what the strip already holds (@sa
+			//fillExistingTerminals).
+		if (child->data(0, ExistingTerminalRole).toBool()) {
+			continue;
+		}
+		current_ids << child->text(0);
 	}
 
 	if (current_ids != parsed.ids) {
@@ -465,6 +652,9 @@ void AddTerminalStripDialog::refreshPreviewTree(const ParsedIds &parsed)
 		QHash<QString, QString> kept_symbols;
 		for (int i = 0 ; i < m_root_item->childCount() ; ++i) {
 			const auto *child = m_root_item->child(i);
+			if (child->data(0, ExistingTerminalRole).toBool()) {
+				continue;
+			}
 			if (child->isSelected()) {
 				selected_ids << child->text(0);
 			}
@@ -472,7 +662,11 @@ void AddTerminalStripDialog::refreshPreviewTree(const ParsedIds &parsed)
 								child->data(0, Qt::UserRole).toString());
 		}
 
-		qDeleteAll(m_root_item->takeChildren());
+		for (int i = m_root_item->childCount() - 1 ; i >= 0 ; --i) {
+			if (!m_root_item->child(i)->data(0, ExistingTerminalRole).toBool()) {
+				delete m_root_item->child(i);
+			}
+		}
 		for (const auto &id : parsed.ids) {
 				//No icon: those terminals are not drawn in any folio yet,
 				//and the missing symbol is how the trees tell them apart
@@ -557,7 +751,13 @@ QList<QTreeWidgetItem *> AddTerminalStripDialog::selectedPreviewChildren() const
 	}
 
 	for (int i = 0 ; i < m_root_item->childCount() ; ++i) {
-		if (auto *child = m_root_item->child(i); child->isSelected()) {
+		auto *child = m_root_item->child(i);
+			//The rows of the terminals the strip already holds carry no
+			//flags and can not be selected at all; they are skipped
+			//here as well, so that no symbol ever reaches them
+			//whatever the tree is asked (@sa fillExistingTerminals).
+		if (child->isSelected()
+			&& !child->data(0, ExistingTerminalRole).toBool()) {
 			result << child;
 		}
 	}

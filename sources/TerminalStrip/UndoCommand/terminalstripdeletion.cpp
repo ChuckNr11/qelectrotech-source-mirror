@@ -390,6 +390,63 @@ QUndoCommand *TerminalStripDeletion::terminalsDeletionMacro(
 }
 
 /**
+ * @brief TerminalStripDeletion::freeTerminalsDeletionMacro
+ * @param project
+ * @param elements
+ * @param parent
+ * @return the macro which takes the symbols of @a elements off their
+ * folios, or nullptr when there is nothing to delete. With @a parent
+ * the macro is one of its children instead, and also returned.
+ *
+ * The why of it is told at the declaration (@sa
+ * TerminalStripDeletion::freeTerminalsDeletionMacro): only elements
+ * which are drawn and belong to no strip go here, and they only go
+ * from their drawing -- one DeleteQGraphicsItemCommand per folio,
+ * built the way a deletion through the selection builds it
+ * (@sa appendElementsTo), so that the wires on their terminals follow
+ * the symbol instead of staying attached to an element which is not
+ * there anymore.
+ */
+QUndoCommand *TerminalStripDeletion::freeTerminalsDeletionMacro(
+		QETProject *project,
+		const QVector<Element *> &elements,
+		QUndoCommand *parent)
+{
+	if (!project) {
+		return nullptr;
+	}
+
+		//Collected per folio, so that every symbol is taken off its own
+		//folio and one undo puts it back there.
+	QHash<Diagram *, DiagramContent> contents;
+	int count{0};
+	for (auto *element : elements)
+	{
+		if (!element || !element->diagram()) {
+			continue;
+		}
+		if (element->elementData().m_type == ElementData::Terminal
+			&& static_cast<TerminalElement *>(element)->parentTerminalStrip()) {
+			continue;		//Draws a row of a strip: not ours (@sa above)
+		}
+		if (contents.contains(element->diagram())
+			&& contents[element->diagram()].m_elements.contains(element)) {
+			continue;		//The same element twice in the selection
+		}
+		appendElementsTo(contents[element->diagram()], {element});
+		++count;
+	}
+	if (count == 0) {
+		return nullptr;
+	}
+
+	auto *macro = new QUndoCommand(parent);
+	appendDrawings(macro, contents);
+	macro->setText(QObject::tr("Delete %n terminal(s)", "", count));
+	return macro;
+}
+
+/**
  * @brief TerminalStripDeletion::drawingDeletionCommand
  * The command the drawing editor pushes for a deletion on
  * @a diagram: what @a selection holds, the @a cable_parts and the

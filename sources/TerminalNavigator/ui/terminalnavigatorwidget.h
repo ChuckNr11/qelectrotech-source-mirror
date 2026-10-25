@@ -28,6 +28,7 @@
 
 class Element;
 class QETProject;
+class QMenu;
 class QMimeData;
 class QTreeWidgetItem;
 class TerminalStrip;
@@ -65,6 +66,22 @@ namespace Ui {
 	drop from the panel). Those signals arrive one per element, so they
 	are collected by a timer into a single rebuild.
 
+	The marks stay on one side of the tree at a time. The project and
+	the independent terminals are the two roots, and a mark on one of
+	them takes every mark of the other side away -- an independent
+	terminal belongs to no strip, and a strip or a branch marked
+	beside it would have the answers of the tab say two things at
+	once. Inside the project several items are marked together only
+	within one terminal strip (the strip itself with its rows, or
+	rows of it), so a mark in a second strip takes the marks of the
+	first one away, and everything else -- the project, an
+	installation, a location -- is worth a mark of its own only. The
+	marks the user sets come in one click or key at a time, and it is
+	always the one which just came in that says which side is meant;
+	what the tab answers the drag, the delete and the buttons of the
+	toolbar -- is what was kept of the selection
+	(@sa onSelectionChanged).
+
 	The tab also creates strips: a toolbar button and a context menu entry
 	both open the creator dialog of the terminal strip editor, prefilled
 	with the plant and the location the user is looking at, and the strip
@@ -81,11 +98,17 @@ namespace Ui {
 	strip) says what it takes with it and asks first, since a whole
 	strip goes with its symbols and its plans on every folio
 	(@sa TerminalStripDeletion, in
-	sources/TerminalStrip/UndoCommand/). The free terminals are never
-	touched: they belong to no strip. The toolbar button waits for a
-	terminal row to be marked -- deleting a strip or a whole branch
-	asks its question and stays in the context menu and on the Delete
-	key, and both buttons follow the selection
+	sources/TerminalStrip/UndoCommand/). The free terminals go the
+	same way as a row, but the other direction: they belong to no
+	strip, so nothing leaves a strip -- their symbols leave the folio
+	they are drawn on, wires included, and that is all
+	(@sa TerminalStripDeletion::freeTerminalsDeletionMacro). A single
+	or several marked ones go without asking, the way a row does;
+	the root of them says what it takes and asks, like the project
+	above it does. The toolbar button waits for a terminal row to be
+	marked, of a strip or of the free terminals -- deleting a strip
+	or a whole branch asks its question and stays in the context menu
+	and on the Delete key, and both buttons follow the selection
 	(@sa updateActionsState).
 
 	Drawing the terminals which wait for their symbol is the drag
@@ -162,9 +185,12 @@ class TerminalNavigatorWidget : public QWidget
 			(the project, an installation, a location, a strip) says
 			what it takes with it and asks first, because a whole
 			strip goes with its symbols and its plans on every folio.
-			The free terminals are not touched: they belong to no
-			strip, and taking a symbol off a folio is the drawing
-			editor's business.
+			The free terminals of the second root go without asking
+			too when they are marked on their own: they belong to no
+			strip, so only their symbols leave the folios they are
+			drawn on, wires included. Marked as the whole root they
+			ask like a branch does, since every one of them goes at
+			once then.
 		*/
 		void deleteSelection();
 
@@ -189,9 +215,13 @@ class TerminalNavigatorWidget : public QWidget
 			answer is wanted before anything moves. @p terminal_count
 			is everything the drawings lose a symbol by: the rows
 			marked on their own plus the rows of the strips which go
-			as a whole. A single terminal row, which the drawing
+			as a whole plus the free terminals the root of them takes
+			with it. A single terminal row, which the drawing
 			editor deletes without asking either, does not come
-			through here.
+			through here -- neither does a free terminal marked on
+			its own. With @p strip_count at 0 nothing but free
+			terminals goes, and the question says so: no plan and no
+			strip is involved then, only the symbols on the folios.
 			@return true to go on with the deletion
 		*/
 		virtual bool confirmGroupDeletion(int strip_count, int terminal_count);
@@ -199,20 +229,68 @@ class TerminalNavigatorWidget : public QWidget
 	signals:
 		void currentStripChanged(TerminalStrip *strip);
 
+	protected:
+		/**
+			@brief buildContextMenu
+			Build the context menu the tree shows for @a item: the
+			creation of a strip, the drawing of what waits for its
+			symbol, and the deletion of what is marked. The "New
+			terminal strip" entry is left out when @a item is one of
+			the independent terminals or their root -- those belong to
+			no strip, and adding a strip below them makes no sense
+			(@sa isInFreeTerminalBranch). Kept out of the slot which
+			shows the menu, so that the entries can be read without a
+			real menu in the way.
+			@return the menu, owned by the caller.
+		*/
+		QMenu *buildContextMenu(QTreeWidgetItem *item);
+
 	private slots:
 		void on_m_tree_view_currentItemChanged(QTreeWidgetItem *current, QTreeWidgetItem *previous);
 		void on_m_tree_view_customContextMenuRequested(const QPoint &pos);
 		void on_m_add_strip_triggered();
 		void onElementChanged();
 		/**
+			@brief onSelectionChanged
+			Every mark the user (or a test, or the panel of another
+			window) sets comes through here, since the tree says so on
+			any change: the marks are first brought down to what the
+			tree allows, then the buttons are told what is left of the
+			selection (@sa updateActionsState).
+
+			What the tree allows is one branch of it at a time: the
+			project on one side, the independent terminals on the
+			other -- a mark on one side takes every mark of the other
+			side away, and the way back is the same. Inside the
+			project several items are marked together only within one
+			terminal strip: the strip itself with its rows, or rows of
+			it -- a mark in a second strip takes the marks of the
+			first one away. Everything else (the project, an
+			installation, a location) is a single mark, and a second
+			one beside it takes the first away.
+
+			The item the marks are measured against is the one which
+			just came in (@p added below), which is the item the user
+			clicked or the keyboard landed on -- marks which only
+			leave cannot make the selection illegal, so nothing is
+			checked for those.
+		*/
+		void onSelectionChanged();
+		/**
 			@brief updateActionsState
-			Say what the selection is worth to the two buttons which
+			Say what the selection is worth to the buttons which
 			follow it (@sa the constructor): the delete button of the
-			toolbar waits for a terminal row of a strip to be marked,
+			toolbar waits for a terminal row to be marked -- a row of
+			a strip, which goes out of its strip, or a free terminal,
+			which goes off its folio --,
 			the "Draw" entry of the context menu for one which waits
-			for its symbol. Called on every selection change and after
-			every rebuild: a rebuild marks nothing, and a button must
-			not stay enabled for a selection which is gone.
+			for its symbol, and the "New terminal strip" button for a
+			selection which is not one of the independent terminals:
+			those belong to no strip, and a strip added below them
+			would stand in their branch for nothing. Called after
+			every mark is settled and after every rebuild: a rebuild
+			marks nothing, and a button must not stay enabled for a
+			selection which is gone.
 		*/
 		void updateActionsState();
 
@@ -224,6 +302,25 @@ class TerminalNavigatorWidget : public QWidget
 								   QUuid *strip_uuid,
 								   QUuid *terminal_uuid,
 								   QSharedPointer<RealTerminal> *real = nullptr) const;
+		/**
+			@brief isInFreeTerminalBranch
+			@return true when @a item is the root of the independent
+			terminals or hangs below it.
+		*/
+		bool isInFreeTerminalBranch(QTreeWidgetItem *item) const;
+		/**
+			@brief selectionScopeKey
+			What the marks of a selection must agree on
+			(@sa onSelectionChanged): the root of the independent
+			terminals for anything below it, the item of the strip for
+			the strip and for its rows -- the one item which makes
+			their selection a single one, marks of another strip are
+			not of it --, and the item itself for everything else,
+			which is worth a mark of its own only.
+			@return the item every mark of a legal selection is equal
+			to, or nullptr when there is nothing to say about @a item.
+		*/
+		QTreeWidgetItem *selectionScopeKey(QTreeWidgetItem *item) const;
 		void setCurrentStrip(TerminalStrip *strip);
 		void connectElementSignals();
 		void disconnectElementSignals();
@@ -238,6 +335,24 @@ class TerminalNavigatorWidget : public QWidget
 		QHash<QTreeWidgetItem *, QPointer<TerminalStrip>> m_item_strip_H;
 		QHash<QUuid, QSharedPointer<RealTerminal>> m_uuid_terminal_H;
 		QHash<QUuid, QPointer<TerminalStrip>> m_uuid_strip_H;
+			/// The free terminals of the second root, read by uuid the
+			/// way the strips are: their item holds the uuid of their
+			/// element, and this answers the element itself for the
+			/// deletion of them (@sa deleteSelection). QPointer since
+			/// a folio taken off the project takes its symbols with it
+			/// while the tree may still show them, until the signal of
+			/// the project rebuilds it.
+		QHash<QUuid, QPointer<Element>> m_uuid_free_terminal_H;
+			/// The marks the tree accepted the last time, the ones the
+			/// marks which just came in are weighed against (@sa
+			/// onSelectionChanged): minus this, the new ones say which
+			/// side of the tree was meant. The items are rebuilt with
+			/// every reload, so this goes with them.
+		QList<QTreeWidgetItem *> m_marked_snapshot;
+			/// Set while onSelectionChanged() takes marks away again:
+			/// that changes the selection a second time, and the
+			/// second round must not weigh and take away once more.
+		bool m_filtering_selection{false};
 		QVector<QMetaObject::Connection> m_strip_changed_connection;
 		QVector<QMetaObject::Connection> m_element_changed_connection;
 			/// Collects the elementAdded()/elementRemoved() signals into

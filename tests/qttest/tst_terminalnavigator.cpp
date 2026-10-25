@@ -29,6 +29,7 @@
 #include "qetproject.h"
 #include "undocommand/changeelementinformationcommand.h"
 
+#include <QAction>
 #include <QApplication>
 #include <QComboBox>
 #include <QDialog>
@@ -36,7 +37,9 @@
 #include <QDomDocument>
 #include <QLabel>
 #include <QLineEdit>
+#include <QMenu>
 #include <QMimeData>
+#include <QScopedPointer>
 #include <QTimer>
 #include <QTreeWidget>
 #include <QTreeWidgetItem>
@@ -55,6 +58,21 @@
 	No example file carries terminal strips, so the strips used here are
 	built from the free terminals examples/industrial.qet does have.
 */
+
+/**
+	The context menu of the tab is put together for the item under the
+	cursor, and only the slot which shows it looks at the pieces
+	(@sa TerminalNavigatorWidget::buildContextMenu). The test reads those
+	pieces without a real menu in the way, which takes the protected
+	method -- and so a subclass of the tab, one of its own.
+*/
+class MenuNavigator : public TerminalNavigatorWidget
+{
+	public:
+		using TerminalNavigatorWidget::TerminalNavigatorWidget;
+		using TerminalNavigatorWidget::buildContextMenu;
+};
+
 class tst_terminalnavigator : public QObject
 {
 	Q_OBJECT
@@ -124,6 +142,26 @@ class tst_terminalnavigator : public QObject
 	int freeTerminalCount() const
 	{
 		return freeRoot() ? freeRoot()->childCount() : -1;
+	}
+
+	/// The strip X2, the second strip of the KA / Cabinet A branch.
+	QTreeWidgetItem *stripItemX2() const
+	{
+		auto *ka = rootChild(0, QStringLiteral("KA"));
+		auto *cabinet_a = childByText(ka, QStringLiteral("Cabinet A"));
+		return childByText(cabinet_a, QStringLiteral("X2"));
+	}
+
+		//The marks of a selection are weighed one after the other, so
+		//every scenario of the rules below starts with a single mark:
+		//@p item alone, and the current item beside it the way a click
+		//leaves it.
+	void selectOnly(QTreeWidgetItem *item)
+	{
+		QVERIFY(item);
+		m_tree->clearSelection();
+		m_tree->setCurrentItem(item);
+		item->setSelected(true);
 	}
 
 		//The dialogs of the navigator are modal, so every interaction
@@ -237,6 +275,11 @@ private slots:
 	void keepsSavedSymbolsWithoutProjectIds();
 	void dragsPendingTerminalsOnly();
 	void dragsTheSelectionInTreeOrder();
+	void marksOnlyWithinOneSideOfTheTree();
+	void marksOnlyWithinOneStrip();
+	void offersNewStripOutsideTheFreeTerminals();
+	void stripButtonFollowsTheMarkedSide();
+	void preFillsNameFromTheStripAndShowsItsTerminals();
 	void clearsWithoutProject();
 	void followsTheActiveProject();
 	void cleanupTestCase();
@@ -1596,6 +1639,366 @@ void tst_terminalnavigator::dragsTheSelectionInTreeOrder()
 	strip_item = stripX10();
 	QVERIFY(strip_item);
 	QCOMPARE(strip_item->childCount(), terminals_in_x10);
+}
+
+/**
+	The marks stay on one side of the tree at a time: the project with
+	its strips on one side, the independent terminals on the other. The
+	mark which just came in says which side is meant -- it is the one the
+	user clicked or the keyboard landed on -- and takes the marks of the
+	other side away, the way back the same. Their own root belongs to
+	their side as a whole, so it is marked beside one of them.
+*/
+void tst_terminalnavigator::marksOnlyWithinOneSideOfTheTree()
+{
+	auto *project_side = m_tree->topLevelItem(0);
+	auto *free_side = freeRoot();
+	auto *x10 = stripX10();
+	auto *free_row = freeRoot() ? freeRoot()->child(0) : nullptr;
+	QVERIFY(project_side);
+	QVERIFY(free_side);
+	QVERIFY(x10);
+	QVERIFY(free_row);
+
+		//A strip marked, then an independent terminal beside it: the
+		//strip goes, and with it the side it stands for.
+	selectOnly(x10);
+	free_row->setSelected(true);
+	QVERIFY(free_row->isSelected());
+	QVERIFY(!x10->isSelected());
+	QCOMPARE(m_tree->selectedItems().count(), 1);
+
+		//The same the other way round: the independent terminal goes
+		//when the strip is marked afterwards.
+	selectOnly(free_row);
+	x10->setSelected(true);
+	QVERIFY(x10->isSelected());
+	QVERIFY(!free_row->isSelected());
+	QCOMPARE(m_tree->selectedItems().count(), 1);
+
+		//A row of a strip beside an independent terminal is the same
+		//question, only from the other end.
+	selectOnly(free_row);
+	x10->child(0)->setSelected(true);
+	QVERIFY(x10->child(0)->isSelected());
+	QVERIFY(!free_row->isSelected());
+
+		//Their own root is the side too: an independent terminal and
+		//the root of them are one scope, so both stay marked.
+	selectOnly(free_row);
+	free_side->setSelected(true);
+	QVERIFY(free_row->isSelected());
+	QVERIFY(free_side->isSelected());
+
+	m_tree->clearSelection();
+}
+
+/**
+	Inside the project several items are marked together only within one
+	terminal strip: the strip itself with its rows, or rows of it. A mark
+	in a second strip takes the marks of the first one away, and a branch
+	-- the project, an installation, a location -- is a mark of its own.
+*/
+void tst_terminalnavigator::marksOnlyWithinOneStrip()
+{
+	auto *x10 = stripX10();
+	auto *x2 = stripItemX2();
+	QVERIFY(x10);
+	QVERIFY(x2);
+	QCOMPARE(x10->childCount(), 4);
+	QVERIFY(x2->childCount());
+
+		//Two rows of one strip stay marked together.
+	selectOnly(x10->child(0));
+	x10->child(1)->setSelected(true);
+	QVERIFY(x10->child(0)->isSelected());
+	QVERIFY(x10->child(1)->isSelected());
+
+		//The strip with a row of its own: one scope, so both stay.
+	selectOnly(x10);
+	x10->child(0)->setSelected(true);
+	QVERIFY(x10->isSelected());
+	QVERIFY(x10->child(0)->isSelected());
+
+		//A row of a second strip takes the marks of the first strip
+		//away -- and the strip itself with them.
+	selectOnly(x10);
+	x2->child(0)->setSelected(true);
+	QVERIFY(x2->child(0)->isSelected());
+	QVERIFY(!x10->isSelected());
+
+		//An installation is a mark of its own: a strip marked beside
+		//it is not kept, the strip was the one just clicked in.
+	auto *ka = rootChild(0, QStringLiteral("KA"));
+	QVERIFY(ka);
+	selectOnly(ka);
+	x10->setSelected(true);
+	QVERIFY(x10->isSelected());
+	QVERIFY(!ka->isSelected());
+
+	m_tree->clearSelection();
+}
+
+/**
+	"New terminal strip" is offered everywhere but on the side of the
+	independent terminals: they belong to no strip, and a strip made
+	below their root would stand in their branch for nothing. The two
+	other entries are there on both sides.
+*/
+void tst_terminalnavigator::offersNewStripOutsideTheFreeTerminals()
+{
+	MenuNavigator navigator;
+	navigator.setProject(m_project);
+	auto *tree = navigator.findChild<QTreeWidget *>();
+	QVERIFY(tree);
+	auto *add_strip = navigator.findChild<QAction *>(
+				QStringLiteral("m_add_strip"));
+	QVERIFY(add_strip);
+
+	auto *free_side = tree->topLevelItem(1);
+	QVERIFY(free_side);
+	QVERIFY(free_side->childCount());
+
+		//The free terminals and the root of them: no strip is made
+		//below either of them, and the two other entries are there.
+	for (auto *item : {free_side, free_side->child(0)})
+	{
+		QScopedPointer<QMenu> menu(navigator.buildContextMenu(item));
+		QVERIFY(menu);
+		QVERIFY(!menu->actions().contains(add_strip));
+		QCOMPARE(menu->actions().count(), 2);
+	}
+
+		//The project side, root branch and row alike: the strip is
+		//offered everywhere.
+	auto *project_side = tree->topLevelItem(0);
+	auto *ka = childByText(project_side, QStringLiteral("KA"));
+	auto *cabinet_a = childByText(ka, QStringLiteral("Cabinet A"));
+	auto *x10 = childByText(cabinet_a, QStringLiteral("X10"));
+	QVERIFY(project_side);
+	QVERIFY(ka);
+	QVERIFY(x10);
+	QVERIFY(x10->childCount());
+	for (auto *item : {project_side, ka, cabinet_a, x10, x10->child(0)})
+	{
+		QScopedPointer<QMenu> menu(navigator.buildContextMenu(item));
+		QVERIFY(menu);
+		QVERIFY(menu->actions().contains(add_strip));
+		QCOMPARE(menu->actions().count(), 3);
+	}
+
+		//With no item under the cursor at all the current one says
+		//which side is meant -- the context menu moves it to the item
+		//it is about before it is built.
+	tree->setCurrentItem(x10);
+	QScopedPointer<QMenu> for_project(navigator.buildContextMenu(nullptr));
+	QVERIFY(for_project->actions().contains(add_strip));
+	tree->setCurrentItem(free_side->child(0));
+	QScopedPointer<QMenu> for_free(navigator.buildContextMenu(nullptr));
+	QVERIFY(!for_free->actions().contains(add_strip));
+}
+
+/**
+	The "New terminal strip" button of the toolbar follows the same
+	rules as the context menu: it is greyed out while the independent
+	terminals are marked, and on again for the project -- the current
+	item alone counts too, since the context menu leaves it behind on
+	the item under the cursor without marking anything.
+*/
+void tst_terminalnavigator::stripButtonFollowsTheMarkedSide()
+{
+	auto *add_strip = m_widget->findChild<QAction *>(
+				QStringLiteral("m_add_strip"));
+	QVERIFY(add_strip);
+	auto *x10 = stripX10();
+	auto *free_side = freeRoot();
+	QVERIFY(x10);
+	QVERIFY(free_side);
+	QVERIFY(free_side->childCount());
+
+		//Nothing marked: the button is for the project as a whole.
+	m_tree->clearSelection();
+	m_tree->setCurrentItem(nullptr);
+	QVERIFY(add_strip->isEnabled());
+
+		//A strip of the project, and a row of it: the button stays.
+	selectOnly(x10);
+	QVERIFY(add_strip->isEnabled());
+	selectOnly(x10->child(0));
+	QVERIFY(add_strip->isEnabled());
+
+		//The independent terminals: no strip is made for them.
+	selectOnly(free_side->child(0));
+	QVERIFY(!add_strip->isEnabled());
+	selectOnly(free_side);
+	QVERIFY(!add_strip->isEnabled());
+
+		//The current item counts the same way, with nothing marked.
+	m_tree->clearSelection();
+	m_tree->setCurrentItem(free_side->child(0));
+	QVERIFY(!add_strip->isEnabled());
+	m_tree->setCurrentItem(x10);
+	QVERIFY(add_strip->isEnabled());
+
+	m_tree->clearSelection();
+	m_tree->setCurrentItem(nullptr);
+}
+
+/**
+	Opened from a terminal strip -- the strip itself or one of its
+	terminals -- the dialog is about that very strip: its name is in the
+	name field, and the preview tree shows what the strip already holds
+	ahead of the IDs typed below them. Those rows are greyed out and not
+	selectable, which is what keeps them out of the OK button: they exist
+	already, and only the IDs typed are created.
+	An installation, a location or a free terminal belongs to no strip, and
+	leaves the name field empty the way it always did.
+*/
+void tst_terminalnavigator::preFillsNameFromTheStripAndShowsItsTerminals()
+{
+	auto *strip_item = stripX10();
+	auto *x10 = stripNamed(QStringLiteral("X10"));
+	QVERIFY(strip_item);
+	QVERIFY(x10);
+	const int terminals_in_x10 = x10->physicalTerminalCount();
+	QVERIFY(terminals_in_x10 > 0);
+	const auto first_terminal = x10->physicalTerminal(0)->realTerminals().at(0);
+		//The rows are read the way the dialog builds them: the ID of
+		//the terminal -- everything up to and including the last colon
+		//of its label goes, the root item of the preview tree saying
+		//which strip they belong to already --, and the name of the
+		//symbol it is drawn with, empty when it is drawn with none.
+	const auto first_label = first_terminal->label();
+	const auto first_id = first_label.mid(
+				first_label.lastIndexOf(QLatin1Char(':')) + 1);
+	QVERIFY2(!first_id.contains(QLatin1Char(':')),
+			 "the row of a terminal carries its ID alone");
+		//The terminals of the fixture are drawn on the folios of the
+		//project, and a drawn terminal keeps no symbol of its own: the
+		//element it is drawn with is the one to ask, the very way the
+		//dialog asks it -- so there is a name to read out of it.
+	const auto *first_element = first_terminal->element();
+	QVERIFY2(first_element,
+			 "the terminals of the fixture are drawn with a symbol");
+	const auto first_symbol_name = first_element->location().name();
+	QVERIFY(!first_symbol_name.isEmpty());
+
+	auto *free_side = freeRoot();
+	QVERIFY(free_side);
+	QVERIFY(free_side->childCount());
+
+		//What one round of the dialog showed: the name field, and the
+		//shape of the preview tree with the ID typed -- if @p typed is
+		//true at all.
+	struct DialogState {
+		bool shown = false;
+		QString name;
+		int rows = -1;
+		int selectable = -1;
+		int colon_rows = -1;
+		QString first_row;
+		QString first_symbol;
+	};
+	const QString next_id = QString::number(terminals_in_x10 + 1);
+
+	const auto readDialog = [&](bool typed, DialogState *state) {
+		state->shown = interactWithTheStripDialog([&](QDialog *dialog) {
+			auto *names = dialogNameCombo(dialog);
+			auto *id_field = dialogIdField(dialog);
+			auto *tree = dialogPreviewTree(dialog);
+			if (!names || !id_field || !tree) {
+				return;
+			}
+			state->name = names->currentText();
+			if (typed) {
+				id_field->setText(next_id);
+			}
+
+			auto *root_item = tree->topLevelItem(0);
+			if (!root_item) {
+				return;
+			}
+			state->rows = root_item->childCount();
+			state->selectable = 0;
+			state->colon_rows = 0;
+			for (int i = 0 ; i < root_item->childCount() ; ++i) {
+				const auto *child = root_item->child(i);
+				if (child->flags() & Qt::ItemIsSelectable) {
+					++state->selectable;
+				}
+					//No row carries the name of the strip beside the
+					//ID: the root item above says it (@sa
+					//fillExistingTerminals)
+				if (child->text(0).contains(QLatin1Char(':'))) {
+					++state->colon_rows;
+				}
+			}
+			if (root_item->childCount()) {
+				state->first_row = root_item->child(0)->text(0);
+				state->first_symbol = root_item->child(0)->text(1);
+			}
+		});
+	};
+
+		//Called from the strip itself: its name is in the field, and
+		//the four terminals it holds are listed ahead of the ID typed.
+	m_tree->clearSelection();
+	m_tree->setCurrentItem(strip_item);
+	DialogState from_strip;
+	readDialog(true, &from_strip);
+	QVERIFY2(from_strip.shown, "the strip dialog was shown");
+	QCOMPARE(from_strip.name, QStringLiteral("X10"));
+	QCOMPARE(from_strip.rows, terminals_in_x10 + 1);
+	QCOMPARE(from_strip.selectable, 1);
+	QCOMPARE(from_strip.first_row, first_id);
+	QCOMPARE(from_strip.first_symbol, first_symbol_name);
+	QCOMPARE(from_strip.colon_rows, 0);
+
+		//Called from one of its terminals: the very same dialog.
+	m_tree->clearSelection();
+	m_tree->setCurrentItem(strip_item->child(0));
+	DialogState from_terminal;
+	readDialog(false, &from_terminal);
+	QVERIFY(from_terminal.shown);
+	QCOMPARE(from_terminal.name, QStringLiteral("X10"));
+	QCOMPARE(from_terminal.rows, terminals_in_x10);
+	QCOMPARE(from_terminal.selectable, 0);
+	QCOMPARE(from_terminal.first_row, first_id);
+	QCOMPARE(from_terminal.first_symbol, first_symbol_name);
+	QCOMPARE(from_terminal.colon_rows, 0);
+
+		//Called from a free terminal, which belongs to no strip: no
+		//name, and nothing to show beside the ID typed.
+	m_tree->clearSelection();
+	m_tree->setCurrentItem(free_side->child(0));
+	DialogState from_free;
+	readDialog(true, &from_free);
+	QVERIFY(from_free.shown);
+	QVERIFY2(from_free.name.isEmpty(),
+			 "a free terminal belongs to no strip to name");
+	QCOMPARE(from_free.rows, 1);
+	QCOMPARE(from_free.selectable, 1);
+
+		//Called from the strip once more, and accepted: the terminals
+		//the dialog showed are not created a second time, only the ID
+		//typed goes into the strip -- and one undo takes it out again.
+	m_tree->clearSelection();
+	m_tree->setCurrentItem(strip_item);
+	const int undo_index_before = m_project->undoStack()->index();
+	const bool accepted = interactWithTheStripDialog([&](QDialog *dialog) {
+		auto *id_field = dialogIdField(dialog);
+		if (!id_field) {
+			return;
+		}
+		id_field->setText(next_id);
+		dialog->accept();
+	});
+	QVERIFY(accepted);
+	QCOMPARE(x10->physicalTerminalCount(), terminals_in_x10 + 1);
+	QCOMPARE(m_project->undoStack()->index(), undo_index_before + 1);
+
+	m_project->undoStack()->undo();
+	QCOMPARE(x10->physicalTerminalCount(), terminals_in_x10);
 }
 
 void tst_terminalnavigator::clearsWithoutProject()

@@ -53,9 +53,11 @@
 	block manager's tree and the drawings all follow --, and one undo
 	which brings the whole of it back, plans and bridges included.
 
-	What must not go silently is checked too: the free terminals are
-	never touched, and a bridged or multi-level row is refused the way
-	the drawing editor has always refused to delete such terminals.
+	What must not go silently is checked too: a bridged or multi-level
+	row is refused the way the drawing editor has always refused to
+	delete such terminals, and a free terminal only goes from its own
+	folio -- the strips of the project, their rows and their plans are
+	never touched by it.
 */
 class tst_deleteterminalstrips : public QObject
 {
@@ -178,7 +180,7 @@ private slots:
 	void asksBeforeDeletingAWholeStrip();
 	void asksWhatItActuallyTakes();
 	void deletesEveryStripOfTheProjectButNoFreeTerminal();
-	void doesNotDeleteFreeTerminals();
+	void deletesFreeTerminalsFromTheirFolios();
 	void deletesAPlanWithItsStrip();
 	void refusesBridgedRowsAndKeepsThem();
 	void deletesOnlyTheDrawingWhenAsked();
@@ -314,27 +316,26 @@ void tst_deleteterminalstrips::asksWhatItActuallyTakes()
 	QVERIFY(x2);
 	QVERIFY(x10);
 
-		//A strip plus a row of another strip: the strip goes as a
-		//whole -- its own selected row included, which is one deletion
-		//less to describe -- and the row of the other strip on its
-		//own. The question counts everything the drawings lose a
-		//symbol by: the two rows of the strip and the row marked
-		//beside it.
+		//A strip plus a row of it: the strip goes as a whole -- the
+		//selected row included, which is one deletion less to
+		//describe --, and the question counts everything the drawings
+		//lose a symbol by: the two rows of the strip. (A row of a
+		//second strip is not marked beside a strip at all: the marks
+		//of the tab stay within one strip -- @sa the marks in
+		//TerminalNavigatorWidget.)
 	auto *x2_item = treeItem(QStringLiteral("X2"));
-	auto *x10_item = treeItem(QStringLiteral("X10"));
 	QVERIFY(x2_item);
-	QVERIFY(x10_item);
-	auto *x10_row = findByText(x10_item, x10->realTerminals().first()->label());
-	QVERIFY(x10_row);
+	auto *x2_row = findByText(x2_item, x2->realTerminals().first()->label());
+	QVERIFY(x2_row);
 	m_tree->clearSelection();
 	x2_item->setSelected(true);
-	x10_row->setSelected(true);
+	x2_row->setSelected(true);
 	m_widget->answer = false;
 	m_widget->asked_strips = -1;
 	m_widget->asked_terminals = -1;
 	m_widget->deleteSelection();
 	QCOMPARE(m_widget->asked_strips, 1);
-	QCOMPARE(m_widget->asked_terminals, 3);
+	QCOMPARE(m_widget->asked_terminals, 2);
 
 		//A whole installation: its two strips, and the six rows the
 		//drawings lose a symbol by with them.
@@ -384,20 +385,29 @@ void tst_deleteterminalstrips::deletesEveryStripOfTheProjectButNoFreeTerminal()
 	}
 }
 
-void tst_deleteterminalstrips::doesNotDeleteFreeTerminals()
+void tst_deleteterminalstrips::deletesFreeTerminalsFromTheirFolios()
 {
 	auto *free_root = m_tree->topLevelItem(1);
 	QVERIFY(free_root);
 	QVERIFY(free_root->childCount() > 0);
-	const int commands = m_project->undoStack()->count();
 	const int free_before = ElementProvider(m_project).freeTerminal().count();
 
 	selectOnly(free_root->child(0));
 	m_widget->deleteSelection();
 
-		//A free terminal belongs to no strip and leaves nothing of a
-		//strip behind: not even an undo step is made for it.
-	QCOMPARE(m_project->undoStack()->count(), commands);
+		//A free terminal belongs to no strip: nothing leaves a strip,
+		//but its symbol leaves the folio it is drawn on. No question
+		//is asked for a row marked on its own, the way a row of a
+		//strip goes without asking -- and one undo step is pushed for
+		//it, the way the drawing editor deletes the same element.
+	flushTheTrees();
+	QCOMPARE(ElementProvider(m_project).freeTerminal().count(), free_before - 1);
+	QVERIFY(m_project->undoStack()->canUndo());
+
+	undoLastPush();
+
+		//The symbol is back on its folio, and the tree shows it there
+		//again -- the project says so through elementAdded().
 	QCOMPARE(ElementProvider(m_project).freeTerminal().count(), free_before);
 }
 
@@ -788,13 +798,14 @@ void tst_deleteterminalstrips::toolbarButtonsFollowTheMarkedTerminals()
 	QVERIFY(!delete_->isEnabled());
 	QVERIFY(!draw->isEnabled());
 
-		//A free terminal belongs to no strip: it leaves from nowhere
-		//here, and is drawn already anyway.
+		//A free terminal leaves from here too: its symbol goes off
+		//its folio, which is what the delete button says. It is
+		//drawn already, so the second button stays greyed out.
 	auto *free_root = m_tree->topLevelItem(1);
 	QVERIFY(free_root);
 	QVERIFY(free_root->childCount() > 0);
 	selectOnly(free_root->child(0));
-	QVERIFY(!delete_->isEnabled());
+	QVERIFY(delete_->isEnabled());
 	QVERIFY(!draw->isEnabled());
 
 		//A drawn row of a strip: deletable, and drawn already.
