@@ -25,12 +25,16 @@
 #include "../../qetproject.h"
 #include "../../utils/qetutils.h"
 
+#include <QAction>
 #include <QDialogButtonBox>
 #include <QDirIterator>
 #include <QDomDocument>
 #include <QFile>
 #include <QFutureWatcher>
+#include <QMessageBox>
+#include <QRadioButton>
 #include <QSignalBlocker>
+#include <QSpinBox>
 #include <QTextDocument>
 #include <QTreeWidgetItem>
 #include <QtConcurrentRun>
@@ -76,6 +80,15 @@ namespace {
 		return id.size() == 1 && id.at(0).isLetter();
 	}
 
+	/// The ID of a terminal, as its label carries it: the label of a
+	/// terminal is 'strip name:ID', so everything up to and including the
+	/// last colon goes -- a label without a colon at all ("XPE") is an ID
+	/// of its own already.
+	QString idOfLabel(const QString &label)
+	{
+		return label.mid(label.lastIndexOf(QLatin1Char(':')) + 1);
+	}
+
 	/// Reads the root of an element file and tells whether it is a terminal
 	/// symbol. Used by the background scan of the standard collection: a
 	/// plain file read, no collection, no project, no shared state, so it
@@ -109,9 +122,21 @@ AddTerminalStripDialog::AddTerminalStripDialog(QETProject *project, QWidget *par
 	m_project(project)
 {
 	ui->setupUi(this);
-	ui->m_notice_lb->setStyleSheet(QStringLiteral("QLabel {color: red;}"));
 	ui->m_preview_tree->setHeaderLabels(
 				{tr("ID"), tr("Symbol")});
+
+		//The button of the preview toolbar works on marked terminals
+		//only: just opened, the dialog marks none of them yet -- what
+		//rows appear from here on mark themselves (@sa
+		//onPreviewSelectionChanged).
+	ui->m_edit_terminals->setEnabled(false);
+
+		//The number of terminals to add takes whole numbers from 0 to 99,
+		//zero being the value the dialog opens on: the very values the
+		//.ui file sets on the spin box, set again here so that the dialog
+		//and its code never disagree (@sa generatedIds).
+	ui->m_number_sb->setRange(min_terminal_count, max_terminal_count);
+	ui->m_number_sb->setValue(min_terminal_count);
 
 		//Three lines of description, whatever the font and the screen: the
 		//field is capped, so that it stops taking the room the preview
@@ -158,10 +183,27 @@ AddTerminalStripDialog::AddTerminalStripDialog(QETProject *project, QWidget *par
 		this, &AddTerminalStripDialog::validate);
 	connect(ui->m_id_le, &QLineEdit::textChanged,
 		this, &AddTerminalStripDialog::validate);
+	connect(ui->m_number_sb, &QSpinBox::valueChanged,
+		this, &AddTerminalStripDialog::validate);
+		//One radio button says which of the two inputs names the
+		//terminals to add: the number of them, or the IDs typed
+		//(@sa onTerminalsModeChanged).
+	connect(ui->m_number_rb, &QRadioButton::toggled,
+		this, &AddTerminalStripDialog::onTerminalsModeChanged);
+	connect(ui->m_id_rb, &QRadioButton::toggled,
+		this, &AddTerminalStripDialog::onTerminalsModeChanged);
 	connect(ui->m_symbol_cb, &QComboBox::currentIndexChanged,
 		this, &AddTerminalStripDialog::onSymbolPicked);
 	connect(ui->m_preview_tree, &QTreeWidget::itemSelectionChanged,
 		this, &AddTerminalStripDialog::onPreviewSelectionChanged);
+	connect(ui->m_edit_terminals, &QAction::triggered,
+		this, &AddTerminalStripDialog::onEditTerminalsTriggered);
+
+		//The dialog opens on the number of terminals, its input being the
+		//one which is active -- the radio button says so in the .ui file
+		//already, the enabled state is the one the code owes it.
+	ui->m_number_rb->setChecked(true);
+	onTerminalsModeChanged(true);
 
 	fillNamesOfTheCurrentNode();
 	QET::trackDialogGeometry(this);
@@ -411,6 +453,30 @@ void AddTerminalStripDialog::fillNamesOfTheCurrentNode()
 }
 
 /**
+	@brief AddTerminalStripDialog::onTerminalsModeChanged
+	@param checked : the radio button which just changed its state
+	Enables the input the checked radio button names and disables the other
+	one: @c m_number_sb with "Number of terminals", @c m_id_le with "ID's
+	of terminals". The preview tree then shows what the active mode says,
+	which is always what the OK button would create (@sa parseIds) -- the
+	text typed into the ID field is kept as it is, so that switching back
+	reads it again.
+	The signal arrives twice for one switch, both radio buttons firing it:
+	only the one which got checked has something to say.
+*/
+void AddTerminalStripDialog::onTerminalsModeChanged(bool checked)
+{
+	if (!checked) {
+		return;
+	}
+
+	const bool ids_mode = ui->m_id_rb->isChecked();
+	ui->m_id_le->setEnabled(ids_mode);
+	ui->m_number_sb->setEnabled(!ids_mode);
+	validate();
+}
+
+/**
 	@brief AddTerminalStripDialog::validate
 	Runs every check of the dialog and updates the preview tree, the notice
 	label and the enable state of the OK button:
@@ -424,11 +490,12 @@ void AddTerminalStripDialog::fillNamesOfTheCurrentNode()
 void AddTerminalStripDialog::validate()
 {
 	QStringList messages;
+	QStringList notes;
 	const auto name = effectiveName();
 
-		//The ID field is read even when the name is empty: the preview tree
-		//follows it, and a list which can not be read at all is worth
-		//telling about right away.
+		//The input naming the terminals is read even when the name is
+		//empty: the preview tree follows it, and a list which can not be
+		//read at all is worth telling about right away.
 	const auto parsed = parseIds();
 	if (!parsed.error.isEmpty()) {
 		messages << parsed.error;
@@ -437,10 +504,33 @@ void AddTerminalStripDialog::validate()
 		messages << checkIdsAgainstFreeTerminals(parsed.ids);
 	}
 
+		//The generator stepped over IDs which were taken already: the
+		//terminals go on where the free numbers are, which is worth
+		//reading but not worth stopping for (@sa generatedIds).
+	if (!parsed.skipped.isEmpty()) {
+		notes << tr("IDs %1 are already used and were skipped")
+				 .arg(parsed.skipped.join(QStringLiteral(", ")));
+	}
+
+		//The number of terminals at once is capped, and a spin box stops
+		//growing without saying so: the cap itself is what the notice
+		//label tells about, reached or attempted.
+	if (ui->m_number_rb->isChecked()
+	    && ui->m_number_sb->value() >= ui->m_number_sb->maximum()) {
+		notes << tr("The number of terminals to add at once is limited to %1")
+				 .arg(ui->m_number_sb->maximum());
+	}
+
 	ui->buttonBox->button(QDialogButtonBox::Ok)->setEnabled(
 		!name.isEmpty() && messages.isEmpty());
-	ui->m_notice_lb->setText(messages.join(QLatin1Char('\n')));
-	ui->m_notice_lb->setVisible(!messages.isEmpty());
+
+		//An error is red, a hint is not: the notice label speaks of both,
+		//and only the errors keep the OK button off.
+	ui->m_notice_lb->setStyleSheet(
+		messages.isEmpty() ? QString()
+						  : QStringLiteral("QLabel {color: red;}"));
+	ui->m_notice_lb->setText((messages + notes).join(QLatin1Char('\n')));
+	ui->m_notice_lb->setVisible(!messages.isEmpty() || !notes.isEmpty());
 
 	refreshPreviewTree(parsed);
 }
@@ -516,12 +606,7 @@ void AddTerminalStripDialog::fillExistingTerminals()
 	{
 			//The ID only: the root item above those rows already says
 			//which strip they belong to, and the ID is what the field
-			//below them asks for. The label of a terminal is
-			//'strip name:ID' (@sa RealTerminal::label), so everything
-			//up to and including the last colon goes; a label which
-			//holds no colon at all is an ID of its own already -- a
-			//terminal of an example project can well be labelled
-			//"XPE" -- and stays the way it is.
+			//below them asks for (@sa idOfLabel).
 		for (int i = 0 ; i < strip->physicalTerminalCount() ; ++i)
 		{
 			const auto physical_terminal = strip->physicalTerminal(i);
@@ -532,9 +617,7 @@ void AddTerminalStripDialog::fillExistingTerminals()
 			QStringList terminal_ids;
 			QStringList terminal_symbols;
 			for (const auto &real_terminal : physical_terminal->realTerminals()) {
-				const auto label = real_terminal->label();
-				terminal_ids << label.mid(
-							label.lastIndexOf(QLatin1Char(':')) + 1);
+				terminal_ids << idOfLabel(real_terminal->label());
 					//The name of the symbol the terminal is drawn
 					//with, the very way the terminals typed get
 					//theirs -- and nothing at all when it is drawn
@@ -613,7 +696,11 @@ void AddTerminalStripDialog::fillExistingTerminals()
 	one of the IDs below them, and are left out of every reading of it.
 	The children are rebuilt only when the ID list really changed, since a
 	rebuild throws away the selection the user is looking at; a list which
-	can not be read at all leaves the last known children alone.
+	can not be read at all leaves the last known children alone. What a
+	rebuild adds is marked right away -- the terminals the dialog is about
+	to create are the ones its buttons work on -- while a row which was
+	there before keeps what the user did with it
+	(@sa onPreviewSelectionChanged).
 	A terminal the user gave a symbol keeps it across such a rebuild -- only
 	the IDs which are new get the symbol of the moment, so that retyping an
 	ID list never silently gives the terminals another symbol than the one
@@ -674,6 +761,14 @@ void AddTerminalStripDialog::refreshPreviewTree(const ParsedIds &parsed)
 			const auto symbol = kept_symbols.value(id, m_default_symbol);
 			child->setData(0, Qt::UserRole, symbol);
 			child->setText(1, symbolName(symbol));
+				//A terminal the dialog just added is marked the moment
+				//its row appears, so that the button of the toolbar has
+				//something to work on; one which was there before keeps
+				//what the user did with it (@sa kept_symbols,
+				//onPreviewSelectionChanged).
+			if (!kept_symbols.contains(id)) {
+				child->setSelected(true);
+			}
 		}
 
 		for (int i = 0 ; i < m_root_item->childCount() ; ++i) {
@@ -720,10 +815,15 @@ void AddTerminalStripDialog::onSymbolPicked(int index)
 	reads what he is about to change. Several selected terminals leave the
 	combo box alone: they may well carry different symbols, and the next
 	value applies to all of them.
+	The button of the toolbar above the tree follows the very selection:
+	it has something to work on only while terminals are marked
+	(@sa onEditTerminalsTriggered).
 */
 void AddTerminalStripDialog::onPreviewSelectionChanged()
 {
 	const auto selected = selectedPreviewChildren();
+	ui->m_edit_terminals->setEnabled(!selected.isEmpty());
+
 	if (selected.size() != 1) {
 		return;
 	}
@@ -736,6 +836,39 @@ void AddTerminalStripDialog::onPreviewSelectionChanged()
 	const QSignalBlocker blocker(ui->m_symbol_cb);
 	const int index = ui->m_symbol_cb->findData(symbol);
 	ui->m_symbol_cb->setCurrentIndex(index < 0 ? 0 : index);
+}
+
+/**
+	@brief AddTerminalStripDialog::onEditTerminalsTriggered
+	Opens the dialog for the terminals marked in the preview tree
+	(@sa openTerminalsDialog). The button of the toolbar is only enabled
+	while such terminals are marked, and the guard here is the very rule
+	read once more: no dialog with nothing to work on.
+*/
+void AddTerminalStripDialog::onEditTerminalsTriggered()
+{
+	if (selectedPreviewChildren().isEmpty()) {
+		return;
+	}
+
+	openTerminalsDialog();
+}
+
+/**
+	@brief AddTerminalStripDialog::openTerminalsDialog
+	Opens the dialog which works on the terminals marked in the preview
+	tree (@sa selectedPreviewChildren). The dialog itself is defined later
+	-- this is the place it opens, and the marked terminals are what it is
+	given to work on. Until then only a notice says that the button is
+	alive and what it is about to work on.
+*/
+void AddTerminalStripDialog::openTerminalsDialog()
+{
+	QMessageBox::information(
+				this,
+				tr("Edit the marked terminals"),
+				tr("The dialog for the %n terminal(s) marked here is not "
+				   "defined yet.", "", selectedPreviewChildren().count()));
 }
 
 /**
@@ -981,9 +1114,16 @@ TerminalStrip *AddTerminalStripDialog::stripOfTheCurrentNode() const
 	@return the expanded IDs, or an error message when the field can not be read
 	at all. An empty field is not an error: it simply means that no terminal
 	will be added to the strip.
+	Only IDs typed by hand are read here: as soon as the radio button of the
+	number of terminals is the checked one, the IDs are generated instead of
+	typed, and generatedIds() answers in this one's stead.
 */
 AddTerminalStripDialog::ParsedIds AddTerminalStripDialog::parseIds() const
 {
+	if (ui->m_number_rb->isChecked()) {
+		return generatedIds();
+	}
+
 	ParsedIds result;
 	const auto text = ui->m_id_le->text().trimmed();
 	if (text.isEmpty()) {
@@ -1073,6 +1213,109 @@ AddTerminalStripDialog::ParsedIds AddTerminalStripDialog::parseIds() const
 	}
 
 	return result;
+}
+
+/**
+	@brief AddTerminalStripDialog::generatedIds
+	@return as many IDs as @c m_number_sb asks for, continuing the IDs of the
+	strip behind the terminals it holds already. The first one is the number
+	right behind the last terminal and the highest ID among them alike -- a
+	terminal block holding the IDs 2, 3, 5 and 7 goes on with 8, never with
+	5 -- and an ID which is taken already (@sa takenIds) is stepped over and
+	kept in ParsedIds::skipped, which is worth a hint but is no error: the
+	terminals simply go on where the free numbers are.
+	Zero terminals is no error either: the strip is then created holding no
+	terminal at all, exactly what an empty ID field asks for.
+*/
+AddTerminalStripDialog::ParsedIds AddTerminalStripDialog::generatedIds() const
+{
+	ParsedIds result;
+	const int count = ui->m_number_sb->value();
+	if (count <= 0) {
+		return result;
+	}
+
+		//Where the IDs continue: behind the rows the strip shows, counted
+		//the way checkIdsAgainstTheStrip() counts them -- one per physical
+		//terminal which really holds terminals, and a number up to that
+		//count being the position of a terminal, which is taken already.
+	int existing_rows = 0;
+	int highest_id = 0;
+	if (const auto strip = stripOfTheCurrentNode()) {
+		for (int i = 0 ; i < strip->physicalTerminalCount() ; ++i)
+		{
+			const auto physical_terminal = strip->physicalTerminal(i);
+			if (!physical_terminal || physical_terminal->realTerminalCount() == 0) {
+				continue;
+			}
+			++existing_rows;
+			for (const auto &real_terminal : physical_terminal->realTerminals()) {
+				bool is_number = false;
+				const int id = idOfLabel(real_terminal->label()).toInt(&is_number);
+				if (is_number) {
+					highest_id = qMax(highest_id, id);
+				}
+			}
+		}
+	}
+
+	const auto taken = takenIds();
+	int candidate = qMax(existing_rows, highest_id) + 1;
+	while (result.ids.count() < count
+	       && result.ids.count() + result.skipped.count() < max_id_count)
+	{
+		const auto id = QString::number(candidate);
+		if (taken.contains(id)) {
+			result.skipped << id;
+		} else {
+			result.ids << id;
+		}
+		++candidate;
+	}
+
+	return result;
+}
+
+/**
+	@brief AddTerminalStripDialog::takenIds
+	@return every ID which is taken already for the terminal block the combo
+	boxes define: the IDs the terminals of that strip carry,
+	and the ones a free terminal of the project claims for that very name.
+	Those are the two cases checkIdsAgainstTheStrip() and
+	checkIdsAgainstFreeTerminals() raise as errors for IDs typed by hand; for
+	IDs generated they are stepped over instead
+	(@sa generatedIds).
+*/
+QStringList AddTerminalStripDialog::takenIds() const
+{
+	QStringList taken;
+	const auto name = effectiveName();
+	if (const auto strip = stripOfTheCurrentNode()) {
+		for (int i = 0 ; i < strip->physicalTerminalCount() ; ++i)
+		{
+			const auto physical_terminal = strip->physicalTerminal(i);
+			if (!physical_terminal) {
+				continue;
+			}
+			for (const auto &real_terminal : physical_terminal->realTerminals()) {
+				taken << idOfLabel(real_terminal->label());
+			}
+		}
+	}
+
+	if (m_project && !name.isEmpty()) {
+		const auto prefix = name + QLatin1Char(':');
+		const auto free_terminals = ElementProvider(m_project).freeTerminal();
+		for (auto terminal : free_terminals) {
+			const auto label = terminal->actualLabel();
+			if (label.startsWith(prefix)) {
+				taken << idOfLabel(label);
+			}
+		}
+	}
+
+	taken.removeDuplicates();
+	return taken;
 }
 
 /**

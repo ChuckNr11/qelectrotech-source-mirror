@@ -44,9 +44,14 @@ namespace Ui {
 	            :                  = separator between strip name and ID
 	            ID                 = number of the terminal in the strip
 	@endcode
-	The three first levels are gathered by the (editable) combo boxes, the
-	strip name by @c m_name_cb, and the ID of the terminals to add by
-	@c m_id_le.
+	The three first levels are gathered by the (editable) combo boxes and
+	the strip name by @c m_name_cb. The terminals to add are named in one
+	of two ways, said by the radio buttons: the number of them
+	(@c m_number_rb, @c m_number_sb -- whole numbers from 0 to 99) or the
+	IDs of them typed by hand (@c m_id_rb, @c m_id_le). The number way is
+	the one the dialog opens on, and each radio button enables its own
+	input and disables the other one
+	(@sa onTerminalsModeChanged, generatedIds).
 
 	Besides the strip, this dialog describes the terminals it holds: one per
 	ID, labelled 'strip name:ID', each one with a symbol of its own, because
@@ -74,6 +79,13 @@ namespace Ui {
 	with ExistingTerminalRole -- it is the display of what exists, never
 	one of the terminals the OK button creates
 	(@sa describedTerminals).
+
+	Above that tree is a toolbar holding one button (@c m_edit_terminals),
+	which opens the dialog for the terminals the user marked. The button
+	follows the selection of the tree, and a terminal the dialog is about
+	to create is marked the moment its row appears -- what it creates is
+	what its buttons work on (@sa onPreviewSelectionChanged,
+	refreshPreviewTree).
 
 	A symbol is picked for a terminal the way a text is changed in a list:
 	the user selects the terminals it belongs to -- one, several or all of
@@ -121,10 +133,11 @@ class AddTerminalStripDialog : public QDialog
 		QString symbol;
 	};
 
-		/// @return the terminals this dialog describes, one per ID of the
-		/// ID field and in the order of the preview tree, each with the
-		/// symbol the user gave it. Nothing when that field can not be
-		/// read at all -- which the dialog refuses as an error anyway.
+		/// @return the terminals this dialog describes, one per ID the OK
+		/// button is about to create (@sa parseIds) and in the order of the
+		/// preview tree, each with the symbol the user gave it. Nothing
+		/// when the input naming them can not be read at all -- which the
+		/// dialog refuses as an error anyway.
 		/// The rows of the terminals the strip holds already are display
 		/// only and are left out: they exist, the OK button must not
 		/// create them a second time.
@@ -134,11 +147,16 @@ class AddTerminalStripDialog : public QDialog
 		bool eventFilter(QObject *watched, QEvent *event) override;
 
 	private:
-		/// Result of the reading of the ID field: either a list of IDs to add
-		/// to the terminal block, or a message explaining why the list could
-		/// not be read at all.
+		/// Result of the reading of the input which names the terminals to
+		/// add -- the ID field or the number of them (@sa parseIds): a list
+		/// of IDs to add to the terminal block, or a message explaining why
+		/// the list could not be read at all. The IDs the generator stepped
+		/// over are kept apart in @c skipped: they are worth a hint in the
+		/// notice label, but they are no error
+		/// (@sa generatedIds, validate).
 		struct ParsedIds {
 			QStringList ids;
+			QStringList skipped;
 			QString error;
 		};
 
@@ -152,11 +170,40 @@ class AddTerminalStripDialog : public QDialog
 		/// the preview tree, or, with nothing selected, remembers it as the
 		/// symbol the terminals typed next are created with.
 		void onSymbolPicked(int index);
+		/**
+			@brief onTerminalsModeChanged
+			@param checked : the radio button which just changed its state
+			Enables the input the checked radio button names and disables the
+			other one: @c m_number_sb with "Number of terminals", @c m_id_le
+			with "ID's of terminals". The preview tree follows the mode which
+			is active, so what it shows is always what the OK button would
+			create (@sa parseIds).
+		*/
+		void onTerminalsModeChanged(bool checked);
+		/**
+			@brief onPreviewSelectionChanged
+			Follows the selection of the preview tree in the symbol combo
+			box and in the button of the toolbar above it: that button has
+			something to work on only while terminals are marked
+			(@sa openTerminalsDialog).
+		*/
 		void onPreviewSelectionChanged();
+		/// @brief onEditTerminalsTriggered
+		/// Opens the dialog for the terminals marked in the preview tree
+		/// (@sa openTerminalsDialog).
+		void onEditTerminalsTriggered();
 		QList<QTreeWidgetItem *> selectedPreviewChildren() const;
 		void fillExistingTerminals();
 		void refreshPreviewTree(const ParsedIds &parsed);
 		void validate();
+		/**
+			@brief openTerminalsDialog
+			Opens the dialog which works on the terminals marked in the
+			preview tree (@sa selectedPreviewChildren). The dialog itself
+			is defined elsewhere and later -- this is the place it opens,
+			and what it is given to work on.
+		*/
+		void openTerminalsDialog();
 
 		QString effectiveInstallation() const;
 		QString effectiveLocation() const;
@@ -170,7 +217,36 @@ class AddTerminalStripDialog : public QDialog
 		QString symbolName(const QString &symbol) const;
 		QString preselectedSymbolOfTheProject() const;
 		TerminalStrip *stripOfTheCurrentNode() const;
+		/**
+			@brief parseIds
+			@return the IDs of the terminals the dialog is about to add,
+			read out of the input which names them: the number of terminals
+			when its radio button is checked (@sa generatedIds), the IDs
+			typed when the other one is (@c m_id_le).
+		*/
 		ParsedIds parseIds() const;
+		/**
+			@brief generatedIds
+			@return as many IDs as @c m_number_sb asks for, continuing the
+			IDs of the strip behind the terminals it holds already: the
+			first one is the number right behind the last terminal and the
+			highest ID among them -- a terminal block holding the IDs 2, 3,
+			5 and 7 goes on with 8, never with 5. An ID which is taken
+			already (@sa takenIds) is stepped over and kept in
+			ParsedIds::skipped.
+		*/
+		ParsedIds generatedIds() const;
+		/**
+			@brief takenIds
+			@return every ID which is taken already for the terminal block
+			the combo boxes define: the IDs the terminals of that strip
+			carry, and the ones a free terminal of the project claims for
+			that very name. The two cases are the ones
+			checkIdsAgainstTheStrip() and checkIdsAgainstFreeTerminals()
+			raise as errors for IDs typed by hand -- for IDs generated they
+			are simply stepped over.
+		*/
+		QStringList takenIds() const;
 		QStringList checkIdsAgainstTheStrip(const QStringList &ids) const;
 		QStringList checkIdsAgainstFreeTerminals(const QStringList &ids) const;
 
@@ -180,6 +256,14 @@ class AddTerminalStripDialog : public QDialog
 		/// row is greyed out and display only -- it never reaches the OK
 		/// button (@sa fillExistingTerminals, describedTerminals).
 		static constexpr int ExistingTerminalRole{Qt::UserRole + 2};
+
+		/// The number of terminals to add is a whole number between these
+		/// two, zero being the value the dialog opens on: the same values
+		/// the .ui file sets on @c m_number_sb, set again in the
+		/// constructor so that the dialog and its code never disagree
+		/// (@sa generatedIds).
+		static constexpr int min_terminal_count{0};
+		static constexpr int max_terminal_count{99};
 
 		Ui::AddTerminalStripDialog *ui;
 		QETProject *m_project;

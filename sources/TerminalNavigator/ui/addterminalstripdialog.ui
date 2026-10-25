@@ -7,118 +7,43 @@
     <x>0</x>
     <y>0</y>
     <width>744</width>
-    <height>460</height>
+    <height>549</height>
    </rect>
   </property>
   <property name="windowTitle">
    <string>Add a terminal strip</string>
   </property>
-  <layout class="QGridLayout" name="gridLayout">
+  <layout class="QGridLayout" name="gridLayout_2">
    <item row="0" column="0">
-    <widget class="QLabel" name="label">
+    <widget class="QLabel" name="label_4">
      <property name="text">
-      <string>Plant:</string>
+      <string>Description :</string>
      </property>
     </widget>
    </item>
-   <item row="0" column="1">
-    <widget class="QComboBox" name="m_installation_cb">
-     <property name="editable">
-      <bool>true</bool>
-     </property>
-     <property name="insertPolicy">
-      <enum>QComboBox::NoInsert</enum>
-     </property>
-    </widget>
-   </item>
-   <item row="1" column="0">
-    <widget class="QLabel" name="label_2">
-     <property name="text">
-      <string>Location:</string>
-     </property>
-    </widget>
-   </item>
-   <item row="1" column="1">
-    <widget class="QComboBox" name="m_location_cb">
-     <property name="editable">
-      <bool>true</bool>
-     </property>
-     <property name="insertPolicy">
-      <enum>QComboBox::NoInsert</enum>
-     </property>
-    </widget>
+   <item row="1" column="0" colspan="5">
+    <widget class="QPlainTextEdit" name="m_description_te"/>
    </item>
    <item row="2" column="0">
-    <widget class="QLabel" name="label_3">
-     <property name="text">
-      <string>Name:</string>
-     </property>
-    </widget>
-   </item>
-   <item row="2" column="1">
-    <widget class="QComboBox" name="m_name_cb">
-     <property name="editable">
-      <bool>true</bool>
-     </property>
-     <property name="insertPolicy">
-      <enum>QComboBox::NoInsert</enum>
-     </property>
-    </widget>
-   </item>
-   <item row="3" column="0" colspan="2">
-    <widget class="QLabel" name="m_notice_lb">
-     <property name="visible">
-      <bool>false</bool>
-     </property>
-     <property name="text">
-      <string notr="true"/>
-     </property>
-     <property name="wordWrap">
-      <bool>true</bool>
-     </property>
-    </widget>
-   </item>
-   <item row="4" column="0">
-    <widget class="QLabel" name="label_6">
-     <property name="text">
-      <string>ID:</string>
-     </property>
-    </widget>
-   </item>
-   <item row="4" column="1">
-    <widget class="QLineEdit" name="m_id_le">
-     <property name="placeholderText">
-      <string>1,2,3,4 or 1-4 or 1,2-3,4</string>
-     </property>
-    </widget>
-   </item>
-   <item row="5" column="0">
-    <widget class="QLabel" name="label_7">
-     <property name="text">
-      <string>Symbol :</string>
-     </property>
-    </widget>
-   </item>
-   <item row="5" column="1">
-    <widget class="QComboBox" name="m_symbol_cb">
-     <property name="toolTip">
-      <string>Symbol the terminals are drawn with, once they are placed on a folio. Select the terminals in the list below to give this symbol to them; with nothing selected, it becomes the symbol the terminals typed next get.</string>
-     </property>
-    </widget>
-   </item>
-   <item row="6" column="0">
     <widget class="QLabel" name="label_5">
      <property name="text">
       <string>Comment :</string>
      </property>
     </widget>
    </item>
-   <item row="6" column="1">
+   <item row="2" column="1">
     <widget class="QLineEdit" name="m_comment_le"/>
    </item>
-   <item row="7" column="0" colspan="2">
+   <item row="2" column="2">
+    <widget class="QLabel" name="label_7">
+     <property name="text">
+      <string>Symbol :</string>
+     </property>
+    </widget>
+   </item>
+   <item row="2" column="3">
     <widget class="QWidget" name="widget" native="true">
-     <layout class="QHBoxLayout" name="horizontalLayout" stretch="0,1">
+     <layout class="QHBoxLayout" name="horizontalLayout">
       <property name="leftMargin">
        <number>0</number>
       </property>
@@ -131,59 +56,255 @@
       <property name="bottomMargin">
        <number>0</number>
       </property>
+     </layout>
+    </widget>
+   </item>
+   <item row="2" column="4">
+    <widget class="QComboBox" name="m_symbol_cb">
+     <property name="toolTip">
+      <string>Symbol the terminals are drawn with, once they are placed on a folio. Select the terminals in the list below to give this symbol to them; with nothing selected, it becomes the symbol the terminals typed next get.</string>
+     </property>
+    </widget>
+   </item>
+   <item row="3" column="0">
+    <widget class="QLabel" name="label">
+     <property name="text">
+      <string>Plant:</string>
+     </property>
+    </widget>
+   </item>
+   <item row="3" column="1">
+    <widget class="QComboBox" name="m_installation_cb">
+     <property name="editable">
+      <bool>true</bool>
+     </property>
+     <property name="insertPolicy">
+      <enum>QComboBox::InsertPolicy::NoInsert</enum>
+     </property>
+    </widget>
+   </item>
+   <item row="4" column="0">
+    <widget class="QLabel" name="label_2">
+     <property name="text">
+      <string>Location:</string>
+     </property>
+    </widget>
+   </item>
+   <item row="4" column="1">
+    <widget class="QComboBox" name="m_location_cb">
+     <property name="editable">
+      <bool>true</bool>
+     </property>
+     <property name="insertPolicy">
+      <enum>QComboBox::InsertPolicy::NoInsert</enum>
+     </property>
+    </widget>
+   </item>
+   <item row="5" column="0">
+    <widget class="QLabel" name="label_3">
+     <property name="text">
+      <string>Name:</string>
+     </property>
+    </widget>
+   </item>
+   <item row="5" column="1">
+    <widget class="QComboBox" name="m_name_cb">
+     <property name="editable">
+      <bool>true</bool>
+     </property>
+     <property name="insertPolicy">
+      <enum>QComboBox::InsertPolicy::NoInsert</enum>
+     </property>
+    </widget>
+   </item>
+   <item row="6" column="0" colspan="2">
+    <layout class="QGridLayout" name="gridLayout">
+     <item row="0" column="2">
+      <widget class="QRadioButton" name="m_id_rb">
+       <property name="text">
+        <string>ID's of terminals</string>
+       </property>
+      </widget>
+     </item>
+     <item row="0" column="1">
+      <widget class="QRadioButton" name="m_number_rb">
+       <property name="text">
+        <string>Number of terminals</string>
+       </property>
+       <property name="checked">
+        <bool>true</bool>
+       </property>
+      </widget>
+     </item>
+     <item row="0" column="0">
+      <widget class="QLabel" name="label_6">
+       <property name="text">
+        <string>Terminals:</string>
+       </property>
+      </widget>
+     </item>
+     <item row="1" column="2">
+      <widget class="QLineEdit" name="m_id_le">
+       <property name="placeholderText">
+        <string>1,2,3,4 or 1-4 or 1,2-3,4</string>
+       </property>
+      </widget>
+     </item>
+     <item row="1" column="1">
+      <widget class="QSpinBox" name="m_number_sb">
+       <property name="toolTip">
+        <string>How many terminals to add to the terminal strip</string>
+       </property>
+       <property name="minimum">
+        <number>0</number>
+       </property>
+       <property name="maximum">
+        <number>99</number>
+       </property>
+       <property name="value">
+        <number>0</number>
+       </property>
+      </widget>
+     </item>
+    </layout>
+   </item>
+   <item row="8" column="0" colspan="5">
+    <widget class="QFrame" name="m_preview_group">
+     <property name="frameShape">
+      <enum>QFrame::StyledPanel</enum>
+     </property>
+     <property name="frameShadow">
+      <enum>QFrame::Sunken</enum>
+     </property>
+     <layout class="QVBoxLayout" name="m_preview_layout">
+      <property name="leftMargin">
+       <number>0</number>
+      </property>
+      <property name="topMargin">
+       <number>0</number>
+      </property>
+      <property name="rightMargin">
+       <number>0</number>
+      </property>
+      <property name="bottomMargin">
+       <number>0</number>
+      </property>
+      <property name="spacing">
+       <number>0</number>
+      </property>
       <item>
-       <widget class="QLabel" name="label_4">
-        <property name="text">
-         <string>Description :</string>
+       <widget class="QToolBar" name="m_preview_toolbar">
+        <property name="iconSize">
+         <size>
+          <width>16</width>
+          <height>16</height>
+         </size>
         </property>
+        <property name="movable">
+         <bool>false</bool>
+        </property>
+        <property name="floatable">
+         <bool>false</bool>
+        </property>
+        <property name="toolButtonStyle">
+         <enum>Qt::ToolButtonIconOnly</enum>
+        </property>
+        <property name="windowTitle">
+         <string>previewToolbar</string>
+        </property>
+        <addaction name="m_edit_terminals"/>
        </widget>
       </item>
       <item>
-       <widget class="Line" name="line">
-        <property name="orientation">
-         <enum>Qt::Horizontal</enum>
+       <widget class="QTreeWidget" name="m_preview_tree">
+        <property name="frameShape">
+         <enum>QFrame::NoFrame</enum>
         </property>
+        <property name="toolTip">
+         <string>Terminals about to be added to the terminal strip, with the symbol each one is drawn with. Greyed out rows at the top show what the terminal strip already holds; they are display only. Select one or several of the others and pick a symbol below to give it to them; a terminal without a symbol is not drawn in any folio yet.</string>
+        </property>
+        <property name="selectionMode">
+         <enum>QAbstractItemView::SelectionMode::ExtendedSelection</enum>
+        </property>
+        <property name="columnCount">
+         <number>2</number>
+        </property>
+        <column>
+         <property name="text">
+          <string notr="true">1</string>
+         </property>
+        </column>
+        <column>
+         <property name="text">
+          <string notr="true">2</string>
+         </property>
+        </column>
        </widget>
       </item>
      </layout>
     </widget>
    </item>
-   <item row="8" column="0" colspan="2">
-    <widget class="QPlainTextEdit" name="m_description_te"/>
-   </item>
-   <item row="9" column="0" colspan="2">
-    <widget class="QTreeWidget" name="m_preview_tree">
-     <property name="toolTip">
-      <string>Terminals about to be added to the terminal strip, with the symbol each one is drawn with. Greyed out rows at the top show what the terminal strip already holds; they are display only. Select one or several of the others and pick a symbol below to give it to them; a terminal without a symbol is not drawn in any folio yet.</string>
+   <item row="9" column="1">
+    <widget class="QDialogButtonBox" name="buttonBox">
+     <property name="orientation">
+      <enum>Qt::Orientation::Horizontal</enum>
      </property>
-     <property name="columnCount">
-      <number>2</number>
-     </property>
-     <property name="selectionMode">
-      <enum>QAbstractItemView::ExtendedSelection</enum>
+     <property name="standardButtons">
+      <set>QDialogButtonBox::StandardButton::Cancel|QDialogButtonBox::StandardButton::Ok</set>
      </property>
     </widget>
    </item>
-   <item row="10" column="0" colspan="2">
-    <widget class="QDialogButtonBox" name="buttonBox">
-     <property name="orientation">
-      <enum>Qt::Horizontal</enum>
+   <item row="7" column="0" colspan="2">
+    <widget class="QLabel" name="m_notice_lb">
+     <property name="visible">
+      <bool>true</bool>
      </property>
-     <property name="standardButtons">
-      <set>QDialogButtonBox::Cancel|QDialogButtonBox::Ok</set>
+     <property name="text">
+      <string notr="true"/>
+     </property>
+     <property name="wordWrap">
+      <bool>true</bool>
      </property>
     </widget>
    </item>
   </layout>
+  <action name="m_edit_terminals">
+   <property name="icon">
+    <iconset theme="configure"/>
+   </property>
+   <property name="text">
+    <string>Edit the marked terminals...</string>
+   </property>
+   <property name="toolTip">
+    <string>Open the dialog for the terminals marked in the list above</string>
+   </property>
+  </action>
+  <zorder>label</zorder>
+  <zorder>m_installation_cb</zorder>
+  <zorder>label_2</zorder>
+  <zorder>m_location_cb</zorder>
+  <zorder>label_3</zorder>
+  <zorder>m_name_cb</zorder>
+  <zorder>label_7</zorder>
+  <zorder>m_symbol_cb</zorder>
+  <zorder>buttonBox</zorder>
+  <zorder>widget</zorder>
+  <zorder>m_description_te</zorder>
+  <zorder>label_5</zorder>
+  <zorder>m_comment_le</zorder>
+  <zorder>m_preview_group</zorder>
+  <zorder>m_notice_lb</zorder>
+  <zorder>label_4</zorder>
  </widget>
  <tabstops>
   <tabstop>m_installation_cb</tabstop>
   <tabstop>m_location_cb</tabstop>
   <tabstop>m_name_cb</tabstop>
+  <tabstop>m_number_rb</tabstop>
+  <tabstop>m_number_sb</tabstop>
+  <tabstop>m_id_rb</tabstop>
   <tabstop>m_id_le</tabstop>
   <tabstop>m_symbol_cb</tabstop>
-  <tabstop>m_comment_le</tabstop>
-  <tabstop>m_description_te</tabstop>
   <tabstop>m_preview_tree</tabstop>
  </tabstops>
  <resources/>

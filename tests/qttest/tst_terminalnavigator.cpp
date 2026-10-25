@@ -38,8 +38,11 @@
 #include <QLabel>
 #include <QLineEdit>
 #include <QMenu>
+#include <QMessageBox>
 #include <QMimeData>
+#include <QRadioButton>
 #include <QScopedPointer>
+#include <QSpinBox>
 #include <QTimer>
 #include <QTreeWidget>
 #include <QTreeWidgetItem>
@@ -238,6 +241,43 @@ class tst_terminalnavigator : public QObject
 		return dialog->findChild<QComboBox *>(QStringLiteral("m_symbol_cb"));
 	}
 
+		//The two radio buttons which say how the terminals to add are
+		//named -- the number of them, or the IDs typed -- and the two
+		//inputs they enable (@sa AddTerminalStripDialog::
+		//onTerminalsModeChanged).
+	QRadioButton *dialogIdRadio(QDialog *dialog) const
+	{
+		return dialog->findChild<QRadioButton *>(QStringLiteral("m_id_rb"));
+	}
+
+	QRadioButton *dialogNumberRadio(QDialog *dialog) const
+	{
+		return dialog->findChild<QRadioButton *>(QStringLiteral("m_number_rb"));
+	}
+
+	QSpinBox *dialogNumberSpin(QDialog *dialog) const
+	{
+		return dialog->findChild<QSpinBox *>(QStringLiteral("m_number_sb"));
+	}
+
+		//The action behind the button of the preview toolbar: it works on
+		//the terminals marked in the tree and opens their dialog
+		//(@sa AddTerminalStripDialog::onEditTerminalsTriggered).
+	QAction *dialogEditTerminalsAction(QDialog *dialog) const
+	{
+		return dialog->findChild<QAction *>(QStringLiteral("m_edit_terminals"));
+	}
+
+		//The dialog opens on the number of terminals; this is how a test
+		//says it wants the IDs typed by hand instead, which enables the
+		//ID field and lets the preview tree follow it.
+	void useTypedIds(QDialog *dialog) const
+	{
+		if (auto *ids_rb = dialogIdRadio(dialog)) {
+			ids_rb->setChecked(true);
+		}
+	}
+
 		//What the strip dialog ended up like after one round of typing
 		//into it: every scenario of checksTheStripDialog() opens the
 		//dialog once, fills it, and reads this back out.
@@ -280,6 +320,13 @@ private slots:
 	void offersNewStripOutsideTheFreeTerminals();
 	void stripButtonFollowsTheMarkedSide();
 	void preFillsNameFromTheStripAndShowsItsTerminals();
+	void radioButtonsEnableTheirField();
+	void spinBoxTakesWholeNumbersFromZeroToNinetyNine();
+	void addsAsManyTerminalsAsTheNumberSays();
+	void appendsTheNumberedTerminalsAfterWhatTheStripHolds();
+	void skipsTheIdsAFreeTerminalHolds();
+	void marksTheTerminalsItAdds();
+	void opensItsDialogForTheMarkedTerminals();
 	void clearsWithoutProject();
 	void followsTheActiveProject();
 	void cleanupTestCase();
@@ -786,6 +833,10 @@ tst_terminalnavigator::StripDialogState tst_terminalnavigator::typeIntoTheStripD
 			return;
 		}
 
+			//The dialog opens on the number of terminals: these IDs are
+			//typed by hand, which is what the other radio button says.
+		useTypedIds(dialog);
+
 		for (int i = 0 ; i < names->count() ; ++i) {
 			state.names_offered << names->itemText(i);
 		}
@@ -987,6 +1038,7 @@ void tst_terminalnavigator::previewsTheTerminalsInTheTree()
 		if (!names || !id_field || !tree || !symbols_cb) {
 			return;
 		}
+		useTypedIds(dialog);
 		tree_shown = tree->isVisible();
 		symbol_column_shown = tree->columnCount() == 2 && !tree->isHeaderHidden();
 
@@ -1025,11 +1077,14 @@ void tst_terminalnavigator::previewsTheTerminalsInTheTree()
 
 			//A symbol picked for the terminals the user selected: the
 			//first and the third lose the one they had, the second one
-			//keeps it, since it was not selected.
+			//keeps it, since it is not selected. The rows the dialog adds
+			//are marked the moment they appear, so the middle one is
+			//deselected here to have a row which is left alone.
 		id_field->setText(QStringLiteral("1-3"));
 		root_item = tree->topLevelItem(0);
 		if (root_item && root_item->childCount() == 3) {
 			root_item->child(0)->setSelected(true);
+			root_item->child(1)->setSelected(false);
 			root_item->child(2)->setSelected(true);
 		}
 		symbols_cb->setCurrentIndex(0);		//(no symbol)
@@ -1149,12 +1204,18 @@ void tst_terminalnavigator::createsTheStripWithItsTerminalsOnOk()
 		if (!names || !id_field || !tree || !symbols_cb) {
 			return;
 		}
+		useTypedIds(dialog);
 		QTest::keyClicks(names->lineEdit(), QStringLiteral("X77"));
 		id_field->setText(QStringLiteral("1-2"));
 
 		auto *root_item = tree->topLevelItem(0);
 		if (root_item && root_item->childCount() == 2) {
 			symbol_kept = symbols_cb->itemData(symbols_cb->currentIndex()).toString();
+				//The second row is the only marked one: the first keeps
+				//the symbol the dialog preselects and the second is given
+				//none. The rows the dialog adds are marked the moment
+				//they appear, so the first one is deselected here.
+			root_item->child(0)->setSelected(false);
 			root_item->child(1)->setSelected(true);
 			symbols_cb->setCurrentIndex(0);		//(no symbol)
 		}
@@ -1213,6 +1274,7 @@ void tst_terminalnavigator::createsTheStripWithItsTerminalsOnOk()
 		if (!names || !id_field) {
 			return;
 		}
+		useTypedIds(dialog);
 		names->setCurrentIndex(names->findText(QStringLiteral("X10")));
 		id_field->setText(QStringLiteral("9"));
 		dialog->accept();
@@ -1909,6 +1971,7 @@ void tst_terminalnavigator::preFillsNameFromTheStripAndShowsItsTerminals()
 			if (!names || !id_field || !tree) {
 				return;
 			}
+			useTypedIds(dialog);
 			state->name = names->currentText();
 			if (typed) {
 				id_field->setText(next_id);
@@ -1990,6 +2053,7 @@ void tst_terminalnavigator::preFillsNameFromTheStripAndShowsItsTerminals()
 		if (!id_field) {
 			return;
 		}
+		useTypedIds(dialog);
 		id_field->setText(next_id);
 		dialog->accept();
 	});
@@ -1999,6 +2063,382 @@ void tst_terminalnavigator::preFillsNameFromTheStripAndShowsItsTerminals()
 
 	m_project->undoStack()->undo();
 	QCOMPARE(x10->physicalTerminalCount(), terminals_in_x10);
+}
+
+/**
+	The dialog names the terminals to add in one of two ways, and the radio
+	buttons say which input is the one to type into: the number of terminals
+	enables the spin box, the IDs typed enable the line edit. The dialog
+	opens on the number of terminals, its input being the one which is
+	active (@sa AddTerminalStripDialog::onTerminalsModeChanged).
+*/
+void tst_terminalnavigator::radioButtonsEnableTheirField()
+{
+	bool number_checked = false, id_field_on = true, spin_on = false;
+	bool after_id_field = false, after_id_spin = true;
+	bool back_number = true, back_field = true, back_spin = false;
+	const bool dialog_found = interactWithTheStripDialog([&](QDialog *dialog) {
+		auto *ids_rb = dialogIdRadio(dialog);
+		auto *numbers_rb = dialogNumberRadio(dialog);
+		auto *id_field = dialogIdField(dialog);
+		auto *spin = dialogNumberSpin(dialog);
+		if (!ids_rb || !numbers_rb || !id_field || !spin) {
+			return;
+		}
+		number_checked = numbers_rb->isChecked();
+		id_field_on = id_field->isEnabled();
+		spin_on = spin->isEnabled();
+
+		ids_rb->setChecked(true);
+		after_id_field = id_field->isEnabled();
+		after_id_spin = spin->isEnabled();
+
+		numbers_rb->setChecked(true);
+		back_number = numbers_rb->isChecked();
+		back_field = id_field->isEnabled();
+		back_spin = spin->isEnabled();
+	});
+
+	QVERIFY(dialog_found);
+	QVERIFY2(number_checked, "the dialog opens on the number of terminals");
+	QVERIFY2(!id_field_on, "the ID field is not typed into in that mode");
+	QVERIFY(spin_on);
+	QVERIFY(after_id_field);
+	QVERIFY2(!after_id_spin,
+			 "each radio button disables the input of the other one");
+	QVERIFY(back_number);
+	QVERIFY(!back_field);
+	QVERIFY(back_spin);
+}
+
+/**
+	The number of terminals takes whole numbers from 0 to 99 and starts at
+	zero: the values the .ui file sets on the spin box and the code sets
+	again. A spin box clamps everything typed onto that range, and the cap
+	is what the notice label tells about, reached or attempted.
+*/
+void tst_terminalnavigator::spinBoxTakesWholeNumbersFromZeroToNinetyNine()
+{
+	int minimum = -1, maximum = -1, value_first = -1;
+	int value_high = -1, value_low = -1;
+	QString notice_at_cap, notice_plain;
+	const bool dialog_found = interactWithTheStripDialog([&](QDialog *dialog) {
+		auto *spin = dialogNumberSpin(dialog);
+		auto *notice = dialogNotice(dialog);
+		if (!spin || !notice) {
+			return;
+		}
+		minimum = spin->minimum();
+		maximum = spin->maximum();
+		value_first = spin->value();
+		notice_plain = notice->text();
+
+		spin->setValue(150);
+		value_high = spin->value();
+		notice_at_cap = notice->text();
+
+		spin->setValue(-5);
+		value_low = spin->value();
+	});
+
+	QVERIFY(dialog_found);
+	QCOMPARE(minimum, 0);
+	QCOMPARE(maximum, 99);
+	QCOMPARE(value_first, 0);
+	QCOMPARE(value_high, 99);
+	QCOMPARE(value_low, 0);
+	QVERIFY2(notice_plain.isEmpty(), qPrintable(notice_plain));
+	QCOMPARE(notice_at_cap,
+			 QStringLiteral("The number of terminals to add at once "
+							 "is limited to 99"));
+}
+
+/**
+	With the number of terminals being the way the terminals to add are
+	named, the preview tree shows as many rows as the spin box says -- no
+	more, no less -- and the OK button creates exactly them: the IDs are
+	the ones a new strip starts with.
+*/
+void tst_terminalnavigator::addsAsManyTerminalsAsTheNumberSays()
+{
+	QStringList rows;
+	int selectable = 0;
+	const int strips_before = m_project->terminalStrip().count();
+	const bool dialog_found = interactWithTheStripDialog([&](QDialog *dialog) {
+		auto *names = dialogNameCombo(dialog);
+		auto *spin = dialogNumberSpin(dialog);
+		auto *tree = dialogPreviewTree(dialog);
+		if (!names || !spin || !tree) {
+			return;
+		}
+			//The dialog may well be called from a strip of the tree,
+			//whose name it then prefills: this test names a strip of
+			//its own.
+		names->lineEdit()->clear();
+		QTest::keyClicks(names->lineEdit(), QStringLiteral("X78"));
+		spin->setValue(3);
+
+		auto *root_item = tree->topLevelItem(0);
+		if (!root_item) {
+			return;
+		}
+		for (int i = 0 ; i < root_item->childCount() ; ++i) {
+			rows << root_item->child(i)->text(0);
+			if (root_item->child(i)->flags() & Qt::ItemIsSelectable) {
+				++selectable;
+			}
+		}
+		dialog->accept();
+	});
+
+	QVERIFY(dialog_found);
+	QCOMPARE(rows, QStringList({QStringLiteral("1"),
+							   QStringLiteral("2"),
+							   QStringLiteral("3")}));
+	QCOMPARE(selectable, 3);
+
+	auto *strip = stripNamed(QStringLiteral("X78"));
+	QVERIFY(strip);
+	QCOMPARE(strip->physicalTerminalCount(), 3);
+	QCOMPARE(m_project->terminalStrip().count(), strips_before + 1);
+
+		//Leave the project the way this test found it.
+	m_project->undoStack()->undo();
+	QVERIFY(!stripNamed(QStringLiteral("X78")));
+}
+
+/**
+	What the strip already holds is what the new terminals continue: their
+	rows are appended behind the ones the tree shows already, and their IDs
+	go on behind the rows and behind the highest ID among them alike -- a
+	terminal block holding the IDs 2, 3, 5 and 7 goes on with 8, never
+	with 5 (@sa AddTerminalStripDialog::generatedIds).
+*/
+void tst_terminalnavigator::appendsTheNumberedTerminalsAfterWhatTheStripHolds()
+{
+	auto *x10 = stripNamed(QStringLiteral("X10"));
+	auto *strip_item = stripX10();
+	QVERIFY(x10);
+	QVERIFY(strip_item);
+	const int terminals_in_x10 = x10->physicalTerminalCount();
+	QVERIFY(terminals_in_x10 > 0);
+
+		//Where the IDs continue, read the way the dialog reads it: behind
+		//the rows of the strip and behind the highest ID among them.
+	int highest_id = 0;
+	for (int i = 0 ; i < x10->physicalTerminalCount() ; ++i)
+	{
+		const auto physical_terminal = x10->physicalTerminal(i);
+		if (!physical_terminal) {
+			continue;
+		}
+		for (const auto &real_terminal : physical_terminal->realTerminals()) {
+			const auto label = real_terminal->label();
+			bool is_number = false;
+			const int id = label.mid(label.lastIndexOf(QLatin1Char(':')) + 1)
+					.toInt(&is_number);
+			if (is_number) {
+				highest_id = qMax(highest_id, id);
+			}
+		}
+	}
+	const int first_id = qMax(terminals_in_x10, highest_id) + 1;
+
+	m_tree->clearSelection();
+	m_tree->setCurrentItem(strip_item);
+
+	QStringList new_rows;
+	const bool dialog_found = interactWithTheStripDialog([&](QDialog *dialog) {
+		auto *spin = dialogNumberSpin(dialog);
+		auto *tree = dialogPreviewTree(dialog);
+		if (!spin || !tree) {
+			return;
+		}
+		spin->setValue(3);
+
+		auto *root_item = tree->topLevelItem(0);
+		if (!root_item) {
+			return;
+		}
+			//The rows of what the strip holds already are display only
+			//and not selectable: what the spin box adds are the others.
+		for (int i = 0 ; i < root_item->childCount() ; ++i) {
+			if (root_item->child(i)->flags() & Qt::ItemIsSelectable) {
+				new_rows << root_item->child(i)->text(0);
+			}
+		}
+		dialog->accept();
+	});
+
+	QVERIFY(dialog_found);
+	QCOMPARE(new_rows, QStringList({QString::number(first_id),
+								   QString::number(first_id + 1),
+								   QString::number(first_id + 2)}));
+	QCOMPARE(x10->physicalTerminalCount(), terminals_in_x10 + 3);
+
+		//Leave the project the way this test found it.
+	m_project->undoStack()->undo();
+	QCOMPARE(x10->physicalTerminalCount(), terminals_in_x10);
+}
+
+/**
+	An ID which is taken already is stepped over by the generator, never
+	raised as an error: a free terminal labelled 'X79:2' claims the ID 2
+	of the strip X79, so the terminals to add go on with 1, 3 and 4 -- and
+	the notice label says what was skipped without touching the OK button
+	(@sa AddTerminalStripDialog::generatedIds, takenIds).
+*/
+void tst_terminalnavigator::skipsTheIdsAFreeTerminalHolds()
+{
+		//A free terminal labelled 'name:id' is what claims an ID, and it
+		//is named the way the properties dialog names it: through the undo
+		//command. The formula of a terminal names it, not its label, so it
+		//goes away with the renaming -- a terminal of the test project
+		//follows a numbering scheme or it does not, and either way the
+		//label is what counts after this.
+	auto free_terminals = ElementProvider(m_project).freeTerminal();
+	QVERIFY2(!free_terminals.isEmpty(),
+			 "the test project holds free terminals to rename");
+	auto *free_element = free_terminals.first();
+
+	auto old_info = free_element->elementInformations();
+	auto new_info = old_info;
+	new_info.addValue(QStringLiteral("label"), QStringLiteral("X79:2"));
+	new_info.addValue(QStringLiteral("formula"), QString());
+	m_project->undoStack()->push(
+				new ChangeElementInformationCommand(free_element, old_info, new_info));
+	QCoreApplication::processEvents();
+
+	QStringList rows;
+	QString notice;
+	bool ok_enabled = false;
+	const bool dialog_found = interactWithTheStripDialog([&](QDialog *dialog) {
+		auto *names = dialogNameCombo(dialog);
+		auto *spin = dialogNumberSpin(dialog);
+		auto *tree = dialogPreviewTree(dialog);
+		auto *notice_lb = dialogNotice(dialog);
+		auto *buttons = dialogButtons(dialog);
+		if (!names || !spin || !tree || !notice_lb || !buttons) {
+			return;
+		}
+		names->lineEdit()->clear();
+		QTest::keyClicks(names->lineEdit(), QStringLiteral("X79"));
+		spin->setValue(3);
+		notice = notice_lb->text();
+		auto *ok = buttons->button(QDialogButtonBox::Ok);
+		ok_enabled = ok && ok->isEnabled();
+
+		auto *root_item = tree->topLevelItem(0);
+		if (!root_item) {
+			return;
+		}
+		for (int i = 0 ; i < root_item->childCount() ; ++i) {
+			rows << root_item->child(i)->text(0);
+		}
+	});
+
+	QVERIFY(dialog_found);
+	QCOMPARE(rows, QStringList({QStringLiteral("1"),
+							   QStringLiteral("3"),
+							   QStringLiteral("4")}));
+	QCOMPARE(notice,
+			 QStringLiteral("IDs %1 are already used and were skipped")
+				 .arg(QStringLiteral("2")));
+	QVERIFY2(ok_enabled,
+			 "a skipped ID is worth a hint, never worth stopping for");
+
+		//Leave the project the way this test found it.
+	m_project->undoStack()->undo();
+	QCoreApplication::processEvents();
+}
+
+/**
+	The terminals the dialog is about to create are marked the moment their
+	rows appear, so that the button of the toolbar above the tree has
+	something to work on -- and it has nothing to work on as soon as the
+	user marks nothing anymore (@sa AddTerminalStripDialog::
+	refreshPreviewTree, onPreviewSelectionChanged).
+*/
+void tst_terminalnavigator::marksTheTerminalsItAdds()
+{
+	bool button_at_start = true;
+	int selected_rows = 0;
+	bool button_on_rows = false;
+	bool button_without_rows = true;
+	const bool dialog_found = interactWithTheStripDialog([&](QDialog *dialog) {
+		auto *spin = dialogNumberSpin(dialog);
+		auto *tree = dialogPreviewTree(dialog);
+		auto *action = dialogEditTerminalsAction(dialog);
+		if (!spin || !tree || !action) {
+			return;
+		}
+		button_at_start = action->isEnabled();
+		spin->setValue(3);
+
+		auto *root_item = tree->topLevelItem(0);
+		if (root_item) {
+			for (int i = 0 ; i < root_item->childCount() ; ++i) {
+				if (root_item->child(i)->isSelected()) {
+					++selected_rows;
+				}
+			}
+		}
+		button_on_rows = action->isEnabled();
+
+		tree->clearSelection();
+		button_without_rows = !action->isEnabled();
+	});
+
+	QVERIFY(dialog_found);
+	QVERIFY2(!button_at_start,
+			 "the button has nothing to work on while no terminal is marked");
+	QCOMPARE(selected_rows, 3);
+	QVERIFY2(button_on_rows, "the button works on the terminals marked");
+	QVERIFY2(button_without_rows,
+			 "the button stops working the moment nothing is marked");
+}
+
+/**
+	The button of the toolbar opens the dialog of the terminals marked --
+	the dialog itself is defined later, and what this pins down is that the
+	button opens one for the marked terminals and nothing at all without
+	them (@sa AddTerminalStripDialog::openTerminalsDialog).
+*/
+void tst_terminalnavigator::opensItsDialogForTheMarkedTerminals()
+{
+	bool box_for_rows = false, box_without_rows = false;
+	const bool dialog_found = interactWithTheStripDialog([&](QDialog *dialog) {
+		auto *spin = dialogNumberSpin(dialog);
+		auto *tree = dialogPreviewTree(dialog);
+		auto *action = dialogEditTerminalsAction(dialog);
+		if (!spin || !tree || !action) {
+			return;
+		}
+		spin->setValue(2);
+
+		const auto ask = [&](bool *shown) {
+			QTimer::singleShot(0, dialog, [shown]() {
+				auto *box = qobject_cast<QMessageBox *>(
+							QApplication::activeModalWidget());
+				if (box) {
+					*shown = true;
+					box->close();
+				}
+			});
+			action->trigger();
+		};
+
+		ask(&box_for_rows);
+
+		tree->clearSelection();
+		ask(&box_without_rows);
+	});
+
+	QVERIFY(dialog_found);
+	QVERIFY2(box_for_rows,
+			 "the button opens the dialog for the terminals marked");
+	QVERIFY2(!box_without_rows,
+			 "no terminal marked, no dialog to open");
 }
 
 void tst_terminalnavigator::clearsWithoutProject()
