@@ -205,6 +205,27 @@ class TerminalNavigatorWidget : public QWidget
 		*/
 		void drawSelection();
 
+		/**
+			@brief editSelection
+			Open the dialog of the properties for the terminal rows
+			marked in the tree, and give every one of them what the OK
+			button chose there -- the values of the first terminal in
+			the order of the tree are what that dialog opens on
+			(@sa TerminalPropertiesDialog). The symbol is not asked for
+			in there: a terminal which exists already is drawn with the
+			symbol of its element
+			(@sa TerminalPropertiesDialog::WithoutSymbol).
+
+			Only the rows of a terminal strip are worth this -- an
+			independent terminal belongs to no strip and is what its
+			element is --, so the button of the toolbar and the entry of
+			the context menu stay greyed out on that side of the tree
+			(@sa updateActionsState). One undo step takes the change
+			back, all of the marked terminals at once
+			(@sa ChangeTerminalData).
+		*/
+		void editSelection();
+
 	protected:
 		/**
 			@brief confirmGroupDeletion
@@ -249,6 +270,7 @@ class TerminalNavigatorWidget : public QWidget
 		void on_m_tree_view_currentItemChanged(QTreeWidgetItem *current, QTreeWidgetItem *previous);
 		void on_m_tree_view_customContextMenuRequested(const QPoint &pos);
 		void on_m_add_strip_triggered();
+		void on_m_edit_selection_triggered();
 		void onElementChanged();
 		/**
 			@brief onSelectionChanged

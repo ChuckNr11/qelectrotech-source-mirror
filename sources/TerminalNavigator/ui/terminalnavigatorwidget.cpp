@@ -32,12 +32,14 @@
 #include "../../TerminalStrip/realterminal.h"
 #include "../../TerminalStrip/terminalstrip.h"
 #include "../../TerminalStrip/UndoCommand/addterminaltostripcommand.h"
+#include "../../TerminalStrip/UndoCommand/changeterminaldata.h"
 #include "../../TerminalStrip/UndoCommand/terminalstripdeletion.h"
 #include "../../utils/qetutils.h"
 #include "../UndoCommand/createterminalstripcommand.h"
 #include "../diagramevent/diagrameventaddterminal.h"
 #include "addterminalstripdialog.h"
 #include "terminalnavigatorwidgettree.h"
+#include "terminalpropertiesdialog.h"
 
 #include <QMenu>
 #include <QMessageBox>
@@ -470,6 +472,17 @@ void TerminalNavigatorWidget::on_m_add_strip_triggered()
 }
 
 /**
+ * @brief TerminalNavigatorWidget::on_m_edit_selection_triggered
+ * The button of the toolbar and the entry of the context menu: the
+ * dialog of the properties for the terminals marked
+ * (@sa editSelection).
+ */
+void TerminalNavigatorWidget::on_m_edit_selection_triggered()
+{
+	editSelection();
+}
+
+/**
  * @brief TerminalNavigatorWidget::on_m_tree_view_customContextMenuRequested
  * Right click offers what the item under the cursor is worth: the
  * clicked item becomes the current one first, so that the entries
@@ -518,6 +531,14 @@ QMenu *TerminalNavigatorWidget::buildContextMenu(QTreeWidgetItem *item)
 		//onto a folio; this entry is the same run without the drag,
 		//and follows the selection the same way (@sa drawSelection).
 	menu->addAction(ui->m_draw_selection);
+
+		//The dialog of the properties is about the terminals marked,
+		//and the entry is greyed out the very way the button of the
+		//toolbar is: a selection which holds no row of a terminal strip
+		//is worth nothing there, the side of the independent terminals
+		//never being worth anything (@sa updateActionsState,
+		//editSelection).
+	menu->addAction(ui->m_edit_selection);
 
 		//Deleting is for what can leave the project from here: a strip,
 		//a terminal row of one, or a free terminal with its symbol.
@@ -1393,11 +1414,19 @@ void TerminalNavigatorWidget::onSelectionChanged()
  * stand in its branch for nothing -- the context menu says the same
  * by leaving the entry out (@sa buildContextMenu). The current item
  * counts because the context menu moves it without marking anything.
+ *
+ * The "Terminal properties" button is for the rows of a terminal strip
+ * only: an independent terminal is what its element is and belongs to
+ * no strip, so there is nothing the dialog of the properties could ask
+ * it. A mark lives on one side of the tree alone
+ * (@sa onSelectionChanged), so that button is greyed out for the whole
+ * side of the independent terminals, several of them marked or not.
  */
 void TerminalNavigatorWidget::updateActionsState()
 {
 	bool deletable{false};
 	bool drawable{false};
+	bool editable{false};
 	const auto items = ui->m_tree_view->selectedItems();
 
 		//The side of the tree the button which creates a strip is for
@@ -1428,13 +1457,14 @@ void TerminalNavigatorWidget::updateActionsState()
 			const auto parent_type{item->parent()->type()};
 			if (parent_type == Strip) {
 				deletable = true;
+				editable = true;
 			} else if (parent_type == FreeTerminal
 					   && m_uuid_free_terminal_H.contains(
 						   item->data(0, UUID_USER_ROLE).toUuid())) {
 				deletable = true;
 			}
 		}
-		if (deletable && drawable) {
+		if (deletable && drawable && editable) {
 			break;
 		}
 	}
@@ -1442,6 +1472,7 @@ void TerminalNavigatorWidget::updateActionsState()
 	ui->m_add_strip->setEnabled(bool(m_project) && !free_side);
 	ui->m_delete_selection->setEnabled(bool(m_project) && deletable);
 	ui->m_draw_selection->setEnabled(bool(m_project) && drawable);
+	ui->m_edit_selection->setEnabled(bool(m_project) && editable);
 }
 
 /**
@@ -1493,4 +1524,106 @@ void TerminalNavigatorWidget::drawSelection()
 		//from there.
 	view->startTerminalPlacement(pendings,
 								 view->mapToScene(view->viewport()->rect().center()));
+}
+
+/**
+ * @brief TerminalNavigatorWidget::editSelection
+ * Give the terminal rows of the selection the properties the dialog of
+ * the properties shows for them: the values of the first row in the
+ * order of the tree are what that dialog opens on, and what its OK
+ * button shows is what every marked row gets -- the very point of
+ * marking many of them at once (@sa TerminalPropertiesDialog).
+ *
+ * The symbol is not asked for in there: those terminals exist already
+ * and are drawn with the symbol of their element
+ * (@sa TerminalPropertiesDialog::WithoutSymbol).
+ *
+ * Only the rows of a terminal strip are worth this, an independent one
+ * being what its element is and belonging to no strip -- which is what
+ * the button of the toolbar and the entry of the context menu are
+ * greyed out for (@sa updateActionsState). What is written where a
+ * terminal keeps its own, and one undo step takes the whole of it back
+ * (@sa ChangeTerminalData, TerminalProperties::applyTo).
+ *
+ * One row of the tree is one physical terminal, which holds one
+ * terminal per level and shows every one of them: the dialog works on
+ * all of them alike, since what a terminal is worth is asked per
+ * terminal and a row says nothing about levels
+ * (@sa TerminalNavigatorWidget::addTerminalStrip).
+ */
+void TerminalNavigatorWidget::editSelection()
+{
+	if (!m_project) {
+		return;
+	}
+
+		//The terminals of the rows of the strips of the selection, in
+		//the order the tree shows them -- an item which holds none (the
+		//project, an installation, a location, a strip itself) leaves
+		//nothing behind, the way deleteSelection() reads the same
+		//selection.
+	QVector<ChangeTerminalData::Change> marked;
+	for (auto *item : ui->m_tree_view->selectedItemsInOrder()) {
+		if (item->type() != Terminal
+			|| !item->parent()
+			|| item->parent()->type() != Strip)
+		{
+			continue;
+		}
+
+			//The strip the row hangs below -- walked up from the row,
+			//since the tree holds the strip per strip item, not per
+			//terminal (@sa pendingTerminalOfItem) -- and the terminals
+			//the row stands for, one per level of the physical terminal
+			//it shows.
+		QTreeWidgetItem *strip_item = item;
+		while (strip_item && strip_item->type() != Strip) {
+			strip_item = strip_item->parent();
+		}
+		auto *strip = strip_item
+				? m_item_strip_H.value(strip_item).data()
+				: nullptr;
+		if (!strip) {
+			continue;
+		}
+		const auto physical = strip->physicalTerminal(
+					item->data(0, UUID_USER_ROLE).toUuid());
+		if (!physical) {
+			continue;
+		}
+		for (const auto &real : physical->realTerminals()) {
+			if (real) {
+				marked.append({real, ElementData()});
+			}
+		}
+	}
+
+	if (marked.isEmpty()) {
+		return;
+	}
+
+	TerminalPropertiesDialog dialog(
+				nullptr,
+				TerminalProperties::fromRealTerminal(
+					marked.first().terminal.data()),
+				TerminalPropertiesDialog::WithoutSymbol,
+				this);
+	if (dialog.exec() != QDialog::Accepted) {
+		return;
+	}
+
+		//What each terminal is worth, with what the dialog chose written
+		//into it and nothing else touched: the label it carries, the
+		//catalog entry of its part and whatever its symbol says about it
+		//stay as they are (@sa TerminalProperties::applyTo).
+	const auto properties = dialog.properties();
+	for (auto &change : marked) {
+		change.after = change.terminal->terminalData();
+		properties.applyTo(change.after);
+	}
+
+		//One command for all of them: one click on OK is one step back
+		//out of the undo stack, the way one dialog gathered those
+		//properties.
+	m_project->undoStack()->push(new ChangeTerminalData(marked));
 }

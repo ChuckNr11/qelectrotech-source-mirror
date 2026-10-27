@@ -829,6 +829,8 @@ set(QET_SRC_FILES
   ${QET_DIR}/sources/TerminalStrip/UndoCommand/addterminaltostripcommand.h
   ${QET_DIR}/sources/TerminalStrip/UndoCommand/bridgeterminalscommand.cpp
   ${QET_DIR}/sources/TerminalStrip/UndoCommand/bridgeterminalscommand.h
+  ${QET_DIR}/sources/TerminalStrip/UndoCommand/changeterminaldata.cpp
+  ${QET_DIR}/sources/TerminalStrip/UndoCommand/changeterminaldata.h
   ${QET_DIR}/sources/TerminalStrip/UndoCommand/changeterminallevel.cpp
   ${QET_DIR}/sources/TerminalStrip/UndoCommand/changeterminallevel.h
   ${QET_DIR}/sources/TerminalStrip/UndoCommand/changeterminalstripcolor.cpp

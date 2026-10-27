@@ -327,7 +327,20 @@ class tst_terminalnavigator : public QObject
 					accept);
 	}
 
-
+		//The dialog of the properties the button of the navigator's
+		//toolbar opens for the terminals marked in the tree, reached the
+		//very same way (@sa TerminalNavigatorWidget::editSelection).
+		//Returns false when nothing is marked worth that dialog, which
+		//is what keeps the button greyed out.
+	bool interactWithTheNavigatorPropertiesDialog(
+				const std::function<void(QDialog *)> &interact,
+				bool accept = true)
+	{
+		return interactWithModalDialog(navigatorPropertiesAction(),
+		                               nullptr,
+		                               interact,
+		                               accept);
+	}
 
 		//The name combo box of the strip dialog, else null. Everything
 		//the dialog is built from is reached through its object names,
@@ -407,6 +420,32 @@ class tst_terminalnavigator : public QObject
 		return dialog->findChild<QCheckBox *>(QStringLiteral("m_potential_isolating_cb"));
 	}
 
+		//The action the button of the toolbar and the entry of the
+		//context menu of the navigator share, and what it is for: the
+		//dialog of the properties of the terminals marked in the tree
+		//(@sa TerminalNavigatorWidget::editSelection).
+	QAction *navigatorPropertiesAction() const
+	{
+		return m_widget->findChild<QAction *>(
+					QStringLiteral("m_edit_selection"));
+	}
+
+		/// @return the terminals a row of the tree stands for: one row
+		/// is one physical terminal of @p strip, which holds one
+		/// terminal per level, and the uuid it keeps is the one of that
+		/// physical terminal (@sa TerminalNavigatorWidget::
+		/// addTerminalStrip).
+	QVector<QSharedPointer<RealTerminal>> terminalsOfRow(
+			TerminalStrip *strip, QTreeWidgetItem *row) const
+	{
+		const QVector<QSharedPointer<RealTerminal>> none;
+		if (!strip || !row) {
+			return none;
+		}
+		const auto physical = strip->physicalTerminal(
+					row->data(0, Qt::UserRole + 1).toUuid());
+		return physical ? physical->realTerminals() : none;
+	}
 
 		//The two radio buttons which say how the terminals to add are
 		//named -- the number of them, or the IDs typed -- and the two
@@ -483,6 +522,9 @@ private slots:
 	void appliesThePropertiesToTheMarkedRowsOnly();
 	void keepsUntouchedRowsAtTheirDefault();
 	void createsTheTerminalsWithTheChosenProperties();
+	void opensItsPropertiesForTheTerminalsMarked();
+	void keepsItsPropertiesOutOfTheIndependentTerminals();
+	void givesThePropertiesToEveryTerminalMarked();
 	void keepsPendingTerminalsInXml();
 	void keepsTheDataOfTerminalsWhichAreNotDrawnInXml();
 	void keepsSavedSymbolsWithoutProjectIds();
@@ -2015,6 +2057,226 @@ void tst_terminalnavigator::createsTheTerminalsWithTheChosenProperties()
 }
 
 /**
+	The button of the toolbar and the entry of the context menu are for
+	the rows of a terminal strip marked in the tree: what the first of
+	them carries is what the dialog of the properties opens on, and what
+	its OK button shows is what all of them get
+	(@sa TerminalNavigatorWidget::editSelection). The dialog asks for no
+	symbol, a terminal which exists already being drawn with the symbol
+	of its element (@sa TerminalPropertiesDialog::WithoutSymbol) -- and
+	both stay greyed out while nothing is marked at all.
+*/
+void tst_terminalnavigator::opensItsPropertiesForTheTerminalsMarked()
+{
+	auto *action = navigatorPropertiesAction();
+	auto *x10 = stripX10();
+	auto *strip = stripNamed(QStringLiteral("X10"));
+	QVERIFY(action);
+	QVERIFY(x10);
+	QVERIFY(strip);
+	QVERIFY(x10->childCount() >= 3);
+
+		//Nothing marked: the dialog has nothing to work on.
+	m_tree->clearSelection();
+	m_tree->setCurrentItem(nullptr);
+	QVERIFY2(!action->isEnabled(),
+			 "no terminal marked, no dialog to open");
+
+		//One row of a strip marked, and what that very terminal carries
+		//is what the dialog opens on.
+	const auto terminals = terminalsOfRow(strip, x10->child(0));
+	QVERIFY(!terminals.isEmpty());
+	const auto data = terminals.first()->terminalData();
+	const auto section_of_data = data.m_informations
+			.value(RealTerminal::sectionInfoKey()).toString().toDouble();
+
+	selectOnly(x10->child(0));
+	QVERIFY2(action->isEnabled(),
+			 "the rows of a terminal strip are worth the dialog");
+
+	bool symbol_row_hidden = false;
+	double section = -1;
+	int type_value = -1, function_value = -1;
+	const bool shown = interactWithTheNavigatorPropertiesDialog(
+				[&](QDialog *dialog) {
+		const auto symbols_cb = dialog->findChild<QComboBox *>(
+					QStringLiteral("m_symbol_cb"));
+		const auto symbols_lb = dialog->findChild<QLabel *>(
+					QStringLiteral("label_symbol"));
+		symbol_row_hidden = symbols_cb && symbols_cb->isHidden()
+				&& symbols_lb && symbols_lb->isHidden();
+		if (auto *section_cb = propertiesSectionCombo(dialog)) {
+			section = typedNumber(section_cb->currentText());
+		}
+		if (auto *type_cb = propertiesTypeCombo(dialog)) {
+			type_value = type_cb->currentData().toInt();
+		}
+		if (auto *function_cb = propertiesFunctionCombo(dialog)) {
+			function_value = function_cb->currentData().toInt();
+		}
+	}, false);
+
+	QVERIFY(shown);
+	QVERIFY2(symbol_row_hidden,
+			 "a terminal which exists already is drawn with the symbol "
+			 "of its element, so the dialog asks for none");
+	QCOMPARE(type_value, int(data.terminalType()));
+	QCOMPARE(function_value, int(data.terminalFunction()));
+	QCOMPARE(section, section_of_data);
+
+	m_tree->clearSelection();
+}
+
+/**
+	The independent terminals are what their elements are and belong to
+	no terminal strip, so the dialog of the properties could ask them
+	nothing: the button of the toolbar and the entry of the context menu
+	stay greyed out on that side of the tree, one terminal marked or
+	several of them (@sa TerminalNavigatorWidget::updateActionsState).
+*/
+void tst_terminalnavigator::keepsItsPropertiesOutOfTheIndependentTerminals()
+{
+	auto *action = navigatorPropertiesAction();
+	auto *free_side = freeRoot();
+	QVERIFY(action);
+	QVERIFY(free_side);
+	QVERIFY(free_side->childCount() >= 2);
+
+	selectOnly(free_side->child(0));
+	QVERIFY2(!action->isEnabled(),
+			 "an independent terminal is what its element is");
+	free_side->child(1)->setSelected(true);
+	QVERIFY2(!action->isEnabled(),
+			 "several independent terminals are no terminal strip either");
+	selectOnly(free_side);
+	QVERIFY(!action->isEnabled());
+
+		//The entry of the context menu is the very same action, and is
+		//there for that side of the tree as well: greyed out, never
+		//taken out of the menu (@sa buildContextMenu).
+	MenuNavigator navigator;
+	navigator.setProject(m_project);
+	auto *navigator_tree = navigator.findChild<QTreeWidget *>();
+	auto *navigator_action = navigator.findChild<QAction *>(
+				QStringLiteral("m_edit_selection"));
+	QVERIFY(navigator_tree);
+	QVERIFY(navigator_action);
+	auto *navigator_free = navigator_tree->topLevelItem(1);
+	QVERIFY(navigator_free);
+	QVERIFY(navigator_free->childCount());
+	navigator_free->child(0)->setSelected(true);
+	QScopedPointer<QMenu> menu(
+				navigator.buildContextMenu(navigator_free->child(0)));
+	QVERIFY(menu);
+	QVERIFY2(menu->actions().contains(navigator_action),
+			 "the entry of the context menu is there for the side of "
+			 "the independent terminals");
+	QVERIFY2(!navigator_action->isEnabled(),
+			 "and greyed out the way the button of the toolbar is");
+
+		//A trigger which was never worth anything opens nothing.
+	bool opened = false;
+	const bool shown = interactWithTheNavigatorPropertiesDialog(
+				[&](QDialog *) { opened = true; }, false);
+	QVERIFY(!shown);
+	QVERIFY(!opened);
+
+	m_tree->clearSelection();
+}
+
+/**
+	The OK button of the dialog gives every terminal marked the values it
+	shows, and leaves the ones which are not marked exactly what they
+	were (@sa TerminalNavigatorWidget::editSelection). What a terminal is
+	worth is written where it keeps its own -- the element it is drawn
+	with, or the copy it carries while it is drawn in no folio yet -- and
+	one undo step takes the whole of it back (@sa ChangeTerminalData).
+*/
+void tst_terminalnavigator::givesThePropertiesToEveryTerminalMarked()
+{
+	auto *x10 = stripX10();
+	auto *strip = stripNamed(QStringLiteral("X10"));
+	QVERIFY(x10);
+	QVERIFY(strip);
+	QVERIFY(x10->childCount() >= 3);
+
+	const auto undo_index_before = m_project->undoStack()->index();
+	const auto marked_first = terminalsOfRow(strip, x10->child(0));
+	const auto marked_second = terminalsOfRow(strip, x10->child(1));
+	const auto untouched = terminalsOfRow(strip, x10->child(2));
+	QVERIFY(!marked_first.isEmpty());
+	QVERIFY(!marked_second.isEmpty());
+	QVERIFY(!untouched.isEmpty());
+
+	const auto section_of = [](const QSharedPointer<RealTerminal> &terminal) {
+		return terminal->terminalData().m_informations
+				.value(RealTerminal::sectionInfoKey()).toString();
+	};
+	const auto bom_of = [](const QSharedPointer<RealTerminal> &terminal) {
+		return terminal->terminalData().m_informations
+				.value(QStringLiteral("exclude_from_bom")).toString();
+	};
+
+	const QString first_before = section_of(marked_first.first());
+	const QString second_before = section_of(marked_second.first());
+	const QString untouched_section = section_of(untouched.first());
+	const int untouched_type = int(
+				untouched.first()->terminalData().terminalType());
+
+		//The first two rows are marked, the third one is not: it keeps
+		//what it carries while the two others are given what the dialog
+		//shows.
+	selectOnly(x10->child(0));
+	x10->child(1)->setSelected(true);
+
+	bool opened = false;
+	const bool shown = interactWithTheNavigatorPropertiesDialog(
+				[&](QDialog *dialog) {
+		opened = true;
+		if (auto *type_cb = propertiesTypeCombo(dialog)) {
+			type_cb->setCurrentIndex(
+						type_cb->findText(QStringLiteral("Fuse")));
+		}
+		if (auto *section_cb = propertiesSectionCombo(dialog)) {
+			section_cb->setCurrentText(QStringLiteral("7.5 mm²"));
+		}
+		if (auto *bom_cb = propertiesExcludeFromBom(dialog)) {
+			bom_cb->setChecked(true);
+		}
+	});
+
+	QVERIFY(shown);
+	QVERIFY(opened);
+	for (const auto &terminal : {marked_first.first(), marked_second.first()}) {
+		QCOMPARE(int(terminal->terminalData().terminalType()),
+				 int(ElementData::TTFuse));
+		QCOMPARE(section_of(terminal), QStringLiteral("7.5"));
+		QCOMPARE(bom_of(terminal), QStringLiteral("true"));
+	}
+	QVERIFY2(section_of(untouched.first()) == untouched_section
+			 && int(untouched.first()->terminalData().terminalType()) == untouched_type,
+			 "the terminal which was not marked keeps what it carried");
+	QVERIFY2(bom_of(untouched.first()) != QStringLiteral("true"),
+			 "the flag the dialog set is on the terminals marked alone");
+
+		//One click on OK is one step back out of the undo stack.
+	m_project->undoStack()->undo();
+	QCOMPARE(m_project->undoStack()->index(), undo_index_before);
+	QCOMPARE(section_of(marked_first.first()), first_before);
+	QCOMPARE(section_of(marked_second.first()), second_before);
+	QVERIFY2(bom_of(marked_first.first()) != QStringLiteral("true"),
+			 "the undo takes the flag away with everything else");
+
+		//The change and its undo reach the tree through a timer
+		//(@sa TerminalNavigatorWidget::onElementChanged), which takes
+		//the rows away and builds new ones: let that reload happen here,
+		//where no test holds one of those rows in its hand.
+	QTest::qWait(50);
+
+	m_tree->clearSelection();
+}
+
+/**
 	A terminal which is not drawn in any folio yet travels through the XML
 	of the project: it carries an identity of its own, its label and the
 	symbol it should be drawn with -- and each of those terminals keeps a
@@ -2539,13 +2801,13 @@ void tst_terminalnavigator::offersNewStripOutsideTheFreeTerminals()
 	QVERIFY(free_side->childCount());
 
 		//The free terminals and the root of them: no strip is made
-		//below either of them, and the two other entries are there.
+		//below either of them, and the three other entries are there.
 	for (auto *item : {free_side, free_side->child(0)})
 	{
 		QScopedPointer<QMenu> menu(navigator.buildContextMenu(item));
 		QVERIFY(menu);
 		QVERIFY(!menu->actions().contains(add_strip));
-		QCOMPARE(menu->actions().count(), 2);
+		QCOMPARE(menu->actions().count(), 3);
 	}
 
 		//The project side, root branch and row alike: the strip is
@@ -2563,7 +2825,7 @@ void tst_terminalnavigator::offersNewStripOutsideTheFreeTerminals()
 		QScopedPointer<QMenu> menu(navigator.buildContextMenu(item));
 		QVERIFY(menu);
 		QVERIFY(menu->actions().contains(add_strip));
-		QCOMPARE(menu->actions().count(), 3);
+		QCOMPARE(menu->actions().count(), 4);
 	}
 
 		//With no item under the cursor at all the current one says
