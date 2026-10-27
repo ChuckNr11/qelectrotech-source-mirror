@@ -546,9 +546,10 @@ QMenu *TerminalNavigatorWidget::buildContextMenu(QTreeWidgetItem *item)
  * already holds are display in that dialog and are not described twice.
  *
  * The terminals are created as terminals which are not drawn in any folio
- * yet: they hold a label ('strip name:ID') and the symbol the user gave
- * each of them in the dialog, but no element, which is why isElement() is
- * the marker the tree uses to tell a drawn terminal from a pending one.
+ * yet: they hold a label ('strip name:ID'), the symbol the user gave each
+ * of them and the properties he chose for them in the dialog of the
+ * marked terminals, but no element, which is why isElement() is the
+ * marker the tree uses to tell a drawn terminal from a pending one.
  * Nothing needs an active folio here, the terminals get their folio when
  * their symbol is dropped on one.
  *
@@ -608,8 +609,21 @@ void TerminalNavigatorWidget::createTerminalStrip()
 		QVector<QSharedPointer<RealTerminal>> terminals;
 		const auto label_prefix = strip_->name() + QStringLiteral(":");
 		for (const auto &terminal : described) {
-			terminals.append(RealTerminal::createPending(
-						label_prefix + terminal.id, terminal.symbol));
+				//The terminal is created with the label and the symbol
+				//the dialog described it with, and the data it keeps for
+				//itself are the ones the dialog gathered for it: type,
+				//function, section, width, color and flags. Those are
+				//what the terminal strip editor shows for such a
+				//terminal, and what a drawn terminal carries over into
+				//the element it is drawn with
+				//(@sa TerminalProperties::applyTo,
+				//BindTerminalCommand::takenOverData).
+			auto real_terminal = RealTerminal::createPending(
+						label_prefix + terminal.id, terminal.properties.symbol);
+			auto data = real_terminal->spareData();
+			terminal.properties.applyTo(data);
+			real_terminal->setSpareData(data);
+			terminals.append(real_terminal);
 		}
 		new AddTerminalToStripCommand(terminals, strip_, macro);
 	}

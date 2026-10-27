@@ -31,40 +31,8 @@
      </property>
     </widget>
    </item>
-   <item row="2" column="1">
+   <item row="2" column="1" colspan="4">
     <widget class="QLineEdit" name="m_comment_le"/>
-   </item>
-   <item row="2" column="2">
-    <widget class="QLabel" name="label_7">
-     <property name="text">
-      <string>Symbol :</string>
-     </property>
-    </widget>
-   </item>
-   <item row="2" column="3">
-    <widget class="QWidget" name="widget" native="true">
-     <layout class="QHBoxLayout" name="horizontalLayout">
-      <property name="leftMargin">
-       <number>0</number>
-      </property>
-      <property name="topMargin">
-       <number>0</number>
-      </property>
-      <property name="rightMargin">
-       <number>0</number>
-      </property>
-      <property name="bottomMargin">
-       <number>0</number>
-      </property>
-     </layout>
-    </widget>
-   </item>
-   <item row="2" column="4">
-    <widget class="QComboBox" name="m_symbol_cb">
-     <property name="toolTip">
-      <string>Symbol the terminals are drawn with, once they are placed on a folio. Select the terminals in the list below to give this symbol to them; with nothing selected, it becomes the symbol the terminals typed next get.</string>
-     </property>
-    </widget>
    </item>
    <item row="3" column="0">
     <widget class="QLabel" name="label">
@@ -221,7 +189,7 @@
          <enum>QFrame::NoFrame</enum>
         </property>
         <property name="toolTip">
-         <string>Terminals about to be added to the terminal strip, with the symbol each one is drawn with. Greyed out rows at the top show what the terminal strip already holds; they are display only. Select one or several of the others and pick a symbol below to give it to them; a terminal without a symbol is not drawn in any folio yet.</string>
+         <string>Terminals about to be added to the terminal strip, with the symbol each one is drawn with. Greyed out rows at the top show what the terminal strip already holds; they are display only. Select one or several of the others and give them their properties with the button above; a terminal without a symbol is not drawn in any folio yet.</string>
         </property>
         <property name="selectionMode">
          <enum>QAbstractItemView::SelectionMode::ExtendedSelection</enum>
@@ -276,7 +244,7 @@
     <string>Edit the marked terminals...</string>
    </property>
    <property name="toolTip">
-    <string>Open the dialog for the terminals marked in the list above</string>
+    <string>Open the dialog for the terminals marked in the list below</string>
    </property>
   </action>
   <zorder>label</zorder>
@@ -285,10 +253,7 @@
   <zorder>m_location_cb</zorder>
   <zorder>label_3</zorder>
   <zorder>m_name_cb</zorder>
-  <zorder>label_7</zorder>
-  <zorder>m_symbol_cb</zorder>
   <zorder>buttonBox</zorder>
-  <zorder>widget</zorder>
   <zorder>m_description_te</zorder>
   <zorder>label_5</zorder>
   <zorder>m_comment_le</zorder>
@@ -304,7 +269,6 @@
   <tabstop>m_number_sb</tabstop>
   <tabstop>m_id_rb</tabstop>
   <tabstop>m_id_le</tabstop>
-  <tabstop>m_symbol_cb</tabstop>
   <tabstop>m_preview_tree</tabstop>
  </tabstops>
  <resources/>

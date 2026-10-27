@@ -12,15 +12,16 @@
 #ifndef ADDTERMINALSTRIPDIALOG_H
 #define ADDTERMINALSTRIPDIALOG_H
 
+#include "terminalpropertiesdialog.h"
+
 #include <QDialog>
-#include <QFutureWatcher>
 #include <QHash>
 #include <QList>
 
-class ElementsLocation;
 class QTreeWidgetItem;
 class QETProject;
 class TerminalStrip;
+class TerminalSymbolList;
 namespace Ui {
 	class AddTerminalStripDialog;
 }
@@ -54,17 +55,20 @@ namespace Ui {
 	(@sa onTerminalsModeChanged, generatedIds).
 
 	Besides the strip, this dialog describes the terminals it holds: one per
-	ID, labelled 'strip name:ID', each one with a symbol of its own, because
-	the OK button creates terminals which are not drawn in any folio yet, and
-	only the model half of them.
+	ID, labelled 'strip name:ID', each one with a set of properties of its
+	own, because the OK button creates terminals which are not drawn in any
+	folio yet, and only the model half of them.
 	@see TerminalNavigatorWidget::createTerminalStrip, which turns those
 	descriptions into real terminals.
 
 	@c m_preview_tree shows those terminals while the user types: the strip
 	as its root item spanning both columns, one child per ID, the ID in the
 	first column and the name of the symbol it is drawn with in the second
-	one. The location string of that symbol is kept in Qt::UserRole, which is
-	where a later drag out of this tree reads it.
+	one. The properties of that terminal -- of which the location string of
+	its symbol is one -- are kept in Qt::UserRole and in
+	@m_properties, which is where a later drag out of this tree reads the
+	symbol and where the OK button reads the rest
+	(@sa propertiesOfRow).
 
 	That tree also shows what the strip of the current node already holds,
 	as soon as its name is shown (@c setName): one greyed out row per
@@ -81,20 +85,35 @@ namespace Ui {
 	(@sa describedTerminals).
 
 	Above that tree is a toolbar holding one button (@c m_edit_terminals),
-	which opens the dialog for the terminals the user marked. The button
-	follows the selection of the tree, and a terminal the dialog is about
-	to create is marked the moment its row appears -- what it creates is
-	what its buttons work on (@sa onPreviewSelectionChanged,
-	refreshPreviewTree).
+	which opens @c TerminalPropertiesDialog for the terminals the user
+	marked. The button follows the selection of the tree, and a terminal
+	the dialog is about to create is marked the moment its row appears --
+	what it creates is what its buttons work on
+	(@sa onPreviewSelectionChanged, refreshPreviewTree).
 
-	A symbol is picked for a terminal the way a text is changed in a list:
-	the user selects the terminals it belongs to -- one, several or all of
-	them, with the mouse or the keyboard -- and picks the symbol in
-	@c m_symbol_cb, which applies it to the selected terminals only. Picking
-	a symbol with nothing selected does not touch the terminals already
-	listed: the value becomes the one the terminals typed next get. Never
-	silently changing what a terminal carries is the whole point, since the
-	second column shows that value, and the user trusts what he reads there.
+	The dialog is where a terminal gets its properties: symbol, type,
+	function, section, width, color and flags. It works on the marked
+	terminals alone -- one, several or all of them, marked with the mouse
+	or the keyboard -- and the OK button gives every one of them the very
+	values it shows, which is the point of marking many of them at once
+	(@sa openTerminalsDialog). The dialog opens on the values of the
+	terminal the strip already holds, when there is one: the symbol, the
+	sizes and the color a user picked once are the ones he is the most
+	likely to want again, while the type and the function stay generic and
+	the two other flags stay off, since those are the values he chooses
+	for every terminal himself -- the automatic numbering is locked
+	whenever the dialog opens, which is what he wants from the terminals
+	he creates (@sa defaultsForNewTerminals). A terminal the dialog
+	was never asked about keeps exactly those default values, which is why
+	never silently changing what a terminal carries works out: the second
+	column shows the symbol of every terminal, and the user trusts what he
+	reads there.
+
+	Both dialogs share one list of the symbols of the project and of the
+	standard collection (@c TerminalSymbolList): the strip dialog names
+	the symbols its rows show with it, and the properties dialog shows the
+	list itself and starts reading the standard collection, which holds
+	more than a thousand elements and is read in the background.
 */
 class AddTerminalStripDialog : public QDialog
 {
@@ -125,26 +144,23 @@ class AddTerminalStripDialog : public QDialog
 		TerminalStrip *terminalStripOfTheDialog() const;
 		/// @brief TerminalDescription
 		/// One terminal the OK button is about to create: an ID of the ID
-		/// field, and the location string of the symbol it should be drawn
-		/// with -- an empty one when the user gave it none, the terminal
-		/// then only waiting for a symbol of its own.
+		/// field, and the properties the user gave it -- the symbol it
+		/// should be drawn with, its type and function, the sizes and the
+		/// color it is kept with, and the flags (@sa TerminalProperties).
 	struct TerminalDescription {
 		QString id;
-		QString symbol;
+		TerminalProperties properties;
 	};
 
 		/// @return the terminals this dialog describes, one per ID the OK
 		/// button is about to create (@sa parseIds) and in the order of the
-		/// preview tree, each with the symbol the user gave it. Nothing
+		/// preview tree, each with the properties the user gave it. Nothing
 		/// when the input naming them can not be read at all -- which the
 		/// dialog refuses as an error anyway.
 		/// The rows of the terminals the strip holds already are display
 		/// only and are left out: they exist, the OK button must not
 		/// create them a second time.
 	QList<TerminalDescription> describedTerminals() const;
-
-	protected:
-		bool eventFilter(QObject *watched, QEvent *event) override;
 
 	private:
 		/// Result of the reading of the input which names the terminals to
@@ -162,14 +178,14 @@ class AddTerminalStripDialog : public QDialog
 
 		void fillInstallationAndLocation();
 		void fillNamesOfTheCurrentNode();
-		void fillSymbolCombo();
-		void appendSymbolItem(const ElementsLocation &location);
-		void onSymbolScanFinished();
-		/// @brief onSymbolPicked
-		/// Applies the symbol of the combo box to the terminals selected in
-		/// the preview tree, or, with nothing selected, remembers it as the
-		/// symbol the terminals typed next are created with.
-		void onSymbolPicked(int index);
+		/**
+			@brief onSymbolListRead
+			Names the symbols the reading of the standard collection just
+			added to the list: the second column of a row shows the name of
+			its symbol, and a symbol read before it was listed keeps an
+			empty name until this runs (@sa TerminalSymbolList).
+		*/
+		void onSymbolListRead();
 		/**
 			@brief onTerminalsModeChanged
 			@param checked : the radio button which just changed its state
@@ -182,10 +198,9 @@ class AddTerminalStripDialog : public QDialog
 		void onTerminalsModeChanged(bool checked);
 		/**
 			@brief onPreviewSelectionChanged
-			Follows the selection of the preview tree in the symbol combo
-			box and in the button of the toolbar above it: that button has
-			something to work on only while terminals are marked
-			(@sa openTerminalsDialog).
+			Follows the selection of the preview tree in the button of the
+			toolbar above it: that button has something to work on only
+			while terminals are marked (@sa openTerminalsDialog).
 		*/
 		void onPreviewSelectionChanged();
 		/// @brief onEditTerminalsTriggered
@@ -199,23 +214,50 @@ class AddTerminalStripDialog : public QDialog
 		/**
 			@brief openTerminalsDialog
 			Opens the dialog which works on the terminals marked in the
-			preview tree (@sa selectedPreviewChildren). The dialog itself
-			is defined elsewhere and later -- this is the place it opens,
-			and what it is given to work on.
+			preview tree (@sa selectedPreviewChildren), and writes what it
+			chose back into those rows -- and only into those, since the
+			rows carry the very properties the OK button reads
+			(@sa propertiesOfRow).
 		*/
 		void openTerminalsDialog();
 
 		QString effectiveInstallation() const;
 		QString effectiveLocation() const;
 		QString effectiveName() const;
-		/// @return the location string the symbol combo box currently
-		/// shows, or an empty string when it shows none.
-		QString symbolLocation() const;
-		/// @return the name to show for a symbol location, read from the
-		/// combo box when the symbol is listed there -- an element name is
-		/// read out of its XML, which is not worth doing twice.
+		/// @return the name to show for a symbol location, read out of the
+		/// list of symbols once and then kept -- an element name is read
+		/// out of its XML, which is not worth doing twice.
 		QString symbolName(const QString &symbol) const;
-		QString preselectedSymbolOfTheProject() const;
+		/**
+			@brief defaultsForNewTerminals
+			@return the properties a terminal the dialog is never asked
+			about is created with: the generic type and function, the
+			automatic numbering locked and no other flag, -- and the
+			symbol, the sizes and the color of the last terminal
+			the strip of the current node holds, when there is one. Those
+			are the very values the dialog of the marked terminals opens
+			on, which is what keeps the two in step: what the user reads in
+			the dialog is what the terminals get, whether he presses OK
+			there or not.
+			A strip which does not exist yet has no terminal to take
+			anything from: its terminals are created with the generic
+			values alone, and the user gives them the rest if and when he
+			opens the dialog.
+		*/
+		TerminalProperties defaultsForNewTerminals() const;
+		/**
+			@brief propertiesOfRow
+			@param id : the ID of a terminal to be created
+			@return what the dialog gave that terminal -- the values the
+			user chose for it (@sa m_properties) when he chose some, and
+			the defaults of the moment otherwise
+			(@sa defaultsForNewTerminals).
+			The defaults are read here and not remembered when the row
+			appears: which strip the dialog is about can still change, and
+			a terminal which was never worked on keeps following the strip
+			the user picks last.
+		*/
+		TerminalProperties propertiesOfRow(const QString &id) const;
 		TerminalStrip *stripOfTheCurrentNode() const;
 		/**
 			@brief parseIds
@@ -270,18 +312,19 @@ class AddTerminalStripDialog : public QDialog
 		/// Root item of the preview tree: the strip itself, whose children
 		/// are the terminals of the ID field.
 		QTreeWidgetItem *m_root_item = nullptr;
-		/// The symbol list is read on the first popup of its combo box only:
-		/// the standard collection holds more than a thousand elements.
-		bool m_symbol_scan_started = false;
-		/// Fills the symbols of the standard collection, in the background.
-		QFutureWatcher<QStringList> *m_symbol_watcher = nullptr;
-		/// Symbol the terminals typed next are created with. The combo box
-		/// only writes to the terminals the user selected, so its current
-		/// value has to be remembered for the ones which do not exist yet.
-		QString m_default_symbol;
-		/// Names of the symbols already named once, so that a column of the
-		/// preview tree never reads the same element XML twice.
-		mutable QHash<QString, QString> m_symbol_names;
+		/// Every terminal symbol of the project and of the standard
+		/// collection, read once and asked for by both dialogs of this
+		/// one: this dialog names the symbols its rows show with it, while
+		/// the properties dialog shows the list itself and starts reading
+		/// the standard collection in the background (@sa
+		/// TerminalSymbolList). Both are handed this very instance, so
+		/// that the names one of them reads are known to the other one.
+		TerminalSymbolList *m_symbols = nullptr;
+		/// What the dialog of the marked terminals gave them, by ID: what
+		/// the user chose for those terminals, kept while the rows are
+		/// rebuilt. An ID which is not in there is one he never worked on,
+		/// and keeps the defaults of the moment (@sa propertiesOfRow).
+		QHash<QString, TerminalProperties> m_properties;
 
 		static const QString s_installation_default;
 		static const QString s_location_default;

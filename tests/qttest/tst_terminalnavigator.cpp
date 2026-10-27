@@ -25,20 +25,22 @@
 #include "TerminalStrip/realterminal.h"
 #include "TerminalStrip/terminalstrip.h"
 #include "elementprovider.h"
+#include "properties/elementdata.h"
 #include "qetgraphicsitem/terminalelement.h"
 #include "qetproject.h"
 #include "undocommand/changeelementinformationcommand.h"
 
 #include <QAction>
 #include <QApplication>
+#include <QCheckBox>
 #include <QComboBox>
 #include <QDialog>
 #include <QDialogButtonBox>
 #include <QDomDocument>
+#include <QGroupBox>
 #include <QLabel>
 #include <QLineEdit>
 #include <QMenu>
-#include <QMessageBox>
 #include <QMimeData>
 #include <QRadioButton>
 #include <QScopedPointer>
@@ -47,6 +49,8 @@
 #include <QTreeWidget>
 #include <QTreeWidgetItem>
 #include <QUndoStack>
+
+#include <memory>
 
 /**
 	The terminal tab of the elements collection panel shows the strips of
@@ -121,6 +125,39 @@ class tst_terminalnavigator : public QObject
 		for (int i = 0 ; i < item->childCount() ; ++i)
 			texts << item->child(i)->text(0);
 		return texts;
+	}
+
+		//The marker of the first column of a row which shows a terminal
+		//the strip already holds: such a row is display only, carries no
+		//properties of its own and can not be marked at all
+		//(@sa AddTerminalStripDialog::ExistingTerminalRole).
+	static constexpr int existing_terminal_role = Qt::UserRole + 2;
+
+	/// @return true when @p item shows a terminal the strip holds already.
+	static bool showsWhatExists(const QTreeWidgetItem *item)
+	{
+		return item && item->data(0, existing_terminal_role).toBool();
+	}
+
+		//The number an editable size combo box holds: its text, up to
+		//the first character which is neither a digit nor the decimal
+		//separator -- which is a dot or a comma, since the very value
+		//the dialog writes keeps the dot and the text it shows follows
+		//the locale (@sa TerminalPropertiesDialog).
+	static double typedNumber(const QString &text)
+	{
+		QString digits;
+		for (const auto character : text) {
+			if (character.isDigit()
+				|| ((character == QLatin1Char('.') || character == QLatin1Char(','))
+					&& !digits.isEmpty())) {
+				digits += character;
+				continue;
+			}
+			break;
+		}
+		digits.replace(QLatin1Char(','), QLatin1Char('.'));
+		return digits.toDouble();
 	}
 
 	/// The strip X10 of the KA / Cabinet A branch, the one the tests
@@ -208,6 +245,90 @@ class tst_terminalnavigator : public QObject
 		return shown;
 	}
 
+		//Every dialog of the navigator is modal, so every interaction
+		//with one has to run from the event loop exec() spins. This
+		//helper triggers @p trigger, hands the dialog which shows up
+		//over to @p interact, and closes it again -- a watchdog makes
+		//sure a dialog that never shows up fails the caller instead of
+		//hanging the test. @p ignore is a dialog which is open already
+		//and is not what this is about.
+		//Returns false when no dialog showed up at all.
+		//Whatever @p interact does, the dialog does not survive this: it
+		//is accepted when @p accept is true, since what the caller does
+		//with the values it shows is the very thing most tests below are
+		//about -- @p interact only has to not close it itself for that.
+		//Both timers are local ones: the dialog is opened from inside
+		//@p trigger, which does not return before it is closed again, so
+		//the interaction always runs while this is on the stack -- and a
+		//trigger which opened nothing takes the timers down with it
+		//instead of leaving them behind for the dialog of the next test.
+	bool interactWithModalDialog(QAction *trigger,
+	                             QDialog *ignore,
+	                             const std::function<void(QDialog *)> &interact,
+	                             bool accept = true)
+	{
+		bool shown = false;
+
+		QTimer watchdog;
+		watchdog.setSingleShot(true);
+		watchdog.setInterval(3000);
+		connect(&watchdog, &QTimer::timeout, this, []() {
+			if (auto *modal = QApplication::activeModalWidget()) {
+				modal->close();
+			}
+		});
+		watchdog.start();
+
+		QTimer runner;
+		runner.setSingleShot(true);
+		runner.setInterval(0);
+		connect(&runner, &QTimer::timeout, this, [&]() {
+			auto *dialog = qobject_cast<QDialog *>(
+						QApplication::activeModalWidget());
+				//A dialog which is open already and is not what this is
+				//about shows up here the very same way.
+			if (!dialog || dialog == ignore) {
+				return;
+			}
+			shown = true;
+			interact(dialog);
+			if (dialog->isVisible()) {
+				if (accept) {
+					dialog->accept();
+				} else {
+					dialog->close();
+				}
+			}
+		});
+		runner.start();
+
+		if (trigger) {
+			trigger->trigger();
+		}
+		watchdog.stop();
+
+		return shown;
+	}
+
+		//The dialog of the properties is modal over the strip dialog, so
+		//it is opened and closed the same way
+		//(@sa interactWithModalDialog). Returns false when no dialog
+		//showed up at all, which is what the button of the preview
+		//toolbar does as soon as no terminal is marked.
+	bool interactWithThePropertiesDialog(
+				QDialog *strip_dialog,
+				const std::function<void(QDialog *)> &interact,
+				bool accept = true)
+	{
+		return interactWithModalDialog(
+					dialogEditTerminalsAction(strip_dialog),
+					strip_dialog,
+					interact,
+					accept);
+	}
+
+
+
 		//The name combo box of the strip dialog, else null. Everything
 		//the dialog is built from is reached through its object names,
 		//which is what this helper and the tests below go by.
@@ -236,10 +357,56 @@ class tst_terminalnavigator : public QObject
 		return dialog->findChild<QTreeWidget *>(QStringLiteral("m_preview_tree"));
 	}
 
-	QComboBox *dialogSymbolCombo(QDialog *dialog) const
+		//The widget finders below reach into the dialog of the properties
+		//(@sa TerminalPropertiesDialog), which the strip dialog opens for
+		//the terminals the user marked. Its fields are the ones the
+		//terminal group box of the element editor has, plus the symbol
+		//and the flag which keeps a terminal out of the bill of materials.
+	QComboBox *propertiesSymbolCombo(QDialog *dialog) const
 	{
 		return dialog->findChild<QComboBox *>(QStringLiteral("m_symbol_cb"));
 	}
+
+	QComboBox *propertiesTypeCombo(QDialog *dialog) const
+	{
+		return dialog->findChild<QComboBox *>(QStringLiteral("m_terminal_type_cb"));
+	}
+
+	QComboBox *propertiesFunctionCombo(QDialog *dialog) const
+	{
+		return dialog->findChild<QComboBox *>(QStringLiteral("m_terminal_func_cb"));
+	}
+
+	QComboBox *propertiesSectionCombo(QDialog *dialog) const
+	{
+		return dialog->findChild<QComboBox *>(QStringLiteral("m_terminal_section_cb"));
+	}
+
+	QComboBox *propertiesWidthCombo(QDialog *dialog) const
+	{
+		return dialog->findChild<QComboBox *>(QStringLiteral("m_terminal_width_cb"));
+	}
+
+	QComboBox *propertiesColorCombo(QDialog *dialog) const
+	{
+		return dialog->findChild<QComboBox *>(QStringLiteral("m_terminal_color_cb"));
+	}
+
+	QCheckBox *propertiesExcludeFromBom(QDialog *dialog) const
+	{
+		return dialog->findChild<QCheckBox *>(QStringLiteral("m_exclude_from_bom_cb"));
+	}
+
+	QCheckBox *propertiesAutoNumberLocked(QDialog *dialog) const
+	{
+		return dialog->findChild<QCheckBox *>(QStringLiteral("m_auto_num_locked_cb"));
+	}
+
+	QCheckBox *propertiesPotentialIsolating(QDialog *dialog) const
+	{
+		return dialog->findChild<QCheckBox *>(QStringLiteral("m_potential_isolating_cb"));
+	}
+
 
 		//The two radio buttons which say how the terminals to add are
 		//named -- the number of them, or the IDs typed -- and the two
@@ -310,6 +477,12 @@ private slots:
 	void checksTheStripDialog();
 	void previewsTheTerminalsInTheTree();
 	void createsTheStripWithItsTerminalsOnOk();
+	void startsLockedByDefault();
+	void listsEveryTerminalSymbolAtOnce();
+	void preFillsTheValuesFromTheLastTerminal();
+	void appliesThePropertiesToTheMarkedRowsOnly();
+	void keepsUntouchedRowsAtTheirDefault();
+	void createsTheTerminalsWithTheChosenProperties();
 	void keepsPendingTerminalsInXml();
 	void keepsTheDataOfTerminalsWhichAreNotDrawnInXml();
 	void keepsSavedSymbolsWithoutProjectIds();
@@ -1008,12 +1181,16 @@ void tst_terminalnavigator::checksTheStripDialog()
 	The children carry the symbol to draw them with in Qt::UserRole, which
 	is what a drag out of that tree would read.
 
-	The tree lets the user pick children one by one, in ranges or all at
-	once, with the mouse or the keyboard (ExtendedSelection), and a symbol
-	picked in the combo box applies to the children selected -- and to
-	them only, the others keeping the one they were given. With nothing
-	selected, the value only becomes the symbol the children typed next
-	are created with.
+	What a terminal starts with is what the dialog of the properties would
+	show for it: the symbol, the sizes and the color of the last terminal
+	the strip already holds, when the name field designates a strip which
+	holds any -- and nothing at all for a strip which does not exist yet,
+	since there is nothing to take them from (@sa AddTerminalStripDialog::
+	defaultsForNewTerminals). The tree lets the user pick children one by
+	one, in ranges or all at once, with the mouse or the keyboard
+	(ExtendedSelection), and the dialog of the properties gives the values
+	it shows to the children marked -- and to those only, the others
+	keeping what they were given.
 */
 void tst_terminalnavigator::previewsTheTerminalsInTheTree()
 {
@@ -1024,29 +1201,22 @@ void tst_terminalnavigator::previewsTheTerminalsInTheTree()
 	m_tree->setCurrentItem(cabinet_a);
 
 	bool tree_shown = false, root_has_icon = true, children_without_icon = true;
-	bool symbol_column_shown = false, combo_follows_one_selection = false;
-	QString root_text_before, root_text_after, symbol_chosen, symbol_name_chosen;
-	QStringList children_after, symbols, symbols_in_column;
-	QStringList symbols_after_picking, symbols_after_new_default;
+	bool symbol_column_shown = false, properties_opened = false;
+	QString root_text_before, root_text_after, default_of_x10;
+	QStringList children_after, symbols_new_strip, symbols_in_column;
+	QStringList symbols_of_x10, symbols_after_dialog, symbols_after_new_row;
 	int children_on_broken_list = -1, selected_children = 0;
 
 	const bool dialog_found = interactWithTheStripDialog([&](QDialog *dialog) {
 		auto *names = dialogNameCombo(dialog);
 		auto *id_field = dialogIdField(dialog);
 		auto *tree = dialogPreviewTree(dialog);
-		auto *symbols_cb = dialogSymbolCombo(dialog);
-		if (!names || !id_field || !tree || !symbols_cb) {
+		if (!names || !id_field || !tree) {
 			return;
 		}
 		useTypedIds(dialog);
 		tree_shown = tree->isVisible();
 		symbol_column_shown = tree->columnCount() == 2 && !tree->isHeaderHidden();
-
-			//The dialog preselects the terminal symbol the project
-			//already draws its terminals with, so the children carry
-			//that symbol around with them.
-		symbol_chosen = symbols_cb->itemData(symbols_cb->currentIndex()).toString();
-		symbol_name_chosen = symbols_cb->itemText(symbols_cb->currentIndex());
 
 		auto *root_item = tree->topLevelItem(0);
 		if (root_item) {
@@ -1054,6 +1224,9 @@ void tst_terminalnavigator::previewsTheTerminalsInTheTree()
 			root_has_icon = !root_item->icon(0).isNull();
 		}
 
+			//A strip which does not exist yet holds no terminal to take
+			//anything from: the terminals typed next carry no symbol at
+			//all, and the dialog of the properties is where they get one.
 		QTest::keyClicks(names->lineEdit(), QStringLiteral("X77"));
 		id_field->setText(QStringLiteral("1-3"));
 
@@ -1063,7 +1236,7 @@ void tst_terminalnavigator::previewsTheTerminalsInTheTree()
 			for (int i = 0 ; i < root_item->childCount() ; ++i) {
 				auto *child = root_item->child(i);
 				children_after << child->text(0);
-				symbols << child->data(0, Qt::UserRole).toString();
+				symbols_new_strip << child->data(0, Qt::UserRole).toString();
 				symbols_in_column << child->text(1);
 				children_without_icon = children_without_icon && child->icon(0).isNull();
 			}
@@ -1075,63 +1248,102 @@ void tst_terminalnavigator::previewsTheTerminalsInTheTree()
 		root_item = tree->topLevelItem(0);
 		children_on_broken_list = root_item ? root_item->childCount() : -1;
 
-			//A symbol picked for the terminals the user selected: the
-			//first and the third lose the one they had, the second one
-			//keeps it, since it is not selected. The rows the dialog adds
-			//are marked the moment they appear, so the middle one is
-			//deselected here to have a row which is left alone.
+			//A strip which does exist is what the terminals typed next
+			//take their values from: X10 holds terminals drawn with a
+			//symbol, and the rows below them carry that very symbol, in
+			//the second column as well. The rows of what X10 holds are
+			//display only and are left out of all of this
+			//(@sa fillExistingTerminals).
 		id_field->setText(QStringLiteral("1-3"));
-		root_item = tree->topLevelItem(0);
-		if (root_item && root_item->childCount() == 3) {
-			root_item->child(0)->setSelected(true);
-			root_item->child(1)->setSelected(false);
-			root_item->child(2)->setSelected(true);
-		}
-		symbols_cb->setCurrentIndex(0);		//(no symbol)
+		names->setCurrentIndex(names->findText(QStringLiteral("X10")));
 		root_item = tree->topLevelItem(0);
 		if (root_item) {
 			for (int i = 0 ; i < root_item->childCount() ; ++i) {
-				symbols_after_picking << root_item->child(i)
-										 ->data(0, Qt::UserRole).toString();
+				auto *child = root_item->child(i);
+				if (showsWhatExists(child)) {
+					continue;
+				}
+				symbols_of_x10 << child->data(0, Qt::UserRole).toString();
+			}
+		}
+		if (!symbols_of_x10.isEmpty()) {
+			default_of_x10 = symbols_of_x10.first();
+		}
+
+			//The dialog of the properties gives the terminals marked in
+			//the tree what it shows -- and those only: the middle row of
+			//the three is the one which is left alone, and the symbol
+			//given to the other two is the one which says nothing.
+		root_item = tree->topLevelItem(0);
+		if (root_item) {
+			for (int i = 0 ; i < root_item->childCount() ; ++i) {
+				auto *child = root_item->child(i);
+				if (showsWhatExists(child)) {
+					continue;
+				}
+				child->setSelected(child->text(0) != QStringLiteral("2"));
+			}
+		}
+		properties_opened = interactWithThePropertiesDialog(
+					dialog, [&](QDialog *properties) {
+			auto *symbols_cb = propertiesSymbolCombo(properties);
+			if (symbols_cb) {
+				symbols_cb->setCurrentIndex(0);		//(no symbol)
+			}
+		});
+
+		root_item = tree->topLevelItem(0);
+		if (root_item) {
+			for (int i = 0 ; i < root_item->childCount() ; ++i) {
+				auto *child = root_item->child(i);
+				if (showsWhatExists(child)) {
+					continue;
+				}
+				symbols_after_dialog << child->data(0, Qt::UserRole).toString();
 			}
 		}
 
-			//One selected terminal shows the symbol it carries, so
-			//that the user reads what he is about to change.
-		tree->clearSelection();
-		root_item = tree->topLevelItem(0);
-		if (root_item && root_item->childCount() == 3) {
-			root_item->child(1)->setSelected(true);
-			combo_follows_one_selection =
-					symbols_cb->itemData(symbols_cb->currentIndex()).toString()
-					== symbol_chosen;
-		}
-
-			//With nothing selected, the symbol picked next is the one
-			//the terminals typed next are created with -- and it
-			//never changes the terminals already listed.
-		tree->clearSelection();
-		symbols_cb->setCurrentIndex(0);		//(no symbol)
+			//A terminal typed next is worth the values of the last
+			//terminal of the strip again: only the two rows the dialog
+			//worked on keep what it gave them.
 		id_field->setText(QStringLiteral("1-4"));
 		root_item = tree->topLevelItem(0);
 		if (root_item) {
 			for (int i = 0 ; i < root_item->childCount() ; ++i) {
-				symbols_after_new_default << root_item->child(i)
-											  ->data(0, Qt::UserRole).toString();
+				auto *child = root_item->child(i);
+				if (showsWhatExists(child)) {
+					continue;
+				}
+				symbols_after_new_row << child->data(0, Qt::UserRole).toString();
 			}
 		}
 
 			//A selection the user can build with the mouse or the
-			//keyboard, and which survives the typing of a new ID.
+			//keyboard, and which survives the typing of a new ID: the
+			//first and the last of the terminals to be created, never
+			//the rows of what the strip holds already -- those are
+			//display only and can not be marked at all.
 		id_field->setText(QStringLiteral("1-3"));
+		tree->clearSelection();
 		root_item = tree->topLevelItem(0);
-		if (root_item && root_item->childCount() == 3) {
-			tree->setCurrentItem(root_item->child(0));
-			root_item->child(2)->setSelected(true);
+		int first_new = -1, last_new = -1;
+		for (int i = 0 ; i < (root_item ? root_item->childCount() : 0) ; ++i) {
+			if (showsWhatExists(root_item->child(i))) {
+				continue;
+			}
+			if (first_new < 0) {
+				first_new = i;
+			}
+			last_new = i;
+		}
+		if (first_new >= 0) {
+			root_item->child(first_new)->setSelected(true);
+			root_item->child(last_new)->setSelected(true);
 		}
 		root_item = tree->topLevelItem(0);
 		for (int i = 0 ; i < (root_item ? root_item->childCount() : 0) ; ++i) {
-			if (root_item->child(i)->isSelected()) {
+			if (!showsWhatExists(root_item->child(i))
+				&& root_item->child(i)->isSelected()) {
 				++selected_children;
 			}
 		}
@@ -1149,22 +1361,19 @@ void tst_terminalnavigator::previewsTheTerminalsInTheTree()
 										  QStringLiteral("3")}));
 	QVERIFY2(children_without_icon,
 			 "a terminal which is not drawn yet has no symbol in the tree");
-	QVERIFY2(!symbol_chosen.isEmpty(),
-			 "the dialog preselects the terminal symbol the project draws with");
-	QCOMPARE(symbols, (QStringList{symbol_chosen, symbol_chosen, symbol_chosen}));
-	QCOMPARE(symbols_in_column, (QStringList{symbol_name_chosen,
-											 symbol_name_chosen,
-											 symbol_name_chosen}));
+	QVERIFY2(symbols_new_strip == (QStringList{QString(), QString(), QString()}),
+			 "a strip which does not exist yet gives its terminals no symbol");
+	QVERIFY2(symbols_in_column == (QStringList{QString(), QString(), QString()}),
+			 "the second column of a terminal without a symbol is empty");
 	QCOMPARE(children_on_broken_list, 3);
-	QCOMPARE(symbols_after_picking, (QStringList{QString(),
-												 symbol_chosen,
-												 QString()}));
-	QVERIFY2(combo_follows_one_selection,
-			 "one selected terminal shows the symbol it carries");
-	QCOMPARE(symbols_after_new_default, (QStringList{QString(),
-													 symbol_chosen,
-													 QString(),
-													 QString()}));
+	QVERIFY2(!default_of_x10.isEmpty(),
+			 "the terminals typed next start with the symbol of the last terminal of the strip");
+	QVERIFY2(properties_opened,
+			 "the button of the toolbar opens the dialog of the properties");
+	QCOMPARE(symbols_after_dialog, (QStringList{QString(), default_of_x10, QString()}));
+	QVERIFY2(symbols_after_new_row == (QStringList{QString(), default_of_x10,
+												  QString(), default_of_x10}),
+			 "only the terminals the dialog worked on keep what it gave them");
 	QCOMPARE(selected_children, 2);
 }
 
@@ -1193,38 +1402,59 @@ void tst_terminalnavigator::createsTheStripWithItsTerminalsOnOk()
 
 		//A name of his own creates the strip and the two terminals of
 		//the ID field, neither of them drawn anywhere. Each of them
-		//carries the symbol the user gave it: the first one keeps the
-		//symbol the dialog preselects, the second one is given none.
+		//carries what the dialog of the marked terminals gave it: the
+		//first one keeps the symbol the user picked there, the second
+		//one is given none.
 	QString symbol_kept;
+	bool first_dialog_shown = false, second_dialog_shown = false;
 	const bool dialog_found = interactWithTheStripDialog([&](QDialog *dialog) {
 		auto *names = dialogNameCombo(dialog);
 		auto *id_field = dialogIdField(dialog);
 		auto *tree = dialogPreviewTree(dialog);
-		auto *symbols_cb = dialogSymbolCombo(dialog);
-		if (!names || !id_field || !tree || !symbols_cb) {
+		if (!names || !id_field || !tree) {
 			return;
 		}
 		useTypedIds(dialog);
 		QTest::keyClicks(names->lineEdit(), QStringLiteral("X77"));
 		id_field->setText(QStringLiteral("1-2"));
 
+			//Both rows are marked the moment they appear, so both are
+			//about the same click on the button of the toolbar: the
+			//dialog lists the symbols of the project and of the standard
+			//collection, and the first one of them is what the user
+			//picks for them here.
+		first_dialog_shown = interactWithThePropertiesDialog(
+					dialog, [&](QDialog *properties) {
+			auto *symbols_cb = propertiesSymbolCombo(properties);
+			if (!symbols_cb || symbols_cb->count() < 2) {
+				return;
+			}
+			symbol_kept = symbols_cb->itemData(1).toString();
+			symbols_cb->setCurrentIndex(1);
+		});
+
+			//The second row alone is marked this time, and is given no
+			//symbol at all -- the first one keeps what the click above
+			//gave it, since the dialog works on the marked rows only.
 		auto *root_item = tree->topLevelItem(0);
 		if (root_item && root_item->childCount() == 2) {
-			symbol_kept = symbols_cb->itemData(symbols_cb->currentIndex()).toString();
-				//The second row is the only marked one: the first keeps
-				//the symbol the dialog preselects and the second is given
-				//none. The rows the dialog adds are marked the moment
-				//they appear, so the first one is deselected here.
 			root_item->child(0)->setSelected(false);
 			root_item->child(1)->setSelected(true);
-			symbols_cb->setCurrentIndex(0);		//(no symbol)
 		}
+		second_dialog_shown = interactWithThePropertiesDialog(
+					dialog, [&](QDialog *properties) {
+			if (auto *symbols_cb = propertiesSymbolCombo(properties)) {
+				symbols_cb->setCurrentIndex(0);		//(no symbol)
+			}
+		});
 		dialog->accept();
 	});
 
 	QVERIFY2(dialog_found, "the strip dialog was shown and accepted");
+	QVERIFY2(first_dialog_shown && second_dialog_shown,
+			 "the button of the toolbar opens the dialog of the properties");
 	QVERIFY2(!symbol_kept.isEmpty(),
-			 "the dialog preselects the terminal symbol the project draws with");
+			 "the dialog of the properties lists the symbols of the project");
 	QCOMPARE(m_project->terminalStrip().count(), strips_before + 1);
 		//The index of the stack and not its count: a push drops whatever
 		//the stack held as undone, so the count may well stay put.
@@ -1295,6 +1525,493 @@ void tst_terminalnavigator::createsTheStripWithItsTerminalsOnOk()
 	m_project->undoStack()->undo();
 	QCOMPARE(m_project->terminalStrip().count(), strips_before);
 	QCOMPARE(m_project->undoStack()->index(), undo_index_before);
+}
+
+/**
+	What the dialog of the properties shows first is what a terminal which
+	was never worked on is worth: the generic type and the generic function
+	-- the two values which leave a terminal the ones its symbol is drawn
+	with -- and the automatic numbering locked, which is what the user
+	wants from the terminals he creates. The two other flags are off. The
+	sizes and the color are the ones of the last terminal the strip holds,
+	when there is one, since those are the values a user picked once and is
+	the most likely to want again
+	(@sa TerminalPropertiesDialog, AddTerminalStripDialog::
+	defaultsForNewTerminals).
+*/
+void tst_terminalnavigator::startsLockedByDefault()
+{
+	auto *ka = rootChild(0, QStringLiteral("KA"));
+	QVERIFY(ka);
+	auto *cabinet_a = childByText(ka, QStringLiteral("Cabinet A"));
+	QVERIFY(cabinet_a);
+	m_tree->setCurrentItem(cabinet_a);
+
+	int type_value = -1, function_value = -1;
+	bool locked = false, isolating = false, from_bom = false;
+	bool group_box_shown = false, symbol_row_shown = false;
+	const bool dialog_found = interactWithTheStripDialog([&](QDialog *dialog) {
+		auto *spin = dialogNumberSpin(dialog);
+		if (!spin) {
+			return;
+		}
+		spin->setValue(1);
+
+		interactWithThePropertiesDialog(dialog, [&](QDialog *properties) {
+			auto *type_cb = propertiesTypeCombo(properties);
+			auto *function_cb = propertiesFunctionCombo(properties);
+			if (!type_cb || !function_cb) {
+				return;
+			}
+			type_value = type_cb->currentData().toInt();
+			function_value = function_cb->currentData().toInt();
+			group_box_shown = properties->findChild<QGroupBox *>(
+						QStringLiteral("m_terminal_gb")) != nullptr;
+			symbol_row_shown = propertiesSymbolCombo(properties) != nullptr
+					&& properties->findChild<QLabel *>(
+						QStringLiteral("label_symbol")) != nullptr;
+			if (auto *check = propertiesAutoNumberLocked(properties)) {
+				locked = check->isChecked();
+			}
+			if (auto *check = propertiesPotentialIsolating(properties)) {
+				isolating = check->isChecked();
+			}
+			if (auto *check = propertiesExcludeFromBom(properties)) {
+				from_bom = check->isChecked();
+			}
+		});
+	});
+
+	QVERIFY(dialog_found);
+	QVERIFY2(group_box_shown, "the fields of the element editor are grouped as there");
+	QVERIFY2(symbol_row_shown, "the symbol a terminal is drawn with is asked for as well");
+	QCOMPARE(type_value, int(ElementData::TTGeneric));
+	QCOMPARE(function_value, int(ElementData::TFGeneric));
+	QVERIFY2(locked, "the dialog opens with the automatic numbering locked");
+	QVERIFY2(!isolating && !from_bom,
+			 "the two other flags are off for a terminal never worked on");
+}
+
+/**
+	The symbol combo box of the dialog of the properties holds every
+	terminal symbol the moment the dialog opens: the symbols of the project
+	are read by the list both dialogs share, and the ones of the standard
+	collection are read in the background and added when they are in
+	(@sa TerminalSymbolList). The first row of that list is the one which
+	says that a terminal is drawn with no symbol at all, and what the user
+	types completes a name anywhere in it -- not only at its start.
+*/
+void tst_terminalnavigator::listsEveryTerminalSymbolAtOnce()
+{
+	auto *ka = rootChild(0, QStringLiteral("KA"));
+	QVERIFY(ka);
+	auto *cabinet_a = childByText(ka, QStringLiteral("Cabinet A"));
+	QVERIFY(cabinet_a);
+	m_tree->setCurrentItem(cabinet_a);
+
+	int listed = -1;
+	QString first_data, first_text;
+	bool no_symbol_row = false, completes_anywhere = false;
+	const bool dialog_found = interactWithTheStripDialog([&](QDialog *dialog) {
+		auto *spin = dialogNumberSpin(dialog);
+		if (!spin) {
+			return;
+		}
+		spin->setValue(1);
+
+		interactWithThePropertiesDialog(dialog, [&](QDialog *properties) {
+			auto *symbols_cb = propertiesSymbolCombo(properties);
+			if (!symbols_cb) {
+				return;
+			}
+			listed = symbols_cb->count();
+			no_symbol_row = symbols_cb->itemData(0).toString().isEmpty()
+					&& !symbols_cb->itemText(0).isEmpty();
+			if (listed > 1) {
+				first_data = symbols_cb->itemData(1).toString();
+				first_text = symbols_cb->itemText(1);
+			}
+			if (auto *completer = symbols_cb->completer()) {
+				completes_anywhere = completer->filterMode() == Qt::MatchContains
+						&& completer->caseSensitivity() == Qt::CaseInsensitive;
+			}
+		});
+	});
+
+	QVERIFY(dialog_found);
+	QVERIFY2(no_symbol_row, "the list starts with the row which says 'no symbol'");
+	QVERIFY2(listed > 1,
+			 "the symbols of the project are listed without any interaction");
+	QVERIFY2(!first_data.isEmpty() && !first_text.isEmpty(),
+			 "the first symbol listed is named and carries a location");
+	QVERIFY2(first_data.startsWith(QStringLiteral("embed://"))
+			 || first_data.startsWith(QStringLiteral("common://")),
+			 "the symbols come as the plain path of their collection, "
+			 "with no runtime project id before it");
+	QVERIFY2(completes_anywhere,
+			 "what is typed anywhere in a name completes a symbol");
+}
+
+/**
+	What the dialog of the properties gives the terminals it works on is
+	what the OK button creates them with -- the symbol, the sizes and the
+	color of the last terminal the strip already holds, read back out of
+	the dialog of the very strip. Those values are written the way the
+	editor of an element writes them, so that the terminal strip editor
+	shows them for those terminals alike.
+*/
+void tst_terminalnavigator::preFillsTheValuesFromTheLastTerminal()
+{
+	auto *ka = rootChild(0, QStringLiteral("KA"));
+	QVERIFY(ka);
+	auto *cabinet_a = childByText(ka, QStringLiteral("Cabinet A"));
+	QVERIFY(cabinet_a);
+	m_tree->setCurrentItem(cabinet_a);
+
+		//A strip of its own, with two terminals the user gives a symbol,
+		//a section, a width and a color -- none of them drawn anywhere.
+	QString chosen_symbol, chosen_color;
+	bool properties_opened = false;
+	const bool created = interactWithTheStripDialog([&](QDialog *dialog) {
+		auto *names = dialogNameCombo(dialog);
+		auto *id_field = dialogIdField(dialog);
+		auto *tree = dialogPreviewTree(dialog);
+		if (!names || !id_field || !tree) {
+			return;
+		}
+		useTypedIds(dialog);
+		QTest::keyClicks(names->lineEdit(), QStringLiteral("X88"));
+		id_field->setText(QStringLiteral("1-2"));
+
+		properties_opened = interactWithThePropertiesDialog(
+					dialog, [&](QDialog *properties) {
+			auto *symbols_cb = propertiesSymbolCombo(properties);
+			auto *section_cb = propertiesSectionCombo(properties);
+			auto *width_cb = propertiesWidthCombo(properties);
+			auto *color_cb = propertiesColorCombo(properties);
+			if (!symbols_cb || !section_cb || !width_cb || !color_cb) {
+				return;
+			}
+			symbols_cb->setCurrentIndex(1);		//the first symbol listed
+			chosen_symbol = symbols_cb->itemData(1).toString();
+				//Both sizes are typed, which the editable combo boxes
+				//take as well as anything out of their list.
+			section_cb->setCurrentText(QStringLiteral("2.5 mm²"));
+			width_cb->setCurrentText(QStringLiteral("1.5 mm"));
+			color_cb->setCurrentIndex(1);
+			chosen_color = color_cb->itemData(1).toString();
+		});
+		if (properties_opened) {
+			dialog->accept();
+		}
+	});
+
+	QVERIFY2(created, "the strip dialog was shown and accepted");
+	QVERIFY2(properties_opened, "the dialog of the properties was shown");
+	QVERIFY2(!chosen_symbol.isEmpty(),
+			 "the dialog of the properties lists the symbols of the project");
+	QVERIFY2(!chosen_color.isEmpty(), "the list of colors holds a color to pick");
+
+	auto *x88 = stripNamed(QStringLiteral("X88"));
+	QVERIFY(x88);
+	QCOMPARE(x88->physicalTerminalCount(), 2);
+
+		//What those terminals carry is what the next terminals of that
+		//strip start with, both in the rows of the preview tree and in
+		//the dialog itself.
+	QString read_symbol, read_color, read_column;
+	QList<QTreeWidgetItem *> new_rows;
+	double read_section = -1, read_width = -1;
+	const bool reopened = interactWithTheStripDialog([&](QDialog *dialog) {
+		auto *names = dialogNameCombo(dialog);
+		auto *id_field = dialogIdField(dialog);
+		auto *tree = dialogPreviewTree(dialog);
+		if (!names || !id_field || !tree) {
+			return;
+		}
+		useTypedIds(dialog);
+		names->setCurrentIndex(names->findText(QStringLiteral("X88")));
+		id_field->setText(QStringLiteral("3-4"));
+
+			//X88 holds the two terminals of the first phase, and their
+			//rows are display only: what the dialog is about are the
+			//two rows below them.
+		auto *root_item = tree->topLevelItem(0);
+		for (int i = 0 ; i < (root_item ? root_item->childCount() : 0) ; ++i) {
+			auto *child = root_item->child(i);
+			if (showsWhatExists(child)) {
+				continue;
+			}
+			new_rows << child;
+		}
+		if (new_rows.count() == 2) {
+			read_column = new_rows.at(0)->text(1);
+		}
+
+		interactWithThePropertiesDialog(dialog, [&](QDialog *properties) {
+			auto *symbols_cb = propertiesSymbolCombo(properties);
+			auto *section_cb = propertiesSectionCombo(properties);
+			auto *width_cb = propertiesWidthCombo(properties);
+			auto *color_cb = propertiesColorCombo(properties);
+			if (!symbols_cb || !section_cb || !width_cb || !color_cb) {
+				return;
+			}
+			read_symbol = symbols_cb->itemData(symbols_cb->currentIndex()).toString();
+			read_section = typedNumber(section_cb->currentText());
+			read_width = typedNumber(width_cb->currentText());
+			read_color = color_cb->itemData(color_cb->currentIndex()).toString();
+		});
+	});
+
+	QVERIFY2(reopened, "the strip dialog was shown again");
+	QCOMPARE(read_symbol, chosen_symbol);
+	QCOMPARE(read_section, 2.5);
+	QCOMPARE(read_width, 1.5);
+	QCOMPARE(read_color, chosen_color);
+	QVERIFY2(!read_column.isEmpty(),
+			 "the second column of the row names the symbol of that terminal");
+}
+
+/**
+	The dialog of the properties gives its values to the terminals marked
+	in the preview tree -- and to those only. The rows it leaves alone keep
+	what they were worth, which is what the second column keeps showing:
+	never silently changing what a terminal carries is the whole point of
+	the marking (@sa AddTerminalStripDialog::openTerminalsDialog).
+*/
+void tst_terminalnavigator::appliesThePropertiesToTheMarkedRowsOnly()
+{
+	auto *ka = rootChild(0, QStringLiteral("KA"));
+	QVERIFY(ka);
+	auto *cabinet_a = childByText(ka, QStringLiteral("Cabinet A"));
+	QVERIFY(cabinet_a);
+	m_tree->setCurrentItem(cabinet_a);
+
+	QString chosen_symbol, middle_row;
+	QStringList symbols_before, symbols_after;
+	bool opened = false;
+	const bool dialog_found = interactWithTheStripDialog([&](QDialog *dialog) {
+		auto *names = dialogNameCombo(dialog);
+		auto *id_field = dialogIdField(dialog);
+		auto *tree = dialogPreviewTree(dialog);
+		if (!names || !id_field || !tree) {
+			return;
+		}
+		useTypedIds(dialog);
+		QTest::keyClicks(names->lineEdit(), QStringLiteral("X81"));
+		id_field->setText(QStringLiteral("1-3"));
+
+		auto *root_item = tree->topLevelItem(0);
+		if (!root_item || root_item->childCount() != 3) {
+			return;
+		}
+		for (int i = 0 ; i < root_item->childCount() ; ++i) {
+			symbols_before << root_item->child(i)->data(0, Qt::UserRole).toString();
+		}
+		middle_row = symbols_before.value(1);
+
+			//The rows are marked the moment they appear, so the middle
+			//one is deselected here: the first and the third are what
+			//the dialog is about.
+		root_item->child(1)->setSelected(false);
+
+		opened = interactWithThePropertiesDialog(dialog, [&](QDialog *properties) {
+			auto *symbols_cb = propertiesSymbolCombo(properties);
+			if (!symbols_cb || symbols_cb->count() < 2) {
+				return;
+			}
+			chosen_symbol = symbols_cb->itemData(1).toString();
+			symbols_cb->setCurrentIndex(1);
+		});
+
+		root_item = tree->topLevelItem(0);
+		for (int i = 0 ; i < root_item->childCount() ; ++i) {
+			symbols_after << root_item->child(i)->data(0, Qt::UserRole).toString();
+		}
+	});
+
+	QVERIFY(dialog_found);
+	QVERIFY2(opened, "the dialog of the properties was shown");
+	QVERIFY(!chosen_symbol.isEmpty());
+	QCOMPARE(symbols_before.size(), 3);
+	QCOMPARE(symbols_after.size(), 3);
+	QCOMPARE(symbols_after.at(0), chosen_symbol);
+	QCOMPARE(symbols_after.at(2), chosen_symbol);
+	QVERIFY2(symbols_after.at(1) == middle_row,
+			 "the terminal the dialog was not about keeps what it was worth");
+}
+
+/**
+	A terminal the dialog of the properties was never asked about keeps the
+	values of the moment, and the dialog opens on those very values when
+	that terminal is marked later on -- never on the values the user gave
+	the other ones. What such a terminal is worth follows the strip the
+	dialog is about, which the name field can change at any time.
+*/
+void tst_terminalnavigator::keepsUntouchedRowsAtTheirDefault()
+{
+	auto *ka = rootChild(0, QStringLiteral("KA"));
+	QVERIFY(ka);
+	auto *cabinet_a = childByText(ka, QStringLiteral("Cabinet A"));
+	QVERIFY(cabinet_a);
+	m_tree->setCurrentItem(cabinet_a);
+
+	QString first_before, first_after, second_before, second_dialog_symbol;
+	bool opened = false;
+	const bool dialog_found = interactWithTheStripDialog([&](QDialog *dialog) {
+		auto *names = dialogNameCombo(dialog);
+		auto *id_field = dialogIdField(dialog);
+		auto *tree = dialogPreviewTree(dialog);
+		if (!names || !id_field || !tree) {
+			return;
+		}
+		useTypedIds(dialog);
+		names->setCurrentIndex(names->findText(QStringLiteral("X10")));
+		id_field->setText(QStringLiteral("1-2"));
+
+			//X10 holds terminals of its own, and their rows are display
+			//only: what this test is about are the two rows below them.
+		QList<QTreeWidgetItem *> rows;
+		auto *root_item = tree->topLevelItem(0);
+		for (int i = 0 ; i < (root_item ? root_item->childCount() : 0) ; ++i) {
+			if (!showsWhatExists(root_item->child(i))) {
+				rows << root_item->child(i);
+			}
+		}
+		if (rows.count() != 2) {
+			return;
+		}
+		first_before = rows.at(0)->data(0, Qt::UserRole).toString();
+		second_before = rows.at(1)->data(0, Qt::UserRole).toString();
+
+			//The first terminal is given no symbol at all, which is
+			//what the first row of the list says -- the second one is
+			//left alone, and keeps the symbol of the last terminal of
+			//the strip.
+		rows.at(1)->setSelected(false);
+		opened = interactWithThePropertiesDialog(dialog, [&](QDialog *properties) {
+			if (auto *symbols_cb = propertiesSymbolCombo(properties)) {
+				symbols_cb->setCurrentIndex(0);		//(no symbol)
+			}
+		});
+
+			//Marking the terminal which was left alone opens the dialog
+			//on the values of the moment again.
+		rows.clear();
+		root_item = tree->topLevelItem(0);
+		for (int i = 0 ; i < (root_item ? root_item->childCount() : 0) ; ++i) {
+			if (!showsWhatExists(root_item->child(i))) {
+				rows << root_item->child(i);
+			}
+		}
+		if (rows.count() != 2) {
+			return;
+		}
+		first_after = rows.at(0)->data(0, Qt::UserRole).toString();
+		rows.at(0)->setSelected(false);
+		rows.at(1)->setSelected(true);
+		interactWithThePropertiesDialog(dialog, [&](QDialog *properties) {
+			if (auto *symbols_cb = propertiesSymbolCombo(properties)) {
+				second_dialog_symbol = symbols_cb->itemData(
+							symbols_cb->currentIndex()).toString();
+			}
+		});
+	});
+
+	QVERIFY(dialog_found);
+	QVERIFY2(opened, "the dialog of the properties was shown");
+	QVERIFY2(!second_before.isEmpty(),
+			 "the terminals of X10 are drawn with a symbol, so the new ones start with it");
+	QVERIFY2(first_before == second_before,
+			 "both terminals start with the values of the last terminal of the strip");
+	QVERIFY2(first_after.isEmpty(),
+			 "the terminal the dialog worked on keeps what it was given");
+	QVERIFY2(second_dialog_symbol == second_before,
+			 "the terminal the dialog was never about is worth the values of the moment");
+}
+
+/**
+	What the dialog of the properties shows is what the terminals it works
+	on are created with: type, function, section, color and flags, written
+	the very way the editor of an element writes them -- which is what
+	makes the terminal strip editor show them for those terminals, and what
+	a drawn terminal carries over into the element it is drawn with
+	(@sa TerminalProperties::applyTo,
+	BindTerminalCommand::takenOverData).
+*/
+void tst_terminalnavigator::createsTheTerminalsWithTheChosenProperties()
+{
+	auto *ka = rootChild(0, QStringLiteral("KA"));
+	QVERIFY(ka);
+	auto *cabinet_a = childByText(ka, QStringLiteral("Cabinet A"));
+	QVERIFY(cabinet_a);
+	m_tree->setCurrentItem(cabinet_a);
+
+	QString color_spec;
+	bool opened = false;
+	const bool dialog_found = interactWithTheStripDialog([&](QDialog *dialog) {
+		auto *names = dialogNameCombo(dialog);
+		auto *id_field = dialogIdField(dialog);
+		if (!names || !id_field) {
+			return;
+		}
+		useTypedIds(dialog);
+		QTest::keyClicks(names->lineEdit(), QStringLiteral("X82"));
+		id_field->setText(QStringLiteral("1-2"));
+
+		opened = interactWithThePropertiesDialog(dialog, [&](QDialog *properties) {
+			auto *type_cb = propertiesTypeCombo(properties);
+			auto *function_cb = propertiesFunctionCombo(properties);
+			auto *section_cb = propertiesSectionCombo(properties);
+			auto *color_cb = propertiesColorCombo(properties);
+			if (!type_cb || !function_cb || !section_cb || !color_cb) {
+				return;
+			}
+			type_cb->setCurrentIndex(type_cb->findText(QStringLiteral("Fuse")));
+			function_cb->setCurrentIndex(
+						function_cb->findText(QStringLiteral("Phase")));
+			section_cb->setCurrentText(QStringLiteral("2.5 mm²"));
+			color_cb->setCurrentIndex(1);
+			color_spec = color_cb->itemData(1).toString();
+			if (auto *bom_cb = propertiesExcludeFromBom(properties)) {
+				bom_cb->setChecked(true);
+			}
+			if (auto *locked_cb = propertiesAutoNumberLocked(properties)) {
+				locked_cb->setChecked(true);
+			}
+		});
+		if (opened) {
+			dialog->accept();
+		}
+	});
+
+	QVERIFY(dialog_found);
+	QVERIFY2(opened, "the dialog of the properties was shown");
+	QVERIFY(!color_spec.isEmpty());
+
+	auto *x82 = stripNamed(QStringLiteral("X82"));
+	QVERIFY(x82);
+	QCOMPARE(x82->physicalTerminalCount(), 2);
+	for (int i = 0 ; i < x82->physicalTerminalCount() ; ++i) {
+		const auto terminal = x82->physicalTerminal(i)->realTerminals().at(0);
+		const auto data = terminal->terminalData();
+		const auto informations = data.m_informations;
+
+		QVERIFY2(!terminal->isElement(), "the terminal is not drawn in any folio yet");
+		QCOMPARE(int(data.terminalType()), int(ElementData::TTFuse));
+		QCOMPARE(int(data.terminalFunction()), int(ElementData::TFPhase));
+		QCOMPARE(informations.value(RealTerminal::sectionInfoKey()).toString(),
+				 QStringLiteral("2.5"));
+		QCOMPARE(informations.value(RealTerminal::colorInfoKey()).toString(),
+				 color_spec);
+		QCOMPARE(informations.value(QStringLiteral("exclude_from_bom")).toString(),
+				 QStringLiteral("true"));
+		QCOMPARE(informations.value(QStringLiteral("auto_num_locked")).toString(),
+				 QStringLiteral("true"));
+		QVERIFY2(!informations.value(
+					 QStringLiteral("potential_isolating")).isValid(),
+				 "a flag the dialog did not set is kept out of the data");
+	}
 }
 
 /**
@@ -2399,14 +3116,19 @@ void tst_terminalnavigator::marksTheTerminalsItAdds()
 }
 
 /**
-	The button of the toolbar opens the dialog of the terminals marked --
-	the dialog itself is defined later, and what this pins down is that the
-	button opens one for the marked terminals and nothing at all without
-	them (@sa AddTerminalStripDialog::openTerminalsDialog).
+	The button of the toolbar opens the dialog of the properties for the
+	terminals marked, and the fields the user finds there are the very ones
+	of the element editor, plus the symbol a terminal is drawn with and the
+	flag which keeps it out of the bill of materials
+	(@sa TerminalPropertiesDialog). The button keeps quiet while nothing is
+	marked: a dialog which has no terminal to work on is a dialog which
+	would give its values to nothing
+	(@sa AddTerminalStripDialog::openTerminalsDialog).
 */
 void tst_terminalnavigator::opensItsDialogForTheMarkedTerminals()
 {
-	bool box_for_rows = false, box_without_rows = false;
+	bool dialog_for_rows = false, dialog_without_rows = false;
+	bool lists_the_fields = false;
 	const bool dialog_found = interactWithTheStripDialog([&](QDialog *dialog) {
 		auto *spin = dialogNumberSpin(dialog);
 		auto *tree = dialogPreviewTree(dialog);
@@ -2417,27 +3139,45 @@ void tst_terminalnavigator::opensItsDialogForTheMarkedTerminals()
 		spin->setValue(2);
 
 		const auto ask = [&](bool *shown) {
-			QTimer::singleShot(0, dialog, [shown]() {
-				auto *box = qobject_cast<QMessageBox *>(
-							QApplication::activeModalWidget());
-				if (box) {
-					*shown = true;
-					box->close();
-				}
+			*shown = interactWithThePropertiesDialog(dialog, [&](QDialog *properties) {
+				lists_the_fields = properties->findChild<QGroupBox *>(
+							QStringLiteral("m_terminal_gb"))
+						&& properties->findChild<QComboBox *>(
+							QStringLiteral("m_terminal_type_cb"))
+						&& properties->findChild<QComboBox *>(
+							QStringLiteral("m_terminal_func_cb"))
+						&& properties->findChild<QComboBox *>(
+							QStringLiteral("m_terminal_section_cb"))
+						&& properties->findChild<QComboBox *>(
+							QStringLiteral("m_terminal_width_cb"))
+						&& properties->findChild<QComboBox *>(
+							QStringLiteral("m_terminal_color_cb"))
+						&& properties->findChild<QComboBox *>(
+							QStringLiteral("m_terminal_manufacturer_cb"))
+						&& properties->findChild<QComboBox *>(
+							QStringLiteral("m_symbol_cb"))
+						&& properties->findChild<QCheckBox *>(
+							QStringLiteral("m_auto_num_locked_cb"))
+						&& properties->findChild<QCheckBox *>(
+							QStringLiteral("m_potential_isolating_cb"))
+						&& properties->findChild<QCheckBox *>(
+							QStringLiteral("m_exclude_from_bom_cb"));
 			});
-			action->trigger();
 		};
 
-		ask(&box_for_rows);
+		ask(&dialog_for_rows);
 
 		tree->clearSelection();
-		ask(&box_without_rows);
+		ask(&dialog_without_rows);
 	});
 
 	QVERIFY(dialog_found);
-	QVERIFY2(box_for_rows,
+	QVERIFY2(dialog_for_rows,
 			 "the button opens the dialog for the terminals marked");
-	QVERIFY2(!box_without_rows,
+	QVERIFY2(lists_the_fields,
+			 "the dialog holds the very fields of the element editor, "
+			 "plus the symbol and the flag out of the bill of materials");
+	QVERIFY2(!dialog_without_rows,
 			 "no terminal marked, no dialog to open");
 }
 
