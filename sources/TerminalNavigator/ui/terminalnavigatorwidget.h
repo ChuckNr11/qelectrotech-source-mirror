@@ -343,6 +343,25 @@ class TerminalNavigatorWidget : public QWidget
 			to, or nullptr when there is nothing to say about @a item.
 		*/
 		QTreeWidgetItem *selectionScopeKey(QTreeWidgetItem *item) const;
+		/**
+			@brief nodePathOf
+			What @a item stands for in the tree: its text and the text
+			of every item above it, the last one being its own. A
+			rebuild takes every item away with it, and this is how the
+			node the user was on is read back afterwards -- the very
+			node the dialog of a new strip is called from
+			(@sa reload, itemForNodePath).
+			@return the texts from the root of the tree down to
+			@a item, empty when there is no @a item.
+		*/
+		QStringList nodePathOf(QTreeWidgetItem *item) const;
+		/**
+			@brief itemForNodePath
+			@param path : what nodePathOf answered
+			@return the item which stands for that very node now, or
+			nullptr when the tree holds it no more.
+		*/
+		QTreeWidgetItem *itemForNodePath(const QStringList &path) const;
 		void setCurrentStrip(TerminalStrip *strip);
 		void connectElementSignals();
 		void disconnectElementSignals();

@@ -510,6 +510,7 @@ private slots:
 	void movesTerminalFromFreeToStrip();
 	void selectsStripAndTerminal();
 	void reloadKeepsTheSelectedStrip();
+	void reloadKeepsTheSelectedNode();
 	void followsElementsOfTheFolios();
 	void followsEditedTerminalsInTheTree();
 	void createsStripThroughTheToolbar();
@@ -725,6 +726,53 @@ void tst_terminalnavigator::reloadKeepsTheSelectedStrip()
 	m_widget->reload();
 	QCOMPARE(m_tree->topLevelItemCount(), 2);
 	QVERIFY(!m_widget->currentStrip());
+}
+
+/**
+	A rebuild keeps the node the user was on as well. An installation, a
+	location and the side of the independent terminals are no strip, and
+	losing them leaves the tab speaking for no node at all -- while the
+	dialog of "New terminal strip" is called from that very node, and
+	opens on no plant and no location when it is gone: a name list which
+	matches no strip of the project at all
+	(@sa TerminalNavigatorWidget::reload, currentInstallation).
+*/
+void tst_terminalnavigator::reloadKeepsTheSelectedNode()
+{
+	auto *ka = rootChild(0, QStringLiteral("KA"));
+	QVERIFY(ka);
+	auto *cabinet_a = childByText(ka, QStringLiteral("Cabinet A"));
+	QVERIFY(cabinet_a);
+
+		//A location of the project, which is the node a strip is
+		//created below.
+	m_tree->setCurrentItem(cabinet_a);
+	QCOMPARE(m_widget->currentInstallation(), QStringLiteral("KA"));
+	QCOMPARE(m_widget->currentLocation(), QStringLiteral("Cabinet A"));
+
+	m_widget->reload();
+
+	QVERIFY(m_tree->currentItem());
+	QCOMPARE(m_tree->currentItem()->text(0), QStringLiteral("Cabinet A"));
+	QCOMPARE(m_widget->currentInstallation(), QStringLiteral("KA"));
+	QCOMPARE(m_widget->currentLocation(), QStringLiteral("Cabinet A"));
+
+		//The side of the independent terminals is kept the same way,
+		//its root standing for the node of every terminal below it.
+	auto *free_side = freeRoot();
+	QVERIFY(free_side);
+	const auto free_side_text = free_side->text(0);
+	m_tree->setCurrentItem(free_side);
+	m_widget->reload();
+
+	QVERIFY(m_tree->currentItem());
+	QCOMPARE(m_tree->currentItem()->text(0), free_side_text);
+	QVERIFY2(!m_widget->currentIsStrip(),
+			 "the independent terminals are no strip of their own");
+	QVERIFY(!m_widget->currentStrip());
+
+	m_tree->clearSelection();
+	m_tree->setCurrentItem(nullptr);
 }
 
 /**

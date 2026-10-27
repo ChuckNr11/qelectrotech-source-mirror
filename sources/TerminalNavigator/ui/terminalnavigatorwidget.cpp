@@ -287,6 +287,17 @@ QETProject *TerminalNavigatorWidget::project() const
 void TerminalNavigatorWidget::reload()
 {
 	auto current_ = m_current_strip;
+		//What the user is on when it is no strip: an installation, a
+		//location, the root of the independent terminals or one of
+		//their rows. Only a strip is told apart by the pointer above,
+		//and the rebuild below takes every item away with it -- while
+		//the node is what the dialog of a new strip is called from
+		//(@sa currentInstallation, currentLocation): a node lost here
+		//opens that dialog on no installation and no location at all,
+		//and it offers no name of the branch to pick.
+	const QStringList node_ = current_
+			? QStringList()
+			: nodePathOf(ui->m_tree_view->currentItem());
 
 	ui->m_tree_view->clear();
 	m_item_strip_H.clear();
@@ -330,6 +341,68 @@ void TerminalNavigatorWidget::reload()
 			//this a safety net instead of a second signal.
 		setCurrentStrip(nullptr);
 	}
+	else if (!node_.isEmpty()) {
+			//An installation, a location or the side of the
+			//independent terminals: the very node the user was on,
+			//read back the way the tree stands after the rebuild
+			//(@sa itemForNodePath). A node which is gone leaves the
+			//selection empty, which the buttons have said already.
+		if (auto *node_item = itemForNodePath(node_)) {
+			ui->m_tree_view->setCurrentItem(node_item);
+		}
+	}
+}
+
+/**
+ * @brief TerminalNavigatorWidget::nodePathOf
+ * @param item
+ * @return the text of @p item and of every item above it, the last one
+ * being its own -- what stands for the node of @p item, read before a
+ * rebuild takes that item away (@sa reload).
+ */
+QStringList TerminalNavigatorWidget::nodePathOf(QTreeWidgetItem *item) const
+{
+	QStringList path;
+	while (item) {
+		path.prepend(item->data(0, Qt::DisplayRole).toString());
+		item = item->parent();
+	}
+	return path;
+}
+
+/**
+ * @brief TerminalNavigatorWidget::itemForNodePath
+ * @param path : what nodePathOf answered
+ * @return the item of the tree which stands for that very node now, or
+ * nullptr when the tree holds it no more (@sa reload).
+ */
+QTreeWidgetItem *TerminalNavigatorWidget::itemForNodePath(const QStringList &path) const
+{
+	if (path.isEmpty()) {
+		return nullptr;
+	}
+
+	QTreeWidgetItem *item = nullptr;
+	for (int i = 0 ; i < ui->m_tree_view->topLevelItemCount() ; ++i) {
+		auto *top = ui->m_tree_view->topLevelItem(i);
+		if (top->data(0, Qt::DisplayRole).toString() == path.constFirst()) {
+			item = top;
+			break;
+		}
+	}
+
+	for (int i = 1 ; item && i < path.count() ; ++i) {
+		QTreeWidgetItem *below = nullptr;
+		for (int j = 0 ; j < item->childCount() ; ++j) {
+			if (item->child(j)->data(0, Qt::DisplayRole).toString() == path.at(i)) {
+				below = item->child(j);
+				break;
+			}
+		}
+		item = below;
+	}
+
+	return item;
 }
 
 /**
