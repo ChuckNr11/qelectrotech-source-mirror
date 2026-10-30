@@ -1,7 +1,7 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <ui version="4.0">
- <class>AddTerminalStripDialog</class>
- <widget class="QDialog" name="AddTerminalStripDialog">
+ <class>AddTerminalsDialog</class>
+ <widget class="QDialog" name="AddTerminalsDialog">
   <property name="geometry">
    <rect>
     <x>0</x>
@@ -11,7 +11,7 @@
    </rect>
   </property>
   <property name="windowTitle">
-   <string>Add a terminal strip</string>
+   <string>Add new terminals</string>
   </property>
   <layout class="QGridLayout" name="gridLayout_2">
    <item row="0" column="0">
@@ -77,6 +77,9 @@
    </item>
    <item row="5" column="1">
     <widget class="QComboBox" name="m_name_cb">
+     <property name="toolTip">
+      <string>Add terminal strip name</string>
+     </property>
      <property name="editable">
       <bool>true</bool>
      </property>
@@ -89,6 +92,9 @@
     <layout class="QGridLayout" name="gridLayout">
      <item row="0" column="2">
       <widget class="QRadioButton" name="m_id_rb">
+       <property name="toolTip">
+        <string>Add terminals by ID name</string>
+       </property>
        <property name="text">
         <string>ID's of terminals</string>
        </property>
@@ -139,12 +145,15 @@
    <item row="8" column="0" colspan="5">
     <widget class="QFrame" name="m_preview_group">
      <property name="frameShape">
-      <enum>QFrame::StyledPanel</enum>
+      <enum>QFrame::Shape::StyledPanel</enum>
      </property>
      <property name="frameShadow">
-      <enum>QFrame::Sunken</enum>
+      <enum>QFrame::Shadow::Sunken</enum>
      </property>
      <layout class="QVBoxLayout" name="m_preview_layout">
+      <property name="spacing">
+       <number>0</number>
+      </property>
       <property name="leftMargin">
        <number>0</number>
       </property>
@@ -157,39 +166,124 @@
       <property name="bottomMargin">
        <number>0</number>
       </property>
-      <property name="spacing">
-       <number>0</number>
-      </property>
       <item>
-       <widget class="QToolBar" name="m_preview_toolbar">
-        <property name="iconSize">
-         <size>
-          <width>16</width>
-          <height>16</height>
-         </size>
+       <layout class="QHBoxLayout" name="m_preview_bar_layout">
+        <property name="spacing">
+         <number>4</number>
         </property>
-        <property name="movable">
-         <bool>false</bool>
+        <property name="leftMargin">
+         <number>4</number>
         </property>
-        <property name="floatable">
-         <bool>false</bool>
+        <property name="topMargin">
+         <number>2</number>
         </property>
-        <property name="toolButtonStyle">
-         <enum>Qt::ToolButtonIconOnly</enum>
+        <property name="rightMargin">
+         <number>4</number>
         </property>
-        <property name="windowTitle">
-         <string>previewToolbar</string>
+        <property name="bottomMargin">
+         <number>2</number>
         </property>
-        <addaction name="m_edit_terminals"/>
-       </widget>
+        <item>
+         <widget class="QToolButton" name="m_edit_terminals_bt">
+          <property name="toolTip">
+           <string>Edit the marked terminals...</string>
+          </property>
+          <property name="text">
+           <string notr="true">...</string>
+          </property>
+          <property name="icon">
+           <iconset theme="configure"/>
+          </property>
+          <property name="autoRaise">
+           <bool>true</bool>
+          </property>
+         </widget>
+        </item>
+        <item>
+         <spacer name="m_symbol_spacer">
+          <property name="orientation">
+           <enum>Qt::Orientation::Horizontal</enum>
+          </property>
+          <property name="sizeHint" stdset="0">
+           <size>
+            <width>40</width>
+            <height>20</height>
+           </size>
+          </property>
+         </spacer>
+        </item>
+        <item>
+         <widget class="QComboBox" name="m_symbol_cb">
+          <property name="toolTip">
+           <string>Symbol the terminals are drawn with, once they are placed on a folio. Type to find one, or pick it in the list; every terminal symbol of the project and of the standard collection is listed.</string>
+          </property>
+          <property name="editable">
+           <bool>true</bool>
+          </property>
+          <property name="insertPolicy">
+           <enum>QComboBox::InsertPolicy::NoInsert</enum>
+          </property>
+         </widget>
+        </item>
+        <item>
+         <widget class="QToolButton" name="m_symbol_bt">
+          <property name="minimumSize">
+           <size>
+            <width>24</width>
+            <height>24</height>
+           </size>
+          </property>
+          <property name="maximumSize">
+           <size>
+            <width>24</width>
+            <height>24</height>
+           </size>
+          </property>
+          <property name="toolTip">
+           <string>Choose a terminal symbol in the collection</string>
+          </property>
+          <property name="text">
+           <string notr="true">...</string>
+          </property>
+          <property name="autoRaise">
+           <bool>true</bool>
+          </property>
+         </widget>
+        </item>
+        <item>
+         <widget class="QToolButton" name="m_default_symbol_bt">
+          <property name="minimumSize">
+           <size>
+            <width>24</width>
+            <height>24</height>
+           </size>
+          </property>
+          <property name="maximumSize">
+           <size>
+            <width>24</width>
+            <height>24</height>
+           </size>
+          </property>
+          <property name="toolTip">
+           <string>Save the selected symbol as the default terminal symbol</string>
+          </property>
+          <property name="text">
+           <string notr="true">...</string>
+          </property>
+          <property name="icon">
+           <iconset theme="document-save"/>
+          </property>
+          <property name="autoRaise">
+           <bool>true</bool>
+          </property>
+         </widget>
+        </item>
+       </layout>
       </item>
       <item>
        <widget class="QTreeWidget" name="m_preview_tree">
         <property name="frameShape">
-         <enum>QFrame::NoFrame</enum>
-        </property>
-        <property name="toolTip">
-         <string>Terminals about to be added to the terminal strip, with the symbol each one is drawn with. Greyed out rows at the top show what the terminal strip already holds; they are display only. Select one or several of the others and give them their properties with the button above; a terminal without a symbol is not drawn in any folio yet.</string>
+         <enum>QFrame::Shape::NoFrame</enum>
         </property>
         <property name="selectionMode">
          <enum>QAbstractItemView::SelectionMode::ExtendedSelection</enum>
@@ -276,7 +370,7 @@
   <connection>
    <sender>buttonBox</sender>
    <signal>accepted()</signal>
-   <receiver>AddTerminalStripDialog</receiver>
+   <receiver>AddTerminalsDialog</receiver>
    <slot>accept()</slot>
    <hints>
     <hint type="sourcelabel">
@@ -292,7 +386,7 @@
   <connection>
    <sender>buttonBox</sender>
    <signal>rejected()</signal>
-   <receiver>AddTerminalStripDialog</receiver>
+   <receiver>AddTerminalsDialog</receiver>
    <slot>reject()</slot>
    <hints>
     <hint type="sourcelabel">

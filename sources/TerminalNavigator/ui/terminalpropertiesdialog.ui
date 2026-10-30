@@ -23,30 +23,6 @@
    <string>Terminal properties</string>
   </property>
   <layout class="QGridLayout" name="gridLayout">
-   <item row="0" column="0">
-    <layout class="QFormLayout" name="formLayout">
-     <item row="0" column="0">
-      <widget class="QLabel" name="label_symbol">
-       <property name="text">
-        <string>Symbol :</string>
-       </property>
-      </widget>
-     </item>
-     <item row="0" column="1">
-      <widget class="QComboBox" name="m_symbol_cb">
-       <property name="toolTip">
-        <string>Symbol the terminals are drawn with, once they are placed on a folio. Type to find one, or pick it in the list; every terminal symbol of the project and of the standard collection is listed.</string>
-       </property>
-       <property name="editable">
-        <bool>true</bool>
-       </property>
-       <property name="insertPolicy">
-        <enum>QComboBox::InsertPolicy::NoInsert</enum>
-       </property>
-      </widget>
-     </item>
-    </layout>
-   </item>
    <item row="1" column="0">
     <widget class="QGroupBox" name="m_terminal_gb">
      <property name="sizePolicy">

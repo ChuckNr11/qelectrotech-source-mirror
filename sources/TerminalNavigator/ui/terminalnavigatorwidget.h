@@ -211,10 +211,9 @@ class TerminalNavigatorWidget : public QWidget
 			marked in the tree, and give every one of them what the OK
 			button chose there -- the values of the first terminal in
 			the order of the tree are what that dialog opens on
-			(@sa TerminalPropertiesDialog). The symbol is not asked for
-			in there: a terminal which exists already is drawn with the
-			symbol of its element
-			(@sa TerminalPropertiesDialog::WithoutSymbol).
+			(@sa TerminalPropertiesDialog). That dialog asks for no
+			symbol at all: a terminal which exists already is drawn with
+			the symbol of its element.
 
 			Only the rows of a terminal strip are worth this -- an
 			independent terminal belongs to no strip and is what its

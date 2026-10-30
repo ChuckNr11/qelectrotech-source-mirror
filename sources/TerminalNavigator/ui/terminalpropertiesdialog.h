@@ -19,7 +19,6 @@
 #include <QStringList>
 
 class RealTerminal;
-class TerminalSymbolList;
 namespace Ui {
 	class TerminalPropertiesDialog;
 }
@@ -93,7 +92,7 @@ struct TerminalProperties
 	no folio can have of its own. It serves the terminals the strip
 	dialog is about to create and the ones which exist already in the
 	terminal navigator alike
-	(@sa AddTerminalStripDialog::openTerminalsDialog,
+	(@sa AddTerminalsDialog::openTerminalsDialog,
 	TerminalNavigatorWidget::editSelection).
 
 	The dialog works on the marked terminals alone: the OK button hands
@@ -111,43 +110,28 @@ struct TerminalProperties
 	automatic numbering is locked whenever the dialog opens -- which is
 	what he wants from the terminals he creates -- and every terminal the
 	dialog is not asked about keeps exactly those values
-	(@sa AddTerminalStripDialog::defaultsForNewTerminals).
+	(@sa AddTerminalsDialog::defaultsForNewTerminals).
 
 	What the dialog asks for is what is worth asking: the symbol a
-	terminal is drawn with is a question for a terminal which is drawn in
-	no folio yet, and one which exists already is drawn with the symbol
-	of its element -- the row is then taken out of the dialog altogether
-	(@sa SymbolRow, TerminalNavigatorWidget::editSelection).
+	terminal is drawn with is not among it. The dialog which creates
+	terminals picks that symbol once, in the row of symbols its own
+	toolbar carries (@sa AddTerminalsDialog), and a terminal which exists
+	already is drawn with the symbol of its element -- so there is
+	nothing this dialog could ask about it. It is also why the list of
+	the symbols stays where it is: this dialog holds none
+	(@sa TerminalSymbolList).
 */
 class TerminalPropertiesDialog : public QDialog
 {
 	Q_OBJECT
 
 	public:
-		/// Whether the dialog asks for the symbol the terminals are
-		/// drawn with (@sa SymbolRow).
-		enum SymbolRow {
-			ShowSymbol,     ///< every terminal symbol is listed
-			WithoutSymbol   ///< the row is not shown at all
-		};
-
 		/**
 			@brief TerminalPropertiesDialog
-			@param symbols : the list of every terminal symbol, which is
-			read as far as it is needed by whoever owns it -- this dialog
-			starts the reading of the standard collection it does not do
-			already, since it is the one which shows the list
-			(@sa TerminalSymbolList). May be null: the dialog then opens
-			on the symbol it was given and lists none.
 			@param values : the properties the dialog opens on
-			@param symbol_row : whether the symbol is asked for at all
-			(@sa SymbolRow); the list of @a symbols is then of no use to
-			the dialog and is left alone.
 			@param parent
 		*/
-		TerminalPropertiesDialog(TerminalSymbolList *symbols,
-		                         const TerminalProperties &values,
-		                         SymbolRow symbol_row = ShowSymbol,
+		TerminalPropertiesDialog(const TerminalProperties &values,
 		                         QWidget *parent = nullptr);
 		~TerminalPropertiesDialog() override;
 
@@ -162,28 +146,6 @@ class TerminalPropertiesDialog : public QDialog
 
 	private:
 		void fillTypeAndFunctionCombos();
-		void fillSymbolCombo(const QString &selected);
-		/**
-			@brief setupSymbolCompleter
-			The symbol combo box is editable, and is given a completer
-			which completes on what is typed anywhere in a symbol name --
-			'm10' finds 'Terminal M10', which the prefix matching of the
-			combo box alone would not. The completer works on the names of
-			the symbols listed, since that is what the user reads in the
-			combo box.
-		*/
-		void setupSymbolCompleter();
-		/// @return the location string of the symbol shown in the combo
-		/// box, or an empty string when it shows none.
-		QString symbol() const;
-
-		/// @brief onSymbolListRead
-		/// Fills what the reading of the standard collection added
-		/// (@sa TerminalSymbolList): the symbol chosen so far stays
-		/// chosen, and the completer learns the names of the symbols
-		/// which just arrived.
-		void onSymbolListRead();
-
 		void populateTerminalSizeCombos(double section, double width, const QString &catalog_entry);
 		void populateTerminalColorCombo(const QString &spec);
 		/// @brief refreshTerminalWidthCombo
@@ -193,9 +155,6 @@ class TerminalPropertiesDialog : public QDialog
 		void refreshTerminalWidthCombo();
 
 		Ui::TerminalPropertiesDialog *ui;
-		/// Reads the symbols of the standard collection in the background
-		/// and hands the full list to the symbol combo box.
-		TerminalSymbolList *m_symbols;
 };
 
 #endif // TERMINALPROPERTIESDIALOG_H

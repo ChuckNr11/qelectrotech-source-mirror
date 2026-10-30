@@ -6,11 +6,11 @@
 	license.
 */
 /**
-	@file addterminalstripdialog.h
-	@brief Header of the AddTerminalStripDialog class
+	@file addterminalsdialog.h
+	@brief Header of the AddTerminalsDialog class
 */
-#ifndef ADDTERMINALSTRIPDIALOG_H
-#define ADDTERMINALSTRIPDIALOG_H
+#ifndef ADDTERMINALSDIALOG_H
+#define ADDTERMINALSDIALOG_H
 
 #include "terminalpropertiesdialog.h"
 
@@ -23,11 +23,11 @@ class QETProject;
 class TerminalStrip;
 class TerminalSymbolList;
 namespace Ui {
-	class AddTerminalStripDialog;
+	class AddTerminalsDialog;
 }
 
 /**
-	@brief The AddTerminalStripDialog class
+	@brief The AddTerminalsDialog class
 	This dialog creates a terminal strip from the TerminalNavigator, that is
 	to say: without going through the terminal strip editor.
 	It is deliberately *not* the TerminalStripCreatorDialog of the terminal strip
@@ -115,13 +115,13 @@ namespace Ui {
 	list itself and starts reading the standard collection, which holds
 	more than a thousand elements and is read in the background.
 */
-class AddTerminalStripDialog : public QDialog
+class AddTerminalsDialog : public QDialog
 {
 	Q_OBJECT
 
 	public:
-		explicit AddTerminalStripDialog(QETProject *project, QWidget *parent = nullptr);
-		~AddTerminalStripDialog() override;
+		explicit AddTerminalsDialog(QETProject *project, QWidget *parent = nullptr);
+		~AddTerminalsDialog() override;
 
 		void setInstallation(const QString &installation);
 		void setLocation(const QString &location);
@@ -162,6 +162,16 @@ class AddTerminalStripDialog : public QDialog
 		/// create them a second time.
 	QList<TerminalDescription> describedTerminals() const;
 
+		/**
+			@brief accept
+			Takes what the dialog describes as the terminals to create
+			(@sa describedTerminals) and remembers the symbol the last of
+			them is created with as the one used last -- what the dialog
+			opens on the next time, for a project which holds terminals
+			already (@sa initialSymbol).
+		*/
+		void accept() override;
+
 	private:
 		/// Result of the reading of the input which names the terminals to
 		/// add -- the ID field or the number of them (@sa parseIds): a list
@@ -183,9 +193,87 @@ class AddTerminalStripDialog : public QDialog
 			Names the symbols the reading of the standard collection just
 			added to the list: the second column of a row shows the name of
 			its symbol, and a symbol read before it was listed keeps an
-			empty name until this runs (@sa TerminalSymbolList).
+			empty name until this runs (@sa TerminalSymbolList). The
+			combo box of the symbols is filled from that very list, and
+			learns what arrived the same way (@sa fillSymbolCombo).
 		*/
 		void onSymbolListRead();
+		/**
+			@brief fillSymbolCombo
+			@param selected : the location string of the symbol to select,
+			or an empty string to select "no symbol"
+			Fills the combo box with every symbol the list holds -- the
+			symbols of the project first, then the ones of the standard
+			collection as soon as they are read (@sa onSymbolListRead) --
+			and selects @a selected.
+		*/
+		void fillSymbolCombo(const QString &selected);
+		/**
+			@brief setupSymbolCompleter
+			The symbol combo box is editable, and is given a completer
+			which completes on what is typed anywhere in a symbol name --
+			'm10' finds 'Terminal M10', which the prefix matching of the
+			combo box alone would not. The completer works on the names of
+			the symbols listed, since that is what the user reads in the
+			combo box.
+		*/
+		void setupSymbolCompleter();
+		/**
+			@brief onSymbolChanged
+			Gives the symbol the combo box shows to the terminals marked in
+			the preview tree -- and to those alone: a terminal which is not
+			marked keeps the symbol it carries, and the rows the OK button
+			is about to add are created with what the combo box shows at
+			the moment they appear (@sa symbolOfRow).
+		*/
+		void onSymbolChanged();
+		/// @brief onChooseSymbol
+		/// Opens the dialog which chooses a terminal symbol in the
+		/// collections and puts what it chose into the combo box
+		/// (@sa chooseSymbol).
+		void onChooseSymbol();
+		/**
+			@brief chooseSymbol
+			@return the location string of the terminal symbol the user
+			chose in the collections, id-free and empty when he chose
+			none (@sa onChooseSymbol).
+		*/
+		QString chooseSymbol();
+		/**
+			@brief onSaveDefaultSymbol
+			Keeps the symbol the combo box shows as the one the dialog
+			opens on (@sa initialSymbol): its path goes into the settings,
+			and one which says nothing -- "(no symbol)" -- takes that
+			entry away again. What the project holds stays untouched: this
+			is about the next dialog of the next project.
+		*/
+		void onSaveDefaultSymbol();
+		/// @return the location string of the symbol the combo box shows,
+		/// id-free and empty when it shows "(no symbol)".
+		QString currentSymbol() const;
+		/// Shows @p symbol in the combo box, listed or not (@sa
+		/// fillSymbolCombo).
+		void setCurrentSymbol(const QString &symbol);
+		/**
+			@brief symbolOfRow
+			@param id : the ID of a terminal to be created
+			@return the symbol that terminal is created with: what the
+			user gave that very row, and what the combo box shows for a
+			row he never worked on (@sa onSymbolChanged).
+		*/
+		QString symbolOfRow(const QString &id) const;
+		/**
+			@brief initialSymbol
+			@return the symbol the dialog opens on, and the one the rows
+			which were never worked on are created with: the symbol used
+			last when the project holds terminals already -- which is the
+			one the settings remember, and the one of the last terminal of
+			the strip when they remember none -- and the default the
+			button of the toolbar saved for a project which holds none
+			(@sa onSaveDefaultSymbol). "(no symbol)" when there is nothing
+			to take anything from.
+		*/
+		QString initialSymbol() const;
 		/**
 			@brief onTerminalsModeChanged
 			@param checked : the radio button which just changed its state
@@ -307,27 +395,31 @@ class AddTerminalStripDialog : public QDialog
 		static constexpr int min_terminal_count{0};
 		static constexpr int max_terminal_count{99};
 
-		Ui::AddTerminalStripDialog *ui;
+		Ui::AddTerminalsDialog *ui;
 		QETProject *m_project;
 		/// Root item of the preview tree: the strip itself, whose children
 		/// are the terminals of the ID field.
 		QTreeWidgetItem *m_root_item = nullptr;
 		/// Every terminal symbol of the project and of the standard
-		/// collection, read once and asked for by both dialogs of this
-		/// one: this dialog names the symbols its rows show with it, while
-		/// the properties dialog shows the list itself and starts reading
-		/// the standard collection in the background (@sa
-		/// TerminalSymbolList). Both are handed this very instance, so
-		/// that the names one of them reads are known to the other one.
+		/// collection, read once and asked for by the row of symbols and
+		/// by the dialog which chooses a symbol in the collections: this
+		/// dialog names the symbols its rows show with it, lists them in
+		/// the combo box, and starts reading the standard collection in
+		/// the background (@sa TerminalSymbolList).
 		TerminalSymbolList *m_symbols = nullptr;
 		/// What the dialog of the marked terminals gave them, by ID: what
 		/// the user chose for those terminals, kept while the rows are
 		/// rebuilt. An ID which is not in there is one he never worked on,
 		/// and keeps the defaults of the moment (@sa propertiesOfRow).
 		QHash<QString, TerminalProperties> m_properties;
+		/// The symbol every row appeared with, by ID: what the row of
+		/// symbols showed at that very moment, kept while the rows are
+		/// rebuilt (@sa symbolOfRow). A row the user never worked on
+		/// keeps this and never what the row of symbols shows afterwards.
+		QHash<QString, QString> m_row_symbols;
 
 		static const QString s_installation_default;
 		static const QString s_location_default;
 };
 
-#endif // ADDTERMINALSTRIPDIALOG_H
+#endif // ADDTERMINALSDIALOG_H

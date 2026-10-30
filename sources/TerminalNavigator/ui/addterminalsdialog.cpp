@@ -6,11 +6,11 @@
 	license.
 */
 /**
-	@file addterminalstripdialog.cpp
-	@brief Implementation of the AddTerminalStripDialog class
+	@file addterminalsdialog.cpp
+	@brief Implementation of the AddTerminalsDialog class
 */
-#include "addterminalstripdialog.h"
-#include "ui_addterminalstripdialog.h"
+#include "addterminalsdialog.h"
+#include "ui_addterminalsdialog.h"
 
 #include "terminalsymbollist.h"
 
@@ -19,20 +19,30 @@
 #include "../../TerminalStrip/realterminal.h"
 #include "../../TerminalStrip/terminalstrip.h"
 #include "../../elementprovider.h"
+#include "../../factory/elementpicturefactory.h"
 #include "../../qet.h"
+#include "../../qetapp.h"
 #include "../../qetgraphicsitem/element.h"
 #include "../../qeticons.h"
+#include "../../qetpalette.h"
 #include "../../qetproject.h"
 #include "../../utils/qetutils.h"
 
 #include <QAction>
+#include <QAbstractItemView>
+#include <QCompleter>
 #include <QDialogButtonBox>
-#include <QMessageBox>
+#include <QFileDialog>
+#include <QFileSystemModel>
+#include <QHeaderView>
+#include <QLabel>
 #include <QRadioButton>
+#include <QSettings>
 #include <QSignalBlocker>
 #include <QSpinBox>
 #include <QTextDocument>
 #include <QTreeWidgetItem>
+#include <QVBoxLayout>
 
 #include <algorithm>
 
@@ -45,8 +55,8 @@
 	            :             = separator between strip name and ID
 	            ID            = number of the terminal in the strip
 */
-const QString AddTerminalStripDialog::s_installation_default = QStringLiteral("=INST");
-const QString AddTerminalStripDialog::s_location_default     = QStringLiteral("+LOC");
+const QString AddTerminalsDialog::s_installation_default = QStringLiteral("");	//("=INST");
+const QString AddTerminalsDialog::s_location_default     = QStringLiteral("");	//("+LOC");
 
 namespace {
 	/// Number of IDs a single list may expand to. A silly range such as
@@ -86,14 +96,14 @@ namespace {
 }
 
 /**
-	@brief AddTerminalStripDialog::AddTerminalStripDialog
+	@brief AddTerminalsDialog::AddTerminalsDialog
 	@param project : the project the terminal strip is created in, may be null
 	(the dialog is then empty, which keeps it usable in tests and previews).
 	@param parent
 */
-AddTerminalStripDialog::AddTerminalStripDialog(QETProject *project, QWidget *parent) :
+AddTerminalsDialog::AddTerminalsDialog(QETProject *project, QWidget *parent) :
 	QDialog(parent),
-	ui(new Ui::AddTerminalStripDialog),
+	ui(new Ui::AddTerminalsDialog),
 	m_project(project)
 {
 	ui->setupUi(this);
@@ -135,31 +145,52 @@ AddTerminalStripDialog::AddTerminalStripDialog(QETProject *project, QWidget *par
 		//the list itself, since its embedded collection lives in memory.
 	m_symbols = new TerminalSymbolList(m_project, this);
 	connect(m_symbols, &TerminalSymbolList::symbolsRead,
-		this, &AddTerminalStripDialog::onSymbolListRead);
+		this, &AddTerminalsDialog::onSymbolListRead);
 
 	fillInstallationAndLocation();
 
 	connect(ui->m_installation_cb, &QComboBox::currentTextChanged,
-		this, &AddTerminalStripDialog::fillNamesOfTheCurrentNode);
+		this, &AddTerminalsDialog::fillNamesOfTheCurrentNode);
 	connect(ui->m_location_cb, &QComboBox::currentTextChanged,
-		this, &AddTerminalStripDialog::fillNamesOfTheCurrentNode);
+		this, &AddTerminalsDialog::fillNamesOfTheCurrentNode);
 	connect(ui->m_name_cb, &QComboBox::currentTextChanged,
-		this, &AddTerminalStripDialog::validate);
+		this, &AddTerminalsDialog::validate);
 	connect(ui->m_id_le, &QLineEdit::textChanged,
-		this, &AddTerminalStripDialog::validate);
+		this, &AddTerminalsDialog::validate);
 	connect(ui->m_number_sb, &QSpinBox::valueChanged,
-		this, &AddTerminalStripDialog::validate);
+		this, &AddTerminalsDialog::validate);
 		//One radio button says which of the two inputs names the
 		//terminals to add: the number of them, or the IDs typed
 		//(@sa onTerminalsModeChanged).
 	connect(ui->m_number_rb, &QRadioButton::toggled,
-		this, &AddTerminalStripDialog::onTerminalsModeChanged);
+		this, &AddTerminalsDialog::onTerminalsModeChanged);
 	connect(ui->m_id_rb, &QRadioButton::toggled,
-		this, &AddTerminalStripDialog::onTerminalsModeChanged);
+		this, &AddTerminalsDialog::onTerminalsModeChanged);
 	connect(ui->m_preview_tree, &QTreeWidget::itemSelectionChanged,
-		this, &AddTerminalStripDialog::onPreviewSelectionChanged);
+		this, &AddTerminalsDialog::onPreviewSelectionChanged);
 	connect(ui->m_edit_terminals, &QAction::triggered,
-		this, &AddTerminalStripDialog::onEditTerminalsTriggered);
+		this, &AddTerminalsDialog::onEditTerminalsTriggered);
+
+		//The button of the row of symbols is the very action the toolbar
+		//above the tree carried before that row was there: one entry in
+		//the tree of the .ui file, shown by a button of its own
+		//(@sa m_edit_terminals_bt).
+	ui->m_edit_terminals_bt->setDefaultAction(ui->m_edit_terminals);
+
+		//The row of symbols: the combo box is the list of every symbol
+		//the project and the standard collection hold, the button with
+		//the three dots chooses one in the collections themselves, and
+		//the one beside it keeps the selected symbol as the default the
+		//next dialog opens on (@sa fillSymbolCombo, onChooseSymbol,
+		//onSaveDefaultSymbol).
+	connect(ui->m_symbol_cb, QOverload<int>::of(&QComboBox::currentIndexChanged),
+		this, &AddTerminalsDialog::onSymbolChanged);
+	connect(ui->m_symbol_bt, &QToolButton::clicked,
+		this, &AddTerminalsDialog::onChooseSymbol);
+	connect(ui->m_default_symbol_bt, &QToolButton::clicked,
+		this, &AddTerminalsDialog::onSaveDefaultSymbol);
+	fillSymbolCombo(initialSymbol());
+	setupSymbolCompleter();
 
 		//The dialog opens on the number of terminals, its input being the
 		//one which is active -- the radio button says so in the .ui file
@@ -172,37 +203,37 @@ AddTerminalStripDialog::AddTerminalStripDialog(QETProject *project, QWidget *par
 }
 
 /**
-	@brief AddTerminalStripDialog::~AddTerminalStripDialog
+	@brief AddTerminalsDialog::~AddTerminalsDialog
 */
-AddTerminalStripDialog::~AddTerminalStripDialog()
+AddTerminalsDialog::~AddTerminalsDialog()
 {
 	delete ui;
 }
 
 /**
-	@brief AddTerminalStripDialog::setInstallation
+	@brief AddTerminalsDialog::setInstallation
 	Pre-selects the plant (structure designation '=Inst') of the terminal strip
 	to create, and reloads the strip names of that plant.
 */
-void AddTerminalStripDialog::setInstallation(const QString &installation)
+void AddTerminalsDialog::setInstallation(const QString &installation)
 {
 	ui->m_installation_cb->setCurrentText(installation);
 	fillNamesOfTheCurrentNode();
 }
 
 /**
-	@brief AddTerminalStripDialog::setLocation
+	@brief AddTerminalsDialog::setLocation
 	Pre-selects the location (structure designation '+Loc') of the terminal
 	strip to create, and reloads the strip names of that location.
 */
-void AddTerminalStripDialog::setLocation(const QString &location)
+void AddTerminalsDialog::setLocation(const QString &location)
 {
 	ui->m_location_cb->setCurrentText(location);
 	fillNamesOfTheCurrentNode();
 }
 
 /**
- * @brief AddTerminalStripDialog::setName
+ * @brief AddTerminalsDialog::setName
  * @param name : the strip name (structure designation 'Name') to pre-select
  * The name is set after setInstallation() and setLocation(), which is the
  * order the caller of this dialog has to keep: those two reload the names
@@ -212,7 +243,7 @@ void AddTerminalStripDialog::setLocation(const QString &location)
  * strip of the node already holding terminals shows them, ahead of the IDs
  * typed below (@sa fillExistingTerminals).
  */
-void AddTerminalStripDialog::setName(const QString &name)
+void AddTerminalsDialog::setName(const QString &name)
 {
 	if (name.isEmpty()) {
 		return;
@@ -238,14 +269,14 @@ void AddTerminalStripDialog::setName(const QString &name)
 }
 
 /**
-	@brief AddTerminalStripDialog::generatedTerminalStrip
+	@brief AddTerminalsDialog::generatedTerminalStrip
 	Creates and returns the terminal strip described by this dialog, or null.
 	The terminals themselves are not created here: the caller gets their IDs
 	through terminalIds() and turns them into terminals of its own, since
 	they are terminals which are not drawn in any folio yet.
 	@see terminalStripOfTheDialog
 */
-TerminalStrip *AddTerminalStripDialog::generatedTerminalStrip() const
+TerminalStrip *AddTerminalsDialog::generatedTerminalStrip() const
 {
 	if (!m_project) {
 		return nullptr;
@@ -265,7 +296,7 @@ TerminalStrip *AddTerminalStripDialog::generatedTerminalStrip() const
 }
 
 /**
-	@brief AddTerminalStripDialog::terminalStripOfTheDialog
+	@brief AddTerminalsDialog::terminalStripOfTheDialog
 	@return the terminal strip of the project the name field currently
 	designates, or null when there is none -- the caller then asks for a
 	brand new strip through generatedTerminalStrip().
@@ -273,13 +304,13 @@ TerminalStrip *AddTerminalStripDialog::generatedTerminalStrip() const
 	same terminal strip when they are the same: a name is never refused
 	because it already exists, the terminals are simply added to it.
 */
-TerminalStrip *AddTerminalStripDialog::terminalStripOfTheDialog() const
+TerminalStrip *AddTerminalsDialog::terminalStripOfTheDialog() const
 {
 	return stripOfTheCurrentNode();
 }
 
 /**
-	@brief AddTerminalStripDialog::describedTerminals
+	@brief AddTerminalsDialog::describedTerminals
 	@return the terminals this dialog describes: one per ID of the ID
 	field, in the order of the preview tree, each with the properties the
 	user gave it (@sa propertiesOfRow).
@@ -294,7 +325,7 @@ TerminalStrip *AddTerminalStripDialog::terminalStripOfTheDialog() const
 	OK button is disabled before this could return something the user did
 	not see.
 */
-QList<AddTerminalStripDialog::TerminalDescription> AddTerminalStripDialog::describedTerminals() const
+QList<AddTerminalsDialog::TerminalDescription> AddTerminalsDialog::describedTerminals() const
 {
 	QList<TerminalDescription> result;
 	if (!m_root_item) {
@@ -317,12 +348,12 @@ QList<AddTerminalStripDialog::TerminalDescription> AddTerminalStripDialog::descr
 }
 
 /**
-	@brief AddTerminalStripDialog::fillInstallationAndLocation
+	@brief AddTerminalsDialog::fillInstallationAndLocation
 	Fills the plant and the location combo boxes with the values already used
 	by the terminal strips of the project, the user of course being free to type
 	another one (both combo boxes are editable).
 */
-void AddTerminalStripDialog::fillInstallationAndLocation()
+void AddTerminalsDialog::fillInstallationAndLocation()
 {
 	if (!m_project) {
 		return;
@@ -344,7 +375,7 @@ void AddTerminalStripDialog::fillInstallationAndLocation()
 }
 
 /**
-	@brief AddTerminalStripDialog::fillNamesOfTheCurrentNode
+	@brief AddTerminalsDialog::fillNamesOfTheCurrentNode
 	Fills the strip name combo box with the names of the terminal strips of the
 	plant and the location currently selected, and empties that combo box: the
 	name typed so far belongs to the node we just left.
@@ -352,7 +383,7 @@ void AddTerminalStripDialog::fillInstallationAndLocation()
 	changes nothing to the outcome: the terminals are added to the strip of
 	that name, and a strip which does not exist yet is created.
 */
-void AddTerminalStripDialog::fillNamesOfTheCurrentNode()
+void AddTerminalsDialog::fillNamesOfTheCurrentNode()
 {
 	QStringList names;
 	if (m_project) {
@@ -378,7 +409,7 @@ void AddTerminalStripDialog::fillNamesOfTheCurrentNode()
 }
 
 /**
-	@brief AddTerminalStripDialog::onTerminalsModeChanged
+	@brief AddTerminalsDialog::onTerminalsModeChanged
 	@param checked : the radio button which just changed its state
 	Enables the input the checked radio button names and disables the other
 	one: @c m_number_sb with "Number of terminals", @c m_id_le with "ID's
@@ -389,7 +420,7 @@ void AddTerminalStripDialog::fillNamesOfTheCurrentNode()
 	The signal arrives twice for one switch, both radio buttons firing it:
 	only the one which got checked has something to say.
 */
-void AddTerminalStripDialog::onTerminalsModeChanged(bool checked)
+void AddTerminalsDialog::onTerminalsModeChanged(bool checked)
 {
 	if (!checked) {
 		return;
@@ -402,7 +433,7 @@ void AddTerminalStripDialog::onTerminalsModeChanged(bool checked)
 }
 
 /**
-	@brief AddTerminalStripDialog::validate
+	@brief AddTerminalsDialog::validate
 	Runs every check of the dialog and updates the preview tree, the notice
 	label and the enable state of the OK button:
 	- the ID list has to be readable and free of duplicates;
@@ -412,7 +443,7 @@ void AddTerminalStripDialog::onTerminalsModeChanged(bool checked)
 	a strip of the node designates that strip, whose terminals are extended
 	instead of a new strip being created.
 */
-void AddTerminalStripDialog::validate()
+void AddTerminalsDialog::validate()
 {
 	QStringList messages;
 	QStringList notes;
@@ -427,6 +458,23 @@ void AddTerminalStripDialog::validate()
 	} else if (!name.isEmpty()) {
 		messages << checkIdsAgainstTheStrip(parsed.ids);
 		messages << checkIdsAgainstFreeTerminals(parsed.ids);
+
+			//Every terminal the OK button is about to create is drawn
+			//with a symbol, and the notice label speaks of the ones
+			//which are not: a terminal without a symbol is a terminal
+			//which is drawn nowhere, so there is none to create here
+			//(@sa symbolOfRow). The rows of what the strip holds already
+			//are not created by this dialog and say nothing about it.
+		QStringList without_symbol;
+		for (const auto &id : parsed.ids) {
+			if (symbolOfRow(id).isEmpty()) {
+				without_symbol << id;
+			}
+		}
+		if (!without_symbol.isEmpty()) {
+			messages << tr("These terminals have no symbol: %1")
+						.arg(without_symbol.join(QStringLiteral(", ")));
+		}
 	}
 
 		//The generator stepped over IDs which were taken already: the
@@ -461,38 +509,38 @@ void AddTerminalStripDialog::validate()
 }
 
 /**
-	@brief AddTerminalStripDialog::effectiveInstallation
+	@brief AddTerminalsDialog::effectiveInstallation
 	@return the plant of the terminal block to create, the default one being
 	used when the user left the field empty.
 */
-QString AddTerminalStripDialog::effectiveInstallation() const
+QString AddTerminalsDialog::effectiveInstallation() const
 {
 	const auto installation = ui->m_installation_cb->currentText().trimmed();
 	return installation.isEmpty() ? s_installation_default : installation;
 }
 
 /**
-	@brief AddTerminalStripDialog::effectiveLocation
+	@brief AddTerminalsDialog::effectiveLocation
 	@return the location of the terminal block to create, the default one being
 	used when the user left the field empty.
 */
-QString AddTerminalStripDialog::effectiveLocation() const
+QString AddTerminalsDialog::effectiveLocation() const
 {
 	const auto location = ui->m_location_cb->currentText().trimmed();
 	return location.isEmpty() ? s_location_default : location;
 }
 
 /**
-	@brief AddTerminalStripDialog::effectiveName
+	@brief AddTerminalsDialog::effectiveName
 	@return the (trimmed) name of the terminal block to create.
 */
-QString AddTerminalStripDialog::effectiveName() const
+QString AddTerminalsDialog::effectiveName() const
 {
 	return ui->m_name_cb->currentText().trimmed();
 }
 
 /**
-	@brief AddTerminalStripDialog::fillExistingTerminals
+	@brief AddTerminalsDialog::fillExistingTerminals
 	Shows what the strip of the current node already holds: one greyed out
 	row per physical terminal of it which really holds terminals, at the top
 	of the preview tree and ahead of the IDs typed below them -- the user
@@ -516,7 +564,7 @@ QString AddTerminalStripDialog::effectiveName() const
 	rebuilding them there would throw the list below them around for
 	nothing.
 */
-void AddTerminalStripDialog::fillExistingTerminals()
+void AddTerminalsDialog::fillExistingTerminals()
 {
 	if (!m_root_item) {
 		return;
@@ -612,7 +660,7 @@ void AddTerminalStripDialog::fillExistingTerminals()
 }
 
 /**
-	@brief AddTerminalStripDialog::refreshPreviewTree
+	@brief AddTerminalsDialog::refreshPreviewTree
 	Shows what the OK button will create: the strip as the root item of the
 	preview tree, one child per ID of the ID field, the ID in the first
 	column and the name of its symbol in the second one.
@@ -633,7 +681,7 @@ void AddTerminalStripDialog::fillExistingTerminals()
 	following the defaults of the moment, since which strip the dialog is
 	about can still change (@sa propertiesOfRow).
 */
-void AddTerminalStripDialog::refreshPreviewTree(const ParsedIds &parsed)
+void AddTerminalsDialog::refreshPreviewTree(const ParsedIds &parsed)
 {
 	if (!m_root_item) {
 		return;
@@ -688,7 +736,8 @@ void AddTerminalStripDialog::refreshPreviewTree(const ParsedIds &parsed)
 			//No icon: those terminals are not drawn in any folio yet,
 				//and the missing symbol is how the trees tell them apart
 			auto *child = new QTreeWidgetItem(m_root_item, QStringList(id));
-			const auto symbol = m_properties.value(id, defaults).symbol;
+			const auto symbol = symbolOfRow(id);
+			m_row_symbols.insert(id, symbol);
 			child->setData(0, Qt::UserRole, symbol);
 			child->setText(1, symbolName(symbol));
 				//A terminal the dialog just added is marked the moment
@@ -710,18 +759,18 @@ void AddTerminalStripDialog::refreshPreviewTree(const ParsedIds &parsed)
 		}
 	}
 
-		//What a terminal the user never worked on is worth follows the
-		//strip the dialog is about, and the name field changes that
-		//without the ID list changing at all: every row is asked for its
-		//symbol again, and only the rows which really show something else
-		//are written -- this runs on every keystroke of the ID field
-		//(@sa propertiesOfRow).
+		//What a row is drawn with is what that very row carries: every
+		//row is asked for its symbol again, and only the rows which
+		//really show something else are written -- which is the name of
+		//a symbol the list could not name before this runs, and nothing
+		//else. This runs on every keystroke of the ID field
+		//(@sa symbolOfRow, onSymbolListRead).
 	for (int i = 0 ; i < m_root_item->childCount() ; ++i) {
 		auto *child = m_root_item->child(i);
 		if (child->data(0, ExistingTerminalRole).toBool()) {
 			continue;
 		}
-		const auto symbol = m_properties.value(child->text(0), defaults).symbol;
+		const auto symbol = symbolOfRow(child->text(0));
 		if (child->data(0, Qt::UserRole).toString() != symbol) {
 			child->setData(0, Qt::UserRole, symbol);
 			child->setText(1, symbolName(symbol));
@@ -732,7 +781,7 @@ void AddTerminalStripDialog::refreshPreviewTree(const ParsedIds &parsed)
 }
 
 /**
-	@brief AddTerminalStripDialog::onSymbolListRead
+	@brief AddTerminalsDialog::onSymbolListRead
 	The standard collection just added its symbols to the list, which is
 	what names them: the second column of a row shows the name of its
 	symbol, and one which could not be read before it was listed keeps an
@@ -740,30 +789,54 @@ void AddTerminalStripDialog::refreshPreviewTree(const ParsedIds &parsed)
 	shows is asked for again, the rows of what the strip already holds
 	being read out of the strip itself (@sa validate).
 */
-void AddTerminalStripDialog::onSymbolListRead()
+void AddTerminalsDialog::onSymbolListRead()
 {
+		//What the reading of the standard collection added is named in
+		//the rows which show it already, and listed in the combo box
+		//which offers it: both ask the very same list
+		//@sa TerminalSymbolList.
+	fillSymbolCombo(currentSymbol());
+	if (m_root_item) {
+		for (int i = 0 ; i < m_root_item->childCount() ; ++i) {
+			auto *child = m_root_item->child(i);
+			child->setText(1, symbolName(child->data(0, Qt::UserRole).toString()));
+		}
+	}
 	validate();
 }
 
 /**
-	@brief AddTerminalStripDialog::onPreviewSelectionChanged
+	@brief AddTerminalsDialog::onPreviewSelectionChanged
 	The button of the toolbar above the tree follows the selection of the
 	preview tree: it has something to work on only while terminals are
 	marked (@sa onEditTerminalsTriggered).
 */
-void AddTerminalStripDialog::onPreviewSelectionChanged()
+void AddTerminalsDialog::onPreviewSelectionChanged()
 {
 	ui->m_edit_terminals->setEnabled(!selectedPreviewChildren().isEmpty());
+
+		//The combo box says what the terminals marked are drawn with:
+		//the symbol of the first of them is the one to show, and a mark
+		//of rows carrying two different symbols is still one choice to
+		//make -- what the combo box shows is what all of them get
+		//(@sa onSymbolChanged).
+	const auto selected = selectedPreviewChildren();
+	if (!selected.isEmpty()) {
+		const QSignalBlocker blocker(ui->m_symbol_cb);
+		ui->m_symbol_cb->setCurrentIndex(
+					ui->m_symbol_cb->findData(
+						selected.first()->data(0, Qt::UserRole).toString()));
+	}
 }
 
 /**
-	@brief AddTerminalStripDialog::onEditTerminalsTriggered
+	@brief AddTerminalsDialog::onEditTerminalsTriggered
 	Opens the dialog for the terminals marked in the preview tree
 	(@sa openTerminalsDialog). The button of the toolbar is only enabled
 	while such terminals are marked, and the guard here is the very rule
 	read once more: no dialog with nothing to work on.
 */
-void AddTerminalStripDialog::onEditTerminalsTriggered()
+void AddTerminalsDialog::onEditTerminalsTriggered()
 {
 	if (selectedPreviewChildren().isEmpty()) {
 		return;
@@ -773,7 +846,30 @@ void AddTerminalStripDialog::onEditTerminalsTriggered()
 }
 
 /**
-	@brief AddTerminalStripDialog::openTerminalsDialog
+ * @brief AddTerminalsDialog::accept
+ */
+void AddTerminalsDialog::accept()
+{
+		//What these terminals are drawn with is what was used last: the
+		//dialog of the next time opens on it (@sa initialSymbol). The
+		//last of the rows is the one to say it -- the bottom of the tree
+		//is what the user worked on last.
+	const auto described = describedTerminals();
+	if (!described.isEmpty()) {
+		const auto symbol = described.last().properties.symbol;
+		if (!symbol.isEmpty()) {
+			QSettings settings;
+			settings.setValue(
+						QStringLiteral("terminalnavigator/last_used_terminal_symbol"),
+						symbol);
+		}
+	}
+
+	QDialog::accept();
+}
+
+/**
+	@brief AddTerminalsDialog::openTerminalsDialog
 	Opens the dialog of the properties (@sa TerminalPropertiesDialog) for
 	the terminals marked in the preview tree (@sa selectedPreviewChildren)
 	and writes what it chose into those rows -- and only into those: the
@@ -786,7 +882,7 @@ void AddTerminalStripDialog::onEditTerminalsTriggered()
 	of values, which is the very point of marking many of them at once --,
 	or on the defaults when none of them was worked on before.
 */
-void AddTerminalStripDialog::openTerminalsDialog()
+void AddTerminalsDialog::openTerminalsDialog()
 {
 	const auto selected = selectedPreviewChildren();
 	if (selected.isEmpty()) {
@@ -798,10 +894,14 @@ void AddTerminalStripDialog::openTerminalsDialog()
 		ids << item->text(0);
 	}
 
+		//What the dialog asks for is what the rows share: the values of
+		//the first of them are what it opens on, and what its OK button
+		//shows is what every one of them gets. The symbol is not among
+		//those values -- the row of symbols above the preview tree says
+		//that one, for the marked rows alone -- so every row keeps the
+		//symbol it carries (@sa onSymbolChanged, symbolOfRow).
 	TerminalPropertiesDialog dialog(
-				m_symbols,
 				m_properties.value(ids.first(), defaultsForNewTerminals()),
-				TerminalPropertiesDialog::ShowSymbol,
 				this);
 	if (dialog.exec() != QDialog::Accepted) {
 		return;
@@ -809,23 +909,18 @@ void AddTerminalStripDialog::openTerminalsDialog()
 
 	const auto properties = dialog.properties();
 	for (const auto &id : ids) {
-		m_properties.insert(id, properties);
-	}
-		//The rows follow right away: the second column shows the symbol
-		//of every terminal, and the user trusts what he reads there
-		//@sa symbolName.
-	for (auto *item : selected) {
-		item->setData(0, Qt::UserRole, properties.symbol);
-		item->setText(1, symbolName(properties.symbol));
+		auto merged = properties;
+		merged.symbol = symbolOfRow(id);
+		m_properties.insert(id, merged);
 	}
 }
 
 /**
-	@brief AddTerminalStripDialog::selectedPreviewChildren
+	@brief AddTerminalsDialog::selectedPreviewChildren
 	@return the children of the preview tree the user selected, which are
 	the terminals the next symbol applies to.
 */
-QList<QTreeWidgetItem *> AddTerminalStripDialog::selectedPreviewChildren() const
+QList<QTreeWidgetItem *> AddTerminalsDialog::selectedPreviewChildren() const
 {
 	QList<QTreeWidgetItem *> result;
 	if (!m_root_item) {
@@ -848,20 +943,458 @@ QList<QTreeWidgetItem *> AddTerminalStripDialog::selectedPreviewChildren() const
 }
 
 /**
-	@brief AddTerminalStripDialog::symbolName
+	@brief AddTerminalsDialog::symbolName
 	@param symbol : the location string of a symbol
 	@return the name to show for that symbol in the second column of the
 	preview tree: the one the list of symbols gives it, since an element
 	name is read out of its XML and is worth reading once only -- which is
 	what the list keeps it for (@sa TerminalSymbolList).
 */
-QString AddTerminalStripDialog::symbolName(const QString &symbol) const
+QString AddTerminalsDialog::symbolName(const QString &symbol) const
 {
 	return m_symbols ? m_symbols->name(symbol) : QString();
 }
 
 /**
-	@brief AddTerminalStripDialog::defaultsForNewTerminals
+ * @brief AddTerminalsDialog::currentSymbol
+ * @return the location string of the symbol the combo box shows -- the
+ * one every terminal the user never worked on is created with
+ * (@sa symbolOfRow), id-free and empty while the box shows
+ * "(no symbol)" (@sa RealTerminal::symbolWithoutProjectId).
+ */
+QString AddTerminalsDialog::currentSymbol() const
+{
+	const int index = ui->m_symbol_cb->currentIndex();
+	return index < 0 ? QString() : ui->m_symbol_cb->itemData(index).toString();
+}
+
+/**
+ * @brief AddTerminalsDialog::setCurrentSymbol
+ * @param symbol : the location string of the symbol to show, empty for
+ * "(no symbol)"
+ * Shows @a symbol in the combo box, listed or not: a symbol which is
+ * listed nowhere -- one the list has not read yet, or one of a
+ * collection which does not answer for it anymore -- is listed and
+ * selected all the same, since it is what the terminals carry and no
+ * dialog may take it away behind the back of the user
+ * (@sa fillSymbolCombo). Nothing else follows this: what the marked
+ * terminals are drawn with is changed by the user himself
+ * (@sa onSymbolChanged).
+ */
+void AddTerminalsDialog::setCurrentSymbol(const QString &symbol)
+{
+	const QSignalBlocker blocker(ui->m_symbol_cb);
+	int index = ui->m_symbol_cb->findData(symbol);
+	if (index < 0 && !symbol.isEmpty()) {
+		ui->m_symbol_cb->addItem(QIcon(), symbolName(symbol), symbol);
+		index = ui->m_symbol_cb->count() - 1;
+	}
+	ui->m_symbol_cb->setCurrentIndex(index < 0 ? 0 : index);
+}
+
+/**
+ * @brief AddTerminalsDialog::fillSymbolCombo
+ * @param selected : the location string of the symbol to select, or an
+ * empty string to select "(no symbol)"
+ * Fills the combo box with every symbol the list holds -- the symbols of
+ * the project first, then the ones of the standard collection as soon as
+ * they are read (@sa onSymbolListRead) -- and selects @a selected.
+ */
+void AddTerminalsDialog::fillSymbolCombo(const QString &selected)
+{
+	const QSignalBlocker blocker(ui->m_symbol_cb);
+	ui->m_symbol_cb->clear();
+	ui->m_symbol_cb->addItem(QIcon(), tr("(no symbol)"), QString());
+
+	if (m_symbols) {
+		for (const auto &location : m_symbols->symbols()) {
+			if (location.isNull()) {
+				continue;
+			}
+			ui->m_symbol_cb->addItem(location.icon(),
+									 location.name(),
+									 location.collectionPath());
+		}
+	}
+
+	int index = ui->m_symbol_cb->findData(selected);
+	if (index < 0 && !selected.isEmpty()) {
+			//A symbol which is listed nowhere -- one the list has not
+			//read yet, or one of a collection which does not answer for
+			//it anymore: keep it listed and selected, since it is the one
+			//the terminals carry and the OK button must not take it away
+			//behind the back of the user.
+		ui->m_symbol_cb->addItem(QIcon(),
+								 symbolName(selected),
+								 selected);
+		index = ui->m_symbol_cb->count() - 1;
+	}
+	ui->m_symbol_cb->setCurrentIndex(index < 0 ? 0 : index);
+}
+
+/**
+ * @brief AddTerminalsDialog::setupSymbolCompleter
+ * The symbol combo box is editable, and is given a completer which
+ * completes on what is typed anywhere in a symbol name -- 'm10' finds
+ * 'Terminal M10', which the prefix matching of the combo box alone would
+ * not. The completer works on the names of the symbols listed, since
+ * that is what the user reads in the combo box.
+ */
+void AddTerminalsDialog::setupSymbolCompleter()
+{
+	auto *completer = ui->m_symbol_cb->completer();
+	if (!completer) {
+			//The combo box is editable, so it has a completer of its own
+			//over its own list; this one is only there in case it ever
+			//stops being editable, so that typing still finds a symbol.
+		completer = new QCompleter(ui->m_symbol_cb->model(), ui->m_symbol_cb);
+		ui->m_symbol_cb->setCompleter(completer);
+	}
+	completer->setCaseSensitivity(Qt::CaseInsensitive);
+	completer->setFilterMode(Qt::MatchContains);
+	completer->setCompletionMode(QCompleter::PopupCompletion);
+}
+
+/**
+ * @brief AddTerminalsDialog::onSymbolChanged
+ * Gives the symbol the combo box now shows to the terminals marked in
+ * the preview tree, and to those alone: a terminal which is not marked
+ * keeps the symbol it carries, and the rows which appear later on are
+ * created with what the combo box shows at that very moment
+ * (@sa symbolOfRow, refreshPreviewTree).
+ */
+void AddTerminalsDialog::onSymbolChanged()
+{
+	const auto symbol = currentSymbol();
+	for (auto *item : selectedPreviewChildren()) {
+		const auto id = item->text(0);
+		auto properties = propertiesOfRow(id);
+		properties.symbol = symbol;
+		m_properties.insert(id, properties);
+		item->setData(0, Qt::UserRole, symbol);
+		item->setText(1, symbolName(symbol));
+	}
+	validate();
+}
+
+/**
+ * @brief AddTerminalsDialog::symbolOfRow
+ * @param id : the ID of a terminal to be created
+ * @return the symbol that very terminal is created with: what the user
+ * gave the row of @a id when he worked on it, and what the row appeared
+ * with otherwise -- the combo box says it for the rows which are added
+ * from here on, and never changes a row which is there already
+ * (@sa onSymbolChanged).
+ */
+QString AddTerminalsDialog::symbolOfRow(const QString &id) const
+{
+	if (m_properties.contains(id)) {
+		return m_properties.value(id).symbol;
+	}
+
+	return m_row_symbols.value(id, currentSymbol());
+}
+
+/**
+ * @brief AddTerminalsDialog::initialSymbol
+ * @return the symbol the dialog opens on: the one used last when the
+ * project holds terminals already -- which is the one the settings
+ * remember, or the one of the last terminal of the strip when they
+ * remember none -- and the default the button of the toolbar saved for
+ * a project which holds no terminal at all
+ * (@sa onSaveDefaultSymbol). "(no symbol)" when there is nothing to take
+ * anything from, which is the very row the notice label then speaks of
+ * (@sa validate).
+ */
+QString AddTerminalsDialog::initialSymbol() const
+{
+	QSettings settings;
+	if (m_project && !m_project->terminalStrip().isEmpty()) {
+		const auto last_used = settings.value(
+					QStringLiteral("terminalnavigator/last_used_terminal_symbol"))
+				.toString();
+		return last_used.isEmpty()
+				? defaultsForNewTerminals().symbol
+				: last_used;
+	}
+
+	return settings.value(
+				QStringLiteral("terminalnavigator/default_terminal_symbol"))
+			.toString();
+}
+
+/**
+ * @brief AddTerminalsDialog::onSaveDefaultSymbol
+ * Keeps the symbol the combo box shows as the one the dialog opens on
+ * for a project which holds no terminal yet (@sa initialSymbol): its
+ * location string goes into the settings, and "(no symbol)" takes that
+ * entry away again, since there is no default worth keeping there.
+ * What the project holds is not touched: this is about the next dialog
+ * of the next project.
+ */
+void AddTerminalsDialog::onSaveDefaultSymbol()
+{
+	QSettings settings;
+	const auto symbol = currentSymbol();
+	if (symbol.isEmpty()) {
+		settings.remove(QStringLiteral("terminalnavigator/default_terminal_symbol"));
+	} else {
+		settings.setValue(QStringLiteral("terminalnavigator/default_terminal_symbol"),
+						  symbol);
+	}
+}
+
+namespace {
+	/// @return true when @p location is an element drawn with a terminal
+	/// symbol -- the very question the file of an element answers in its
+	/// root, never its name and never its folder
+	/// (@sa TerminalSymbolList::fileIsATerminalSymbol).
+	bool locationIsATerminalSymbol(const ElementsLocation &location)
+	{
+		return QLatin1String(
+					location.pugiXml().document_element()
+					.attribute("link_type").value())
+				== QLatin1String("terminal");
+	}
+
+	/**
+		The dialog which chooses a terminal symbol in the collections
+		(@sa AddTerminalsDialog::chooseSymbol): the files of the
+		collections are browsed the way the user knows them, and only an
+		element which is a terminal symbol can be chosen at all. Everything
+		else is shown and named, and what it is is what the preview says
+		while the button which takes it stays off -- never a dialog which
+		says so on top of this one.
+	*/
+	class SymbolFileDialog : public QFileDialog
+	{
+		public:
+			SymbolFileDialog(QWidget *parent, const QString &caption) :
+				QFileDialog(parent, caption)
+			{}
+
+			/// @return the symbol chosen, id-free, and empty when the
+			/// dialog was closed without choosing one.
+			QString chosenSymbol() const {return m_chosen;}
+
+			/**
+				@brief lookAt
+				@param path : the file the dialog is on, which is what the
+				view of the files says while it is browsed
+				(@sa QFileDialog::currentChanged).
+				Keeps @a path as the file to take: what the dialog shows
+				is what its OK button takes, whether the selection of that
+				view reached the dialog's own list of chosen files or not.
+			*/
+			void lookAt(const QString &path) {m_current = path;}
+
+		protected:
+			void accept() override
+			{
+				const auto files = selectedFiles();
+				const auto path = files.isEmpty() ? m_current : files.first();
+				if (path.isEmpty()) {
+					return;
+				}
+
+				const ElementsLocation location(path);
+				if (!locationIsATerminalSymbol(location)) {
+					return;
+				}
+
+				const auto symbol = location.collectionPath();
+				if (symbol.isEmpty()) {
+					return;
+				}
+
+					//What is chosen is known here already, and the
+					//dialog of the files has nothing left to ask: it is
+					//closed on that very answer.
+				m_chosen = symbol;
+				done(QDialog::Accepted);
+			}
+
+		private:
+			QString m_current;
+			QString m_chosen;
+	};
+}
+
+/**
+ * @brief AddTerminalsDialog::onChooseSymbol
+ * Opens the dialog which chooses a terminal symbol in the collections
+ * (@sa chooseSymbol) and shows what it chose in the combo box, where it
+ * is the symbol of the terminals the user works on from here
+ * (@sa onSymbolChanged).
+ */
+void AddTerminalsDialog::onChooseSymbol()
+{
+	const auto symbol = chooseSymbol();
+	if (symbol.isEmpty()) {
+		return;
+	}
+	setCurrentSymbol(symbol);
+	onSymbolChanged();
+}
+
+/**
+ * @brief AddTerminalsDialog::chooseSymbol
+ * @return the location string of the terminal symbol the user chose in
+ * the collections, id-free and empty when he chose none.
+ *
+ * The collections are browsed on the file system, the three of them
+ * offered in the sidebar of the dialog -- the common one, the one of the
+ * company and the one of the user -- and what is chosen is read the way
+ * an element is read: its name is the one of its XML, never its file
+ * name, and what it looks like is what the preview below the view of the
+ * files shows (@sa ElementsLocation::name, ElementsLocation::icon).
+ *
+ * What the collection of the project holds is not browsed here: it lives
+ * in the project file and has no folder of its own. Those symbols are in
+ * the combo box all the same (@sa TerminalSymbolList), and this dialog
+ * is for finding one in the collections.
+ */
+QString AddTerminalsDialog::chooseSymbol()
+{
+	SymbolFileDialog dialog(this, tr("Choose a terminal symbol"));
+	dialog.setOption(QFileDialog::DontUseNativeDialog);
+	dialog.setFileMode(QFileDialog::ExistingFile);
+	dialog.setNameFilter(tr("QElectroTech elements (*.elmt)"));
+	dialog.setSidebarUrls({
+		QUrl::fromLocalFile(QETApp::commonElementsDirN()),
+		QUrl::fromLocalFile(QETApp::companyElementsDirN()),
+		QUrl::fromLocalFile(QETApp::customElementsDirN())
+	});
+	dialog.setDirectory(QETApp::commonElementsDirN());
+
+		//Room for the files themselves: a symbol is found between many,
+		//and a list of four rows says nothing of what the collections
+		//hold. The height follows the rows of text and not a number of
+		//pixels, so it is what the font asks for -- and it goes to the
+		//view of the files alone: the sidebar, the popup of the file
+		//name and the header of that very view are views of their own,
+		//and a header made tall would take the room away again.
+	for (auto *view : dialog.findChildren<QAbstractItemView *>()) {
+		if (qobject_cast<QHeaderView *>(view)
+			|| !view->model()
+			|| !qobject_cast<QFileSystemModel *>(view->model())) {
+			continue;
+		}
+		view->setMinimumHeight(20 * view->fontMetrics().height());
+	}
+
+		//What the file under the cursor is worth: the symbol itself, its
+		//name and where it comes from, below the view of the files.
+	auto *preview = new QWidget(&dialog);
+	//auto *preview_layout = new QVBoxLayout(preview);
+	auto *preview_layout = new QVBoxLayout();
+	preview_layout->setContentsMargins(0, 4, 0, 0);
+	auto *picture = new QLabel(preview);
+	picture->setObjectName(QStringLiteral("m_symbol_preview_picture"));
+	picture->setAlignment(Qt::AlignHCenter);
+		//What the symbol looks like is worth a frame of its own: it is
+		//a picture between two lines of text, and without one it floats
+		//in the preview (@sa QFrame::StyledPanel). The room it takes is
+		//the room a symbol is shown in -- what is smaller than that is
+		//scaled up to fill it (@sa chooseSymbol).
+	picture->setFixedSize(128, 128);
+	picture->setFrameStyle(QFrame::StyledPanel | QFrame::Sunken);
+	auto *name_lb = new QLabel(preview);
+	name_lb->setObjectName(QStringLiteral("m_symbol_preview_name"));
+	auto *path_lb = new QLabel(preview);
+	path_lb->setObjectName(QStringLiteral("m_symbol_preview_path"));
+	auto name_font = name_lb->font();
+	name_font.setBold(true);
+	name_lb->setFont(name_font);
+	preview_layout->addWidget(picture);
+	preview_layout->addWidget(name_lb);
+	preview_layout->addWidget(path_lb);
+
+	// Take Grid-Layout fromQFileDialog
+	QGridLayout *mainLayout = qobject_cast<QGridLayout*>(dialog.layout());//neu
+
+	if (mainLayout) {
+		// Determine the next empty row (corresponds to the current number of lines)
+		int totalRow = mainLayout->rowCount();
+
+		// Determine the max column count, so that we can cover the full range
+		int totalColumns = mainLayout->columnCount();
+		if (totalColumns < 1) totalColumns = 1; // Fallback
+
+		mainLayout->addLayout(preview_layout, totalRow, 0, 1, totalColumns);
+	}
+	else
+		dialog.layout()->addWidget(preview);
+
+	auto *buttons = dialog.findChild<QDialogButtonBox *>();
+	auto take = [buttons]() -> QAbstractButton * {
+		if (!buttons) {
+			return nullptr;
+		}
+		for (auto *button : buttons->buttons()) {
+			if (buttons->buttonRole(button) == QDialogButtonBox::AcceptRole) {
+				return button;
+			}
+		}
+		return nullptr;
+	};
+	connect(&dialog, &QFileDialog::currentChanged,
+			&dialog, [&](const QString &path) {
+		dialog.lookAt(path);
+		const ElementsLocation location(path);
+		const bool is_symbol = location.isElement()
+										   && locationIsATerminalSymbol(location)
+										   && !location.collectionPath().isEmpty();
+
+			   //What the symbol looks like is drawn as black line art for
+			   //a white sheet, and the collection shows it the way the
+			   //palette under it wants it: light ink on a dark row, and
+			   //nothing done to it on a light one (@sa QET::Palette,
+			   //ElementPreviewDelegate). It is painted at the size of the
+			   //preview and never scaled up from the little pixmap the
+			   //file's own size makes, which is where a soft picture comes
+			   //from (@sa ElementPictureFactory::pixmap).
+		auto pixmap = ElementPictureFactory::instance()->pixmap(
+			location,
+			picture->size() * picture->devicePixelRatioF());
+		if (QET::Palette::isDark(preview->palette())) {
+			pixmap = QET::Palette::forPalette(pixmap, preview->palette());
+		}
+		picture->setPixmap(pixmap);
+		name_lb->setText(location.isElement()
+							 ? location.name()
+							 : QString());
+
+			   //What that element is worth, and where it comes from: an
+			   //element which is no terminal symbol is shown and named all
+			   //the same, and what it is is what says so here while the
+			   //button which takes it stays off.
+		if (!location.isElement()) {
+			path_lb->setStyleSheet(QString());
+			path_lb->setText(QString());
+		} else if (is_symbol) {
+			path_lb->setStyleSheet(QString());
+			path_lb->setText(location.collectionPath());
+		} else {
+			path_lb->setStyleSheet(QStringLiteral("color: #b00000;"));
+			path_lb->setText(location.collectionPath().isEmpty()
+								 ? tr("This element is outside of every collection")
+								 : tr("This element is not a terminal symbol"));
+		}
+		if (auto *ok = take()) {
+			ok->setEnabled(is_symbol);
+		}
+	});
+
+	if (dialog.exec() != QDialog::Accepted) {
+		return QString();
+	}
+
+	return dialog.chosenSymbol();
+}
+
+/**
+	@brief AddTerminalsDialog::defaultsForNewTerminals
 	@return the properties a terminal this dialog is never asked about is
 	created with (@sa TerminalPropertiesDialog).
 	Those are the very values the dialog of the marked terminals opens on,
@@ -876,7 +1409,7 @@ QString AddTerminalStripDialog::symbolName(const QString &symbol) const
 	terminal to take a habit from, and its terminals are created with the
 	generic values alone.
 */
-TerminalProperties AddTerminalStripDialog::defaultsForNewTerminals() const
+TerminalProperties AddTerminalsDialog::defaultsForNewTerminals() const
 {
 	TerminalProperties properties;
 	auto *strip = stripOfTheCurrentNode();
@@ -920,7 +1453,7 @@ TerminalProperties AddTerminalStripDialog::defaultsForNewTerminals() const
 }
 
 /**
-	@brief AddTerminalStripDialog::propertiesOfRow
+	@brief AddTerminalsDialog::propertiesOfRow
 	@param id : the ID of a terminal to be created
 	@return the properties of that terminal (@sa TerminalProperties).
 	A terminal the user worked on keeps what the dialog of the marked
@@ -928,17 +1461,23 @@ TerminalProperties AddTerminalStripDialog::defaultsForNewTerminals() const
 	defaults of the moment, which follow the strip the dialog is about
 	(@sa defaultsForNewTerminals).
 */
-TerminalProperties AddTerminalStripDialog::propertiesOfRow(const QString &id) const
+TerminalProperties AddTerminalsDialog::propertiesOfRow(const QString &id) const
 {
-	return m_properties.value(id, defaultsForNewTerminals());
+	auto properties = m_properties.value(id, defaultsForNewTerminals());
+		//The symbol is the one of that very row and not one of the
+		//defaults: what the user gave the row, or what it appeared with
+		//(@sa symbolOfRow). The values above follow the strip the dialog
+		//is about, the symbol does not.
+	properties.symbol = symbolOfRow(id);
+	return properties;
 }
 
 /**
-	@brief AddTerminalStripDialog::stripOfTheCurrentNode
+	@brief AddTerminalsDialog::stripOfTheCurrentNode
 	@return the terminal strip of the project whose plant, location and name
 	match the ones currently shown in this dialog, or null if there is none.
 */
-TerminalStrip *AddTerminalStripDialog::stripOfTheCurrentNode() const
+TerminalStrip *AddTerminalsDialog::stripOfTheCurrentNode() const
 {
 	if (!m_project) {
 		return nullptr;
@@ -963,7 +1502,7 @@ TerminalStrip *AddTerminalStripDialog::stripOfTheCurrentNode() const
 }
 
 /**
-	@brief AddTerminalStripDialog::parseIds
+	@brief AddTerminalsDialog::parseIds
 	Reads the ID field and expands its ranges: '1,2,3,4', '1-4' and '1,2-3,4'
 	all lead to the four IDs 1, 2, 3 and 4. A descending range such as '4-1' is
 	expanded in descending order, and the IDs are normalized, so that '007' and
@@ -975,7 +1514,7 @@ TerminalStrip *AddTerminalStripDialog::stripOfTheCurrentNode() const
 	number of terminals is the checked one, the IDs are generated instead of
 	typed, and generatedIds() answers in this one's stead.
 */
-AddTerminalStripDialog::ParsedIds AddTerminalStripDialog::parseIds() const
+AddTerminalsDialog::ParsedIds AddTerminalsDialog::parseIds() const
 {
 	if (ui->m_number_rb->isChecked()) {
 		return generatedIds();
@@ -1073,7 +1612,7 @@ AddTerminalStripDialog::ParsedIds AddTerminalStripDialog::parseIds() const
 }
 
 /**
-	@brief AddTerminalStripDialog::generatedIds
+	@brief AddTerminalsDialog::generatedIds
 	@return as many IDs as @c m_number_sb asks for, continuing the IDs of the
 	strip behind the terminals it holds already. The first one is the number
 	right behind the last terminal and the highest ID among them alike -- a
@@ -1084,7 +1623,7 @@ AddTerminalStripDialog::ParsedIds AddTerminalStripDialog::parseIds() const
 	Zero terminals is no error either: the strip is then created holding no
 	terminal at all, exactly what an empty ID field asks for.
 */
-AddTerminalStripDialog::ParsedIds AddTerminalStripDialog::generatedIds() const
+AddTerminalsDialog::ParsedIds AddTerminalsDialog::generatedIds() const
 {
 	ParsedIds result;
 	const int count = ui->m_number_sb->value();
@@ -1134,7 +1673,7 @@ AddTerminalStripDialog::ParsedIds AddTerminalStripDialog::generatedIds() const
 }
 
 /**
-	@brief AddTerminalStripDialog::takenIds
+	@brief AddTerminalsDialog::takenIds
 	@return every ID which is taken already for the terminal block the combo
 	boxes define: the IDs the terminals of that strip carry,
 	and the ones a free terminal of the project claims for that very name.
@@ -1143,7 +1682,7 @@ AddTerminalStripDialog::ParsedIds AddTerminalStripDialog::generatedIds() const
 	IDs generated they are stepped over instead
 	(@sa generatedIds).
 */
-QStringList AddTerminalStripDialog::takenIds() const
+QStringList AddTerminalsDialog::takenIds() const
 {
 	QStringList taken;
 	const auto name = effectiveName();
@@ -1176,7 +1715,7 @@ QStringList AddTerminalStripDialog::takenIds() const
 }
 
 /**
-	@brief AddTerminalStripDialog::checkIdsAgainstTheStrip
+	@brief AddTerminalsDialog::checkIdsAgainstTheStrip
 	@param ids : the expanded IDs of the ID field
 	@return one message per ID already used by the terminal block of the node
 	currently defined by the combo boxes, or nothing.
@@ -1184,7 +1723,7 @@ QStringList AddTerminalStripDialog::takenIds() const
 	already holding four terminals refuses the IDs 1 to 4; the labels of the
 	child items are checked as well, which also catches the IDs made of a letter.
 */
-QStringList AddTerminalStripDialog::checkIdsAgainstTheStrip(const QStringList &ids) const
+QStringList AddTerminalsDialog::checkIdsAgainstTheStrip(const QStringList &ids) const
 {
 	QStringList messages;
 	const auto strip = stripOfTheCurrentNode();
@@ -1228,12 +1767,12 @@ QStringList AddTerminalStripDialog::checkIdsAgainstTheStrip(const QStringList &i
 }
 
 /**
-	@brief AddTerminalStripDialog::checkIdsAgainstFreeTerminals
+	@brief AddTerminalsDialog::checkIdsAgainstFreeTerminals
 	@param ids : the expanded IDs of the ID field
 	@return one message per label 'strip name:ID' already used by an
 	independent (that is to say: free) terminal of the project, or nothing.
 */
-QStringList AddTerminalStripDialog::checkIdsAgainstFreeTerminals(const QStringList &ids) const
+QStringList AddTerminalsDialog::checkIdsAgainstFreeTerminals(const QStringList &ids) const
 {
 	QStringList messages;
 	if (ids.isEmpty() || !m_project) {

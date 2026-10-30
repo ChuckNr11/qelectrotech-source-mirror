@@ -37,7 +37,7 @@
 #include "../../utils/qetutils.h"
 #include "../UndoCommand/createterminalstripcommand.h"
 #include "../diagramevent/diagrameventaddterminal.h"
-#include "addterminalstripdialog.h"
+#include "addterminalsdialog.h"
 #include "terminalnavigatorwidgettree.h"
 #include "terminalpropertiesdialog.h"
 
@@ -634,7 +634,7 @@ QMenu *TerminalNavigatorWidget::buildContextMenu(QTreeWidgetItem *item)
  * well -- currentStrip() tells the difference, an installation, a location
  * or a free terminal belonging to no strip. The dialog shows the terminals
  * such a strip already holds, so that the user reads where the IDs he types
- * continue them (@sa AddTerminalStripDialog::fillExistingTerminals).
+ * continue them (@sa AddTerminalsDialog::fillExistingTerminals).
  * What the dialog describes is then put into the project: a terminal
  * strip, and the terminals of its ID field -- the terminals the strip
  * already holds are display in that dialog and are not described twice.
@@ -661,8 +661,8 @@ void TerminalNavigatorWidget::createTerminalStrip()
 		return;
 	}
 
-	QScopedPointer<AddTerminalStripDialog> dialog(
-				new AddTerminalStripDialog(m_project, this));
+	QScopedPointer<AddTerminalsDialog> dialog(
+				new AddTerminalsDialog(m_project, this));
 	dialog->setLocation(currentLocation());
 	dialog->setInstallation(currentInstallation());
 		//The name of the strip the dialog was called from, which is
@@ -1607,9 +1607,9 @@ void TerminalNavigatorWidget::drawSelection()
  * button shows is what every marked row gets -- the very point of
  * marking many of them at once (@sa TerminalPropertiesDialog).
  *
- * The symbol is not asked for in there: those terminals exist already
- * and are drawn with the symbol of their element
- * (@sa TerminalPropertiesDialog::WithoutSymbol).
+ * The dialog asks for no symbol at all: those terminals exist already
+ * and are drawn with the symbol of their element, so there is nothing
+ * left to ask about it (@sa TerminalPropertiesDialog).
  *
  * Only the rows of a terminal strip are worth this, an independent one
  * being what its element is and belonging to no strip -- which is what
@@ -1676,10 +1676,8 @@ void TerminalNavigatorWidget::editSelection()
 	}
 
 	TerminalPropertiesDialog dialog(
-				nullptr,
 				TerminalProperties::fromRealTerminal(
 					marked.first().terminal.data()),
-				TerminalPropertiesDialog::WithoutSymbol,
 				this);
 	if (dialog.exec() != QDialog::Accepted) {
 		return;

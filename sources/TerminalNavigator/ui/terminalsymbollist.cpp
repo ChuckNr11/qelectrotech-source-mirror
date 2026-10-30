@@ -13,7 +13,10 @@
 
 #include "../../ElementsCollection/xmlelementcollection.h"
 #include "../../TerminalStrip/realterminal.h"
+#include "../../TerminalStrip/terminalstrip.h"
+#include "../../elementprovider.h"
 #include "../../qetapp.h"
+#include "../../qetgraphicsitem/element.h"
 #include "../../qetproject.h"
 #include "../../utils/qetutils.h"
 
@@ -63,6 +66,7 @@ TerminalSymbolList::TerminalSymbolList(QETProject *project, QObject *parent) :
 	m_project(project)
 {
 	readProjectSymbols();
+	readTerminalSymbols();
 }
 
 TerminalSymbolList::~TerminalSymbolList()
@@ -99,6 +103,48 @@ void TerminalSymbolList::readProjectSymbols()
 		}
 		append(m_project->embeddedElementCollection()->domToLocation(
 			definition.parentNode().toElement()));
+	}
+}
+
+/**
+ * @brief TerminalSymbolList::readTerminalSymbols
+ * Adds the symbols the terminals of the project are drawn with to the
+ * list, whatever collection they come from. A terminal keeps the symbol
+ * it was created with even when no collection answers for it anymore,
+ * and a list which lost it would name nothing for the rows which show it
+ * (@sa name) -- while the user reads it in the row of symbols and can
+ * give it to the next terminals as well. Every terminal counts here:
+ * the ones drawn on a folio, the ones waiting for their symbol and the
+ * independent ones, which is the very list the navigator shows.
+ */
+void TerminalSymbolList::readTerminalSymbols()
+{
+	if (!m_project) {
+		return;
+	}
+
+	const auto add = [this](const QString &symbol) {
+		const auto id_free = RealTerminal::symbolWithoutProjectId(symbol);
+		if (id_free.isEmpty()) {
+			return;
+		}
+			//Only 'embed://...' needs the project to resolve, and takes
+			//it for an embedded one when it is given for any other
+			//@sa RealTerminal::symbolLocation.
+		append(RealTerminal::symbolLocation(id_free, m_project));
+	};
+
+	for (const auto &strip : m_project->terminalStrip()) {
+		for (const auto &real : strip->realTerminals()) {
+			add(real->isElement() && real->element()
+				? real->element()->location().collectionPath()
+				: real->symbol());
+		}
+	}
+
+	ElementProvider provider(m_project);
+	for (auto *terminal : provider.freeTerminal()) {
+		add(terminal->location().collectionPath());
 	}
 }
 

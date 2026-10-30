@@ -12,16 +12,12 @@
 #include "terminalpropertiesdialog.h"
 #include "ui_terminalpropertiesdialog.h"
 
-#include "terminalsymbollist.h"
-
-#include "../../ElementsCollection/elementslocation.h"
 #include "../../TerminalStrip/realterminal.h"
 #include "../../TerminalStrip/terminalcatalog.h"
 #include "../../TerminalStrip/terminalcolor.h"
 #include "../../qet.h"
 #include "../../qetgraphicsitem/element.h"
 
-#include <QCompleter>
 #include <QLocale>
 #include <QLineEdit>
 #include <QRegularExpression>
@@ -202,7 +198,7 @@ TerminalProperties TerminalProperties::fromRealTerminal(const RealTerminal *term
 		//A terminal drawn in a folio keeps no symbol string of its own:
 		//its symbol is the one of its element, which is the very value
 		//the trees of this dialog show for it (@sa
-		//AddTerminalStripDialog::fillExistingTerminals). Id-free, as
+		//AddTerminalsDialog::fillExistingTerminals). Id-free, as
 		//every symbol string of this dialog is: collectionPath() and not
 		//toString(), since toString() prefixes the path with the runtime
 		//id of the project, an id which means nothing in a later session
@@ -233,19 +229,14 @@ TerminalProperties TerminalProperties::fromRealTerminal(const RealTerminal *term
 
 /**
 	@brief TerminalPropertiesDialog::TerminalPropertiesDialog
-	@param symbols
 	@param values
-	@param symbol_row
 	@param parent
  */
 TerminalPropertiesDialog::TerminalPropertiesDialog(
-		TerminalSymbolList *symbols,
 		const TerminalProperties &values,
-		SymbolRow symbol_row,
 		QWidget *parent) :
 	QDialog(parent),
-	ui(new Ui::TerminalPropertiesDialog),
-	m_symbols(symbols)
+	ui(new Ui::TerminalPropertiesDialog)
 {
 	ui->setupUi(this);
 
@@ -279,31 +270,6 @@ TerminalPropertiesDialog::TerminalPropertiesDialog(
 	connect(ui->m_terminal_manufacturer_cb, QOverload<int>::of(&QComboBox::currentIndexChanged),
 			this, &TerminalPropertiesDialog::refreshTerminalWidthCombo);
 
-	if (symbol_row == WithoutSymbol) {
-			//A terminal which exists already is drawn with the symbol of
-			//its element, and there is nothing to ask for here: the row
-			//is taken out of the dialog, and the empty grid row behind it
-			//drops away with it
-			//(@sa TerminalNavigatorWidget::editSelection).
-		ui->label_symbol->hide();
-		ui->m_symbol_cb->hide();
-	} else {
-		fillSymbolCombo(values.symbol);
-		setupSymbolCompleter();
-
-		if (m_symbols) {
-				//The list of symbols is read as far as this dialog needs
-				//it: the symbols of the project are there already, the
-				//ones of the standard collection are read in the
-				//background now, and the combo box learns them when they
-				//are in
-				//@sa TerminalSymbolList.
-			connect(m_symbols, &TerminalSymbolList::symbolsRead,
-					this, &TerminalPropertiesDialog::onSymbolListRead);
-			m_symbols->startCommonCollectionScan();
-		}
-	}
-
 	QET::trackDialogGeometry(this);
 }
 
@@ -324,7 +290,9 @@ TerminalProperties TerminalPropertiesDialog::properties() const
 {
 	TerminalProperties result;
 
-	result.symbol = symbol();
+		//The symbol is not among them: the dialog which creates the
+		//terminals picks that one itself
+		//(@sa AddTerminalsDialog::m_symbol_cb).
 	result.type = ui->m_terminal_type_cb->currentData().value<ElementData::TerminalType>();
 	result.function = ui->m_terminal_func_cb->currentData().value<ElementData::TerminalFunction>();
 
@@ -341,23 +309,6 @@ TerminalProperties TerminalPropertiesDialog::properties() const
 	result.color_spec = colorSpec(ui->m_terminal_color_cb);
 
 	return result;
-}
-
-/**
-	@brief TerminalPropertiesDialog::symbol
-	@return the location string of the symbol shown in the symbol combo
-	box, or an empty string when that box shows none -- the terminals are
-	then created without a symbol, and can be drawn later on with
-	whatever symbol is chosen then.
-	That string holds no runtime project id, whatever session wrote it
-	last: every symbol comparison of this dialog goes by this very value,
-	so the value has to be the same one in every session
-	(@sa RealTerminal::symbolWithoutProjectId).
- */
-QString TerminalPropertiesDialog::symbol() const
-{
-	const int index = ui->m_symbol_cb->currentIndex();
-	return index < 0 ? QString() : ui->m_symbol_cb->itemData(index).toString();
 }
 
 /**
@@ -384,83 +335,6 @@ void TerminalPropertiesDialog::fillTypeAndFunctionCombos()
 	ui->m_terminal_func_cb->addItem(tr("Generic"), ElementData::TFGeneric);
 	ui->m_terminal_func_cb->addItem(tr("Phase"),     ElementData::TFPhase);
 	ui->m_terminal_func_cb->addItem(tr("Neutral"),    ElementData::TFNeutral);
-}
-
-/**
-	@brief TerminalPropertiesDialog::fillSymbolCombo
-	@param selected : the location string of the symbol to select, or an
-	empty string to select "no symbol"
-	Fills the symbol combo box with every symbol the list holds -- the
-	symbols of the project first, then the ones of the standard collection
-	as soon as they are read (@sa onSymbolListRead) -- and selects
-	@a selected.
- */
-void TerminalPropertiesDialog::fillSymbolCombo(const QString &selected)
-{
-	const QSignalBlocker blocker(ui->m_symbol_cb);
-	ui->m_symbol_cb->clear();
-	ui->m_symbol_cb->addItem(QIcon(), tr("(no symbol)"), QString());
-
-	if (m_symbols) {
-		for (const auto &location : m_symbols->symbols()) {
-			if (location.isNull()) {
-				continue;
-			}
-			ui->m_symbol_cb->addItem(location.icon(),
-									 location.name(),
-									 location.collectionPath());
-		}
-	}
-
-	int index = ui->m_symbol_cb->findData(selected);
-	if (index < 0 && !selected.isEmpty()) {
-			//A symbol which is listed nowhere -- one the list has not
-			//read yet, or one of a collection which does not answer for
-			//it anymore: keep it listed and selected, since it is the one
-			//the terminals carry and the OK button must not take it away
-			//behind the back of the user.
-		ui->m_symbol_cb->addItem(QIcon(),
-								 m_symbols ? m_symbols->name(selected) : selected,
-								 selected);
-		index = ui->m_symbol_cb->count() - 1;
-	}
-	ui->m_symbol_cb->setCurrentIndex(index < 0 ? 0 : index);
-}
-
-/**
-	@brief TerminalPropertiesDialog::setupSymbolCompleter
-	The symbol combo box is editable, so it is given a completer which
-	works on the very list the combo box shows: the name of a symbol is
-	what the user reads there and what he types a part of, and completing
-	it selects the item it names, with the location string it stores
-	(@sa TerminalPropertiesDialog::symbol).
- */
-void TerminalPropertiesDialog::setupSymbolCompleter()
-{
-	auto *completer = ui->m_symbol_cb->completer();
-	if (!completer) {
-			//The combo box is editable, so it has a completer of its own
-			//over its own list; this one is only there in case it ever
-			//stops being editable, so that typing still finds a symbol.
-		completer = new QCompleter(ui->m_symbol_cb->model(), ui->m_symbol_cb);
-		ui->m_symbol_cb->setCompleter(completer);
-	}
-	completer->setCaseSensitivity(Qt::CaseInsensitive);
-	completer->setFilterMode(Qt::MatchContains);
-	completer->setCompletionMode(QCompleter::PopupCompletion);
-}
-
-/**
-	@brief TerminalPropertiesDialog::onSymbolListRead
-	Follows the symbols the standard collection just added to the list:
-	the combo box is filled again, with the symbol chosen so far still
-	chosen -- a symbol which is listed now is named from its list, which is
-	what the rows of the preview tree ask for as well
-	(@sa AddTerminalStripDialog::onSymbolListRead).
- */
-void TerminalPropertiesDialog::onSymbolListRead()
-{
-	fillSymbolCombo(symbol());
 }
 
 /**

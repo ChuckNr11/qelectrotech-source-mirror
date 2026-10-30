@@ -42,7 +42,7 @@ class QETProject;
 	dialog of a terminal strip gives its symbol combo box the list itself
 	(@sa TerminalPropertiesDialog), while the dialog which describes the
 	strip only has to name the symbols its preview tree shows, and never
-	shows a list of them (@sa AddTerminalStripDialog::symbolName). Both are
+	shows a list of them (@sa AddTerminalsDialog::symbolName). Both are
 	handed the same instance by the strip dialog, so that the names one of
 	them reads are known to the other one as well.
 
@@ -97,6 +97,7 @@ class TerminalSymbolList : public QObject
 
 	private:
 		void readProjectSymbols();
+		void readTerminalSymbols();
 		void append(const ElementsLocation &location);
 		void onScanFinished();
 
