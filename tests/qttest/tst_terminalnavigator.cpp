@@ -49,6 +49,7 @@
 #include <QLineEdit>
 #include <QMenu>
 #include <QMimeData>
+#include <QMessageBox>
 #include <QRadioButton>
 #include <QScopedPointer>
 #include <QSettings>
@@ -568,6 +569,8 @@ private slots:
 	void selectsStripAndTerminal();
 	void reloadKeepsTheSelectedStrip();
 	void reloadKeepsTheSelectedNode();
+	void hidesTheNodesWhichSayNothing();
+	void asksBeforeItDeletes();
 	void followsElementsOfTheFolios();
 	void followsEditedTerminalsInTheTree();
 	void createsStripThroughTheToolbar();
@@ -2621,6 +2624,145 @@ void tst_terminalnavigator::choosesASymbolInTheCollections()
 }
 
 /**
+	An installation or a location which says nothing is no node of its
+	own: the strip hangs where that one would have hung, and its name is
+	what the user reads right below the project
+	(@sa TerminalNavigatorWidget::addTerminalStrip). What the tree shows
+	is all it changes -- the strip and its terminals are the very same,
+	and the values the dialogs read stay the empty ones.
+*/
+void tst_terminalnavigator::hidesTheNodesWhichSayNothing()
+{
+	auto *ka = rootChild(0, QStringLiteral("KA"));
+	QVERIFY(ka);
+	auto *cabinet_a = childByText(ka, QStringLiteral("Cabinet A"));
+	QVERIFY(cabinet_a);
+	m_tree->setCurrentItem(cabinet_a);
+
+	const int strips_before = m_project->terminalStrip().count();
+	const int undo_index_before = m_project->undoStack()->index();
+	const bool created = interactWithTheStripDialog([&](QDialog *dialog) {
+		auto *names = dialogNameCombo(dialog);
+		auto *id_field = dialogIdField(dialog);
+		if (!names || !id_field) {
+			return;
+		}
+		useTypedIds(dialog);
+
+			//The node the dialog was called from says nothing of the
+			//strip this one creates: no installation, no location, and
+			//nothing of either kind in the tree (@sa
+			//TerminalNavigatorWidget::addTerminalStrip). The name comes
+			//last of all: the list of names follows those two fields and
+			//empties the field with it.
+		for (auto *combo : dialog->findChildren<QComboBox *>()) {
+			if (combo->objectName() == QLatin1String("m_installation_cb")
+				|| combo->objectName() == QLatin1String("m_location_cb")) {
+				combo->setCurrentIndex(-1);
+				combo->setEditText(QString());
+			}
+		}
+		QTest::keyClicks(names->lineEdit(), QStringLiteral("X86"));
+		id_field->setText(QStringLiteral("1"));
+		if (auto *symbols_cb = dialogSymbolCombo(dialog)) {
+			if (symbols_cb->count() >= 2) {
+				symbols_cb->setCurrentIndex(1);
+			}
+		}
+		dialog->accept();
+	});
+
+	QVERIFY2(created, "the strip dialog was shown and accepted");
+	QCOMPARE(m_project->terminalStrip().count(), strips_before + 1);
+
+		//The name of the strip is what hangs below the project: no
+		//installation and no location are shown for it.
+	auto *root_item = m_tree->topLevelItem(0);
+	QVERIFY(root_item);
+	QVERIFY2(childByText(root_item, QStringLiteral("X86")),
+			 "the name of the strip is what hangs below the project");
+	QCOMPARE(m_widget->currentInstallation(), QString());
+	QCOMPARE(m_widget->currentLocation(), QString());
+
+		//Leave the project the way this test found it.
+	m_project->undoStack()->undo();
+	QCOMPARE(m_project->terminalStrip().count(), strips_before);
+	QCOMPARE(m_project->undoStack()->index(), undo_index_before);
+}
+
+/**
+	The deletion asks before it touches anything, and says that what is
+	marked leaves the project (@sa TerminalNavigatorWidget::
+	deleteSelection). The button of the toolbar and the entry of the
+	context menu are the very same action, so the two can never disagree
+	about when there is something to delete.
+*/
+void tst_terminalnavigator::asksBeforeItDeletes()
+{
+	auto *action = m_widget->findChild<QAction *>(
+				QStringLiteral("m_delete_selection"));
+	QVERIFY(action);
+	auto *x10 = stripX10();
+	QVERIFY(x10);
+	QVERIFY(x10->childCount() > 0);
+
+		//Nothing marked: nothing to delete.
+	m_tree->clearSelection();
+	m_tree->setCurrentItem(nullptr);
+	QVERIFY(!action->isEnabled());
+
+		//A strip marked as a whole: the button is on, and the entry of
+		//the context menu is that very button.
+	selectOnly(x10);
+	QVERIFY(action->isEnabled());
+	{
+		MenuNavigator navigator;
+		navigator.setProject(m_project);
+		auto *tree = navigator.findChild<QTreeWidget *>();
+		QVERIFY(tree);
+		auto *strip_item = childByText(childByText(
+					childByText(tree->topLevelItem(0), QStringLiteral("KA")),
+					QStringLiteral("Cabinet A")), QStringLiteral("X10"));
+		QVERIFY(strip_item);
+		QScopedPointer<QMenu> menu(navigator.buildContextMenu(strip_item->child(0)));
+		QVERIFY(menu);
+		QVERIFY2(menu->actions().contains(
+					 navigator.findChild<QAction *>(
+						 QStringLiteral("m_delete_selection"))),
+				 "the entry of the context menu is the button of the toolbar");
+	}
+
+		//The question of the deletion is the one a group has always
+		//asked: a strip marked as a whole says what takes its plans
+		//with it (@sa TerminalNavigatorWidget::confirmGroupDeletion),
+		//and No leaves everything untouched.
+	const int strips_before = m_project->terminalStrip().count();
+	const int undo_index_before = m_project->undoStack()->index();
+	const int terminals_before = stripNamed(QStringLiteral("X10"))
+			->physicalTerminalCount();
+	bool asked = false;
+	QTimer::singleShot(0, this, [&]() {
+		if (auto *box = qobject_cast<QMessageBox *>(
+					QApplication::activeModalWidget())) {
+			asked = box->text().contains(QStringLiteral("from the project"));
+			if (auto *no = box->button(QMessageBox::No)) {
+				no->click();
+			} else {
+				box->close();
+			}
+		}
+	});
+	action->trigger();
+	QVERIFY2(asked, "the deletion asks before it touches anything");
+	QCOMPARE(m_project->terminalStrip().count(), strips_before);
+	QCOMPARE(m_project->undoStack()->index(), undo_index_before);
+	QCOMPARE(stripNamed(QStringLiteral("X10"))->physicalTerminalCount(),
+			 terminals_before);
+
+	m_tree->clearSelection();
+}
+
+/**
 	The button of the toolbar and the entry of the context menu are for
 	the rows of a terminal strip marked in the tree: what the first of
 	them carries is what the dialog of the properties opens on, and what
@@ -2657,6 +2799,17 @@ void tst_terminalnavigator::opensItsPropertiesForTheTerminalsMarked()
 	selectOnly(x10->child(0));
 	QVERIFY2(action->isEnabled(),
 			 "the rows of a terminal strip are worth the dialog");
+
+		//The icon of the action is seen when it is enabled: a theme
+		//icon which is dark in itself disappears on a dark palette the
+		//moment the action is on (@sa QET::Icons).
+	QVERIFY(!action->icon().isNull());
+	const auto on = action->icon().pixmap(QSize(16, 16), QIcon::Normal);
+	action->setEnabled(false);
+	const auto off = action->icon().pixmap(QSize(16, 16), QIcon::Disabled);
+	action->setEnabled(true);
+	QVERIFY2(on.cacheKey() != off.cacheKey(),
+			 "the icon of an enabled action is not the greyed one");
 
 	bool symbol_row_gone = false;
 	double section = -1;

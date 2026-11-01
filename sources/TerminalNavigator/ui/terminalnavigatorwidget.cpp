@@ -56,6 +56,13 @@ TerminalNavigatorWidget::TerminalNavigatorWidget(QWidget *parent) :
 {
 	ui->setupUi(this);
 
+		//The icon of this one comes from the icon set of the
+		//application and not from the theme of the desktop: a theme
+		//icon which is dark in itself disappears on a dark palette the
+		//moment the action is enabled, while the greyed one of a
+		//disabled action is seen just fine (@sa QET::Icons).
+	ui->m_edit_selection->setIcon(QET::Icons::Configure);
+
 	ui->m_tree_view->expandRecursively(ui->m_tree_view->rootIndex());
 
 		//Several terminals are marked at once to be drawn in one run:
@@ -613,15 +620,12 @@ QMenu *TerminalNavigatorWidget::buildContextMenu(QTreeWidgetItem *item)
 		//editSelection).
 	menu->addAction(ui->m_edit_selection);
 
-		//Deleting is for what can leave the project from here: a strip,
-		//a terminal row of one, or a free terminal with its symbol.
-		//deleteSelection() alone knows what each item of the
-		//selection is worth -- the entry is only greyed out when
-		//there is nothing selected at all.
-	auto *delete_ = menu->addAction(QET::Icons::EditDelete, tr("Delete"));
-	delete_->setEnabled(!ui->m_tree_view->selectedItems().isEmpty());
-	connect(delete_, &QAction::triggered,
-			this, &TerminalNavigatorWidget::deleteSelection);
+		//Deleting is for whatever the tree shows: a branch, a strip, a
+		//row or a free terminal. It is the very action the button of
+		//the toolbar is, so the two can never disagree about when
+		//there is something to delete -- and deleteSelection() alone
+		//knows what each item of the selection is worth.
+	menu->addAction(ui->m_delete_selection);
 
 	return menu;
 }
@@ -778,36 +782,47 @@ QTreeWidgetItem* TerminalNavigatorWidget::addTerminalStrip(TerminalStrip *termin
 
 	auto root_item = ui->m_tree_view->topLevelItem(0);
 
-		//Check if installation already exist
-		//if not create a new one
-	auto installation_str = terminal_strip->installation();
-	QTreeWidgetItem *inst_qtwi = nullptr;
-	for (int i = 0 ; i<root_item->childCount() ; ++i) {
-		auto child_inst = root_item->child(i);
-		if (child_inst->data(0, Qt::DisplayRole).toString() == installation_str) {
-			inst_qtwi = child_inst;
-			break;
+		//An installation or a location which says nothing is no node of
+		//its own: a strip without one of them hangs where that one would
+		//have hung, and the name of the strip is what the user reads
+		//right below the project. The root of the tree therefore holds
+		//nodes of three kinds now, which is why the name alone is not
+		//enough to tell an installation from a strip
+		//(@sa currentInstallation).
+	QTreeWidgetItem *inst_qtwi = root_item;
+	const auto installation_str = terminal_strip->installation();
+	if (!installation_str.isEmpty()) {
+		inst_qtwi = nullptr;
+		for (int i = 0 ; i<root_item->childCount() ; ++i) {
+			auto child_inst = root_item->child(i);
+			if (child_inst->type() == Installation
+				&& child_inst->data(0, Qt::DisplayRole).toString() == installation_str) {
+				inst_qtwi = child_inst;
+				break;
+			}
 		}
-	}
-	if (!inst_qtwi) {
-		QStringList inst_strl{installation_str};
-		inst_qtwi = new QTreeWidgetItem(root_item, inst_strl, Installation);
+		if (!inst_qtwi) {
+			QStringList inst_strl{installation_str};
+			inst_qtwi = new QTreeWidgetItem(root_item, inst_strl, Installation);
+		}
 	}
 
-		//Check if location already exist
-		//if not create a new one
-	auto location_str = terminal_strip->location();
-	QTreeWidgetItem *loc_qtwi = nullptr;
-	for (int i = 0 ; i<inst_qtwi->childCount() ; ++i) {
-		auto child_loc = inst_qtwi->child(i);
-		if (child_loc->data(0, Qt::DisplayRole).toString() == location_str) {
-			loc_qtwi = child_loc;
-			break;
+	QTreeWidgetItem *loc_qtwi = inst_qtwi;
+	const auto location_str = terminal_strip->location();
+	if (!location_str.isEmpty()) {
+		loc_qtwi = nullptr;
+		for (int i = 0 ; i<inst_qtwi->childCount() ; ++i) {
+			auto child_loc = inst_qtwi->child(i);
+			if (child_loc->type() == Location
+				&& child_loc->data(0, Qt::DisplayRole).toString() == location_str) {
+				loc_qtwi = child_loc;
+				break;
+			}
 		}
-	}
-	if (!loc_qtwi) {
-		QStringList loc_strl{location_str};
-		loc_qtwi = new QTreeWidgetItem(inst_qtwi, loc_strl, Location);
+		if (!loc_qtwi) {
+			QStringList loc_strl{location_str};
+			loc_qtwi = new QTreeWidgetItem(inst_qtwi, loc_strl, Location);
+		}
 	}
 
 		//Add the terminal strip
@@ -1519,22 +1534,19 @@ void TerminalNavigatorWidget::updateActionsState()
 			drawable = true;
 		}
 
-			//A row of a strip, or a free terminal: the parent of the
-			//item says which one it is -- the strip the row belongs
-			//to, or the root the free terminals hang below. The free
-			//terminal only counts while its element is still there:
-			//it can be gone from the folios already, with the tree
-			//not rebuilt yet (@sa m_uuid_free_terminal_H).
+			//What can be deleted is everything the tree shows: a
+			//branch, a strip, a row or a free terminal, and
+			//deleteSelection() alone knows what each of them is worth
+			//(@sa deleteSelection). A row of a strip is also what the
+			//dialog of the properties works on.
+		if (!deletable) {
+			deletable = true;
+		}
 		if (item->type() == Terminal && item->parent())
 		{
 			const auto parent_type{item->parent()->type()};
 			if (parent_type == Strip) {
-				deletable = true;
 				editable = true;
-			} else if (parent_type == FreeTerminal
-					   && m_uuid_free_terminal_H.contains(
-						   item->data(0, UUID_USER_ROLE).toUuid())) {
-				deletable = true;
 			}
 		}
 		if (deletable && drawable && editable) {
