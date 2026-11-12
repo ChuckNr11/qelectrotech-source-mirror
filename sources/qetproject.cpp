@@ -6198,6 +6198,42 @@ bool QETProject::removeBridge(Bridge *bridge)
 }
 
 /**
+ * @brief QETProject::elementWasAdded
+ * Broadcast that @p element was placed on one of this project's folios.
+ * Called by Diagram::addItem(), the one funnel every insertion goes
+ * through -- DiagramEventAddElement, a paste, an undo, a drop from the
+ * panel. Nothing is stored here: the element belongs to its folio, this
+ * only reports the change, the way addCable() reports a cable but for an
+ * item the project keeps no list of.
+ *
+ * One signal per element, so a listener rebuilding something should
+ * bounce them through a timer -- a paste or a load emits one per item.
+ * @param element
+ */
+void QETProject::elementWasAdded(Element *element)
+{
+	if (!element) return;
+
+	emit elementAdded(element);
+}
+
+/**
+ * @brief QETProject::elementWasRemoved
+ * Broadcast that @p element was taken off one of this project's folios.
+ * Called by Diagram::removeItem(), which runs before the element is
+ * deleted -- an undo of a paste goes through it as well -- so the item is
+ * still valid while the signal travels, but do not keep it: listeners are
+ * expected to re-read their content, not to store the pointer.
+ * @param element
+ */
+void QETProject::elementWasRemoved(Element *element)
+{
+	if (!element) return;
+
+	emit elementRemoved(element);
+}
+
+/**
  * @brief QETProject::diagramByUuid
  * @param uuid
  * @return the folio with that identity, or nullptr. A cable section says

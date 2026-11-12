@@ -2229,6 +2229,14 @@ qet_add_app_test(tst_collectionclosedproject tst_collectionclosedproject.cpp)
 # A second QElectroTech writes to the shared element cache at once instead of
 # waiting for the first to close (#1571).
 qet_add_app_test(tst_elementcachelock tst_elementcachelock.cpp)
+# The terminal tab of the elements collection panel: the strips of the
+# project grouped Installation > Location > Strip > terminal below a
+# root, the free terminals below a second one, and what a reload does to
+# the selection. No example carries terminal strips, so the strips are
+# built from the free terminals industrial.qet has.
+qet_add_app_test(tst_terminalnavigator tst_terminalnavigator.cpp)
+target_compile_definitions(tst_terminalnavigator PRIVATE
+  "QET_TEST_PROJECT_PATH=\"${QET_DIR}/examples/industrial.qet\"")
 
 # The working copy: the project database in a file, committed after each
 # edit; killed at random moments, it holds every edit finished, and a clean

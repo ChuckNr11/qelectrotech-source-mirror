@@ -49,6 +49,7 @@
 #include "QWidgetAnimation/qwidgetanimation.h"
 #include "autoNum/ui/autonumberingdockwidget.h"
 #include "ui/devicenavigatordockwidget.h"
+#include "TerminalNavigator/ui/terminalnavigatorwidget.h"
 #include "conductornumexport.h"
 #include "diagramcommands.h"
 #include "diagramcontent.h"
@@ -333,6 +334,7 @@ QETDiagramEditor::QETDiagramEditor(const QStringList &files, QWidget *parent) :
 	setUpSelectionPropertiesEditor();
 	setUpAutonumberingWidget();
 	setUpDeviceNavigatorDock();
+	setUpTerminalNavigatorDock();
 
 	setUpActions();
 	setUpToolBar();
@@ -541,6 +543,36 @@ void QETDiagramEditor::setUpDeviceNavigatorDock()
 			m_device_navigator_dock->setProject(currentProject());
 		}
 	});
+}
+
+/**
+	@brief QETDiagramEditor::setUpTerminalNavigatorDock
+	Set up the terminal navigator dock widget: the strips of the current
+	project as a dock of its own, the way the device navigator has one,
+	instead of a third tab of the elements collection.
+*/
+void QETDiagramEditor::setUpTerminalNavigatorDock()
+{
+	m_terminal_navigator_dock = new QDockWidget(tr("Terminal navigator", "dock title"), this);
+	m_terminal_navigator_dock->setAllowedAreas(Qt::LeftDockWidgetArea | Qt::RightDockWidgetArea);
+	m_terminal_navigator_dock->setFeatures(
+		QDockWidget::DockWidgetClosable |
+		QDockWidget::DockWidgetMovable |
+		QDockWidget::DockWidgetFloatable);
+	m_terminal_navigator = new TerminalNavigatorWidget(m_terminal_navigator_dock);
+	m_terminal_navigator_dock->setWidget(m_terminal_navigator);
+	addDockWidget(Qt::LeftDockWidgetArea, m_terminal_navigator_dock);
+	tabifyDockWidget(qdw_pa, m_terminal_navigator_dock);
+	m_terminal_navigator_dock->hide();
+
+		//The navigator shows the strips of the project the user really
+		//works on, not the one opened last, and it follows the active
+		//project whether the dock is shown or not -- so the tree is right
+		//the moment the user opens the dock, and a switch of tabs never
+		//leaves a stale project behind in a hidden dock.
+	connect(this, &QETDiagramEditor::currentProjectChanged,
+		m_terminal_navigator, &TerminalNavigatorWidget::setProject);
+	m_terminal_navigator->setProject(currentProject());
 }
 
 /**
@@ -2340,6 +2372,9 @@ void QETDiagramEditor::setUpMenu()
 	if (m_device_navigator_dock) {
 		m_device_navigator_dock->toggleViewAction()->setStatusTip(tr("Show or hide the device navigator"));
 	}
+	if (m_terminal_navigator_dock) {
+		m_terminal_navigator_dock->toggleViewAction()->setStatusTip(tr("Show or hide the terminal navigator"));
+	}
 
 
 	// menu Affichage
@@ -2365,6 +2400,9 @@ void QETDiagramEditor::setUpMenu()
 	menu_affichage -> addAction(m_background_color_button->darkModeAction());
 	if (m_device_navigator_dock) {
 		menu_affichage -> addAction(m_device_navigator_dock->toggleViewAction());
+	}
+	if (m_terminal_navigator_dock) {
+		menu_affichage -> addAction(m_terminal_navigator_dock->toggleViewAction());
 	}
 	menu_affichage -> addSeparator();
 	menu_affichage -> addActions(m_zoom_actions_group.actions());
@@ -4758,6 +4796,15 @@ void QETDiagramEditor::projectWasClosed(ProjectView *project_view)
 	{
 		pa -> elementsPanel().projectWasClosed(project);
 		m_element_collection_widget->removeProject(project);
+			//The navigator lives in its own dock now, so the collection
+			//dropping the project no longer reaches it: take the closed
+			//project out here while it is still the one shown -- closing
+			//makes another project active, whose signal has not run yet,
+			//and the widget tracks the destruction of what it holds by
+			//itself for the rest.
+		if (m_terminal_navigator && m_terminal_navigator->project() == project) {
+			m_terminal_navigator->setProject();
+		}
 		undo_group.removeStack(project -> undoStack());
 		QETApp::unregisterProject(project);
 	}
@@ -5147,6 +5194,7 @@ void QETDiagramEditor::subWindowActivated(QMdiSubWindow *subWindows)
 	slot_updateActions();
 	slot_updateWindowsMenu();
 	emit syncElementsPanel();
+	emit currentProjectChanged(currentProject());
 	updateUsageTrackersActiveState();
 	updateWindowModifiedState();
 	if (m_device_navigator_dock && m_device_navigator_dock->isVisible()) {
