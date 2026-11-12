@@ -2273,6 +2273,15 @@ qet_add_app_test(tst_deleteterminalstrips tst_deleteterminalstrips.cpp)
 target_compile_definitions(tst_deleteterminalstrips PRIVATE
   "QET_TEST_PROJECT_PATH=\"${QET_DIR}/examples/industrial.qet\"")
 
+# The home of a terminal follows its name: renaming the symbol on a folio
+# moves its row to the strip the new name calls for, or out of its strip
+# when none does, in the same undo step as the rename. A bridged row or a
+# row of several levels stays where it is, and a name of its own ("PE")
+# calls for no strip at all.
+qet_add_app_test(tst_terminalrehome tst_terminalrehome.cpp)
+target_compile_definitions(tst_terminalrehome PRIVATE
+  "QET_TEST_PROJECT_PATH=\"${QET_DIR}/examples/industrial.qet\"")
+
 # The working copy: the project database in a file, committed after each
 # edit; killed at random moments, it holds every edit finished, and a clean
 # exit leaves nothing. QET-SQL-FORMAT S3z2.

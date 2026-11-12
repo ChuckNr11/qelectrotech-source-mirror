@@ -18,11 +18,15 @@
 #ifndef CHANGEELEMENTINFORMATIONCOMMAND_H
 #define CHANGEELEMENTINFORMATIONCOMMAND_H
 
+#include <TerminalStrip/terminalstriprehome.h>
 #include <diagramcontext.h>
 
+#include <QPair>
+#include <QPointer>
+#include <QString>
 #include <QUndoCommand>
 #include <QUuid>
-#include <QPointer>
+#include <QVector>
 
 class Element;
 class QETProject;
@@ -30,6 +34,12 @@ class QETProject;
 /**
 	@brief The ChangeElementInformationCommand class
 	This class manage undo/redo to change the element information.
+
+	What the new information names a terminal does to its row in the
+	terminal strips goes with it in the same undo step: a name calling
+	for another strip moves the row there, one no strip answers to makes
+	the terminal independent (@sa TerminalStripRehome). Undo gives the
+	rows their home back along with the information.
 */
 class ChangeElementInformationCommand : public QUndoCommand
 {
@@ -50,10 +60,15 @@ class ChangeElementInformationCommand : public QUndoCommand
 
 	private:
 		void updateProjectDB();
+		void rehome(const QVector<QPair<Element *, QString>> &labels);
+		void unhome();
 
 	private:
 		QMap<QPointer<Element>, QPair<DiagramContext, DiagramContext>> m_map;
 		QMap<QPointer<Element>, QPointer<Element>> m_unlinked_reports;
+		/// The rows this command moved out of their strip, given back
+		/// by undo() (@sa TerminalStripRehome)
+		QVector<TerminalStripRehome::Plan> m_rehomes;
 };
 
 /**

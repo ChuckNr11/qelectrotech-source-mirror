@@ -106,6 +106,48 @@ class tst_deleteterminalstrips : public QObject
 		return findByText(m_tree->topLevelItem(0), text);
 	}
 
+		//What the deletion asks before it touches anything: the
+		//question is answered the way a user who means it would, and
+		//whatever it says afterwards -- the refusal of a bridged
+		//terminal -- is closed from the loop exec() spins
+		//(@sa TerminalNavigatorWidget::deleteSelection). @p refused is
+		//set when such a refusal was seen.
+		//The timer lives until the deletion returns: it watches the
+		//modal boxes from the loop exec() spins, and one which is
+		//still running when the next test begins would answer that
+		//test's boxes instead of its own.
+	QTimer *answerTheBoxes(bool *refused = nullptr)
+	{
+		auto *timer = new QTimer(this);
+		timer->setInterval(20);
+		connect(timer, &QTimer::timeout, this, [timer, refused]() {
+			auto *box = qobject_cast<QMessageBox *>(
+						QApplication::activeModalWidget());
+			if (!box) {
+				return;
+			}
+			if (auto *yes = box->button(QMessageBox::Yes)) {
+				yes->click();
+			} else {
+				if (refused) {
+					*refused = true;
+				}
+				box->close();
+			}
+		});
+		timer->start();
+		return timer;
+	}
+
+		//The deletion, with the question answered.
+	void deleteSelectionAgreed(bool *refused = nullptr)
+	{
+		auto *timer = answerTheBoxes(refused);
+		m_widget->deleteSelection();
+		timer->stop();
+		timer->deleteLater();
+	}
+
 	/// The strip of the project named @p name, else nullptr.
 	TerminalStrip *stripNamed(const QString &name) const
 	{
@@ -245,7 +287,7 @@ void tst_deleteterminalstrips::deletesATerminalRowWithoutAsking()
 
 	selectOnly(findByText(treeItem(QStringLiteral("X10")), reals.first()->label()));
 	m_widget->asked_strips = -1;
-	m_widget->deleteSelection();
+	deleteSelectionAgreed();
 
 		//No question for a row: the strip keeps its other rows, the
 		//row leaves the drawing, and the tree knows through the
@@ -274,7 +316,7 @@ void tst_deleteterminalstrips::asksBeforeDeletingAWholeStrip()
 	m_widget->answer = false;
 	m_widget->asked_strips = -1;
 	m_widget->asked_terminals = -1;
-	m_widget->deleteSelection();
+	deleteSelectionAgreed();
 
 		//The question is asked for a strip -- one strip with no rows
 		//selected besides -- and counts what the drawings lose a
@@ -289,7 +331,7 @@ void tst_deleteterminalstrips::asksBeforeDeletingAWholeStrip()
 	}
 
 	m_widget->answer = true;
-	m_widget->deleteSelection();
+	deleteSelectionAgreed();
 
 	QVERIFY(!m_project->terminalStrip().contains(x2));
 	for (auto *element : elements) {
@@ -333,7 +375,7 @@ void tst_deleteterminalstrips::asksWhatItActuallyTakes()
 	m_widget->answer = false;
 	m_widget->asked_strips = -1;
 	m_widget->asked_terminals = -1;
-	m_widget->deleteSelection();
+	deleteSelectionAgreed();
 	QCOMPARE(m_widget->asked_strips, 1);
 	QCOMPARE(m_widget->asked_terminals, 2);
 
@@ -344,7 +386,7 @@ void tst_deleteterminalstrips::asksWhatItActuallyTakes()
 	selectOnly(ka_item);
 	m_widget->asked_strips = -1;
 	m_widget->asked_terminals = -1;
-	m_widget->deleteSelection();
+	deleteSelectionAgreed();
 	QCOMPARE(m_widget->asked_strips, 2);
 	QCOMPARE(m_widget->asked_terminals, 6);
 
@@ -363,7 +405,7 @@ void tst_deleteterminalstrips::deletesEveryStripOfTheProjectButNoFreeTerminal()
 	m_widget->answer = true;
 	m_widget->asked_strips = -1;
 	m_widget->asked_terminals = -1;
-	m_widget->deleteSelection();
+	deleteSelectionAgreed();
 
 		//The question counts what the drawings lose a symbol by: the
 		//four rows of X10, the two of X2 and the one of X201.
@@ -393,7 +435,7 @@ void tst_deleteterminalstrips::deletesFreeTerminalsFromTheirFolios()
 	const int free_before = ElementProvider(m_project).freeTerminal().count();
 
 	selectOnly(free_root->child(0));
-	m_widget->deleteSelection();
+	deleteSelectionAgreed();
 
 		//A free terminal belongs to no strip: nothing leaves a strip,
 		//but its symbol leaves the folio it is drawn on. No question
@@ -423,7 +465,7 @@ void tst_deleteterminalstrips::deletesAPlanWithItsStrip()
 
 	selectOnly(treeItem(QStringLiteral("X201")));
 	m_widget->answer = true;
-	m_widget->deleteSelection();
+	deleteSelectionAgreed();
 
 		//A strip leaves with the plans drawn for it, wherever they
 		//stand: a plan of nothing would be left on the folio else.
@@ -455,18 +497,12 @@ void tst_deleteterminalstrips::refusesBridgedRowsAndKeepsThem()
 	row0->setSelected(true);
 	row1->setSelected(true);
 
-		//The refusal is a message box, and nobody here to answer it:
-		//close it from the event loop exec() spins, and say it came.
+		//The refusal is a message box: the question of the deletion is
+		//answered before it, and this is what the deletion says instead
+		//of deleting -- the helper closes it and says it came.
 	const int commands = m_project->undoStack()->count();
 	bool refused{false};
-	QTimer::singleShot(0, this, [&]() {
-		if (auto *modal = qobject_cast<QMessageBox *>(
-					QApplication::activeModalWidget())) {
-			refused = true;
-			modal->close();
-		}
-	});
-	m_widget->deleteSelection();
+	deleteSelectionAgreed(&refused);
 	QVERIFY(refused);
 
 		//A bridged row is refused the way the drawing editor refuses
@@ -476,7 +512,7 @@ void tst_deleteterminalstrips::refusesBridgedRowsAndKeepsThem()
 	QCOMPARE(m_project->undoStack()->count(), commands);
 
 	x10->unBridge({reals.at(0), reals.at(1)});
-	m_widget->deleteSelection();
+	deleteSelectionAgreed();
 
 	QCOMPARE(x10->physicalTerminalCount(), 2);
 	undoLastPush();
@@ -790,12 +826,13 @@ void tst_deleteterminalstrips::toolbarButtonsFollowTheMarkedTerminals()
 	QVERIFY(!delete_->isEnabled());
 	QVERIFY(!draw->isEnabled());
 
-		//A strip is deleted from the context menu and the Delete key,
-		//which ask their question first: it marks no button.
+		//A strip leaves from here too, with everything below it: the
+		//question the deletion asks says what that means before
+		//anything is touched.
 	auto *x2 = stripNamed(QStringLiteral("X2"));
 	QVERIFY(x2);
 	selectOnly(treeItem(QStringLiteral("X2")));
-	QVERIFY(!delete_->isEnabled());
+	QVERIFY(delete_->isEnabled());
 	QVERIFY(!draw->isEnabled());
 
 		//A free terminal leaves from here too: its symbol goes off

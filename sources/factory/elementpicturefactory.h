@@ -88,6 +88,17 @@ class ElementPictureFactory
 		void getReadablePictures(const ElementsLocation &location, const QTransform &texts_transform,
 								 QPicture &picture, QPicture &low_picture);
 		QPixmap pixmap(const ElementsLocation &location);
+		/**
+			@brief pixmap
+			@param location : the element to draw
+			@param size : the room the symbol is drawn in, its longest
+			side filled and the shorter one following the symbol
+			@return the symbol of @a location painted straight into a
+			pixmap of that size -- never scaled up from the one its own
+			width and height make, which is where a soft picture comes
+			from (@sa pixmap, AddTerminalsDialog::chooseSymbol).
+		*/
+		QPixmap pixmap(const ElementsLocation &location, const QSize &size);
 		ElementPictureFactory::primitives getPrimitives(const ElementsLocation &location);
 		void dropCache(const ElementsLocation &location);
 		QPicture pictureFromDefinition(const QDomElement &definition) const;
