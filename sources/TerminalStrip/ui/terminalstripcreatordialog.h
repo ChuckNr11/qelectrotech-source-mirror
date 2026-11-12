@@ -30,6 +30,14 @@ namespace Ui {
 /**
  * @brief The TerminalStripCreatorDialog class
  * A simple dialog for create a new terminal strip
+ *
+ * Plant and location are editable combo boxes: they offer the values the
+ * strips of the project already use, but a new one can be typed in too.
+ * The terminal navigator groups the strips by exactly those two values,
+ * so a mistyped plant would show up as a second branch that looks like
+ * the first one -- which is why the existing values are worth offering
+ * here. The setters below keep working for a value which is not in the
+ * list yet; it simply shows up as text.
  */
 class TerminalStripCreatorDialog : public QDialog
 {
@@ -45,6 +53,7 @@ class TerminalStripCreatorDialog : public QDialog
 
 	private:
 		void setCursorToEmptyLine();
+		void fillWithExistingValues();
 
 	private:
 		Ui::TerminalStripCreatorDialog *ui;

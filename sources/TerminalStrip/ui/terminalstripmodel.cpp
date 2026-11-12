@@ -212,7 +212,14 @@ QVariant TerminalStripModel::data(const QModelIndex &index, int role) const
 			case LEVEL_CELL :      return mrtd.level_;
 			case LABEL_CELL :      return mrtd.label_;
 			case CONDUCTOR_CELL :  return mrtd.conductor_;
-			case XREF_CELL :       return mrtd.spare_ ? tr("Spare") : mrtd.Xref_;
+			case XREF_CELL :
+					//A terminal drawn nowhere has no reference to show:
+					//"Spare" for a reserved one, "Not drawn yet" for one the
+					//terminal navigator created and whose symbol is to come
+				if (mrtd.spare_) {
+					return tr("Spare");
+				}
+				return mrtd.pending_ ? tr("Not drawn yet") : mrtd.Xref_;
 			case CABLE_CELL :      return mrtd.cable_;
 			case CABLE_WIRE_CELL : return mrtd.cable_wire;
 			case CABLE_TARGET_CELL : return mrtd.cable_target_;
@@ -265,9 +272,9 @@ QVariant TerminalStripModel::data(const QModelIndex &index, int role) const
 		return mrtd.separator_ ? Qt::Checked : Qt::Unchecked;
 	}
 	else if (role == Qt::ForegroundRole &&
-			 index.column() == XREF_CELL && mrtd.spare_)
+			 index.column() == XREF_CELL && (mrtd.spare_ || mrtd.pending_))
 	{
-		return QBrush(Qt::gray);	//"Spare" : not a reference to a folio
+		return QBrush(Qt::gray);	//"Spare" / "Not drawn yet" : not a reference to a folio
 	}
 	else if ((role == Qt::BackgroundRole || role == Qt::ForegroundRole)
 			 && index.column() < COLUMN_COUNT
