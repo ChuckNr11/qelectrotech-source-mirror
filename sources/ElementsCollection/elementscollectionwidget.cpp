@@ -17,6 +17,7 @@
 */
 #include "elementscollectionwidget.h"
 
+#include <qetproject.h>
 #include <editor/ui/qetelementeditor.h>
 #include <elementscategoryeditor.h>
 #include <import/edz/edzimporter.h>
@@ -138,6 +139,11 @@ void ElementsCollectionWidget::addProject(QETProject *project)
 	else {
 		m_waiting_project.append(project);
 	}
+
+		//The terminal navigator follows the project the user is working
+		//on (currentProjectChanged, setUpConnection), so it is not fed
+		//here: several projects can be open in this editor at once, and
+		//the one added last is not necessarily the active one.
 }
 
 void ElementsCollectionWidget::removeProject(QETProject *project) {

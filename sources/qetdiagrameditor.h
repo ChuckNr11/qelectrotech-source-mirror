@@ -55,6 +55,7 @@ class ElementPickerPopup;
 class CommandSearchPopup;
 class AutoNumberingDockWidget;
 class DeviceNavigatorDockWidget;
+class TerminalNavigatorWidget;
 class TerminalNumberingDialog;
 
 class KAutoSaveFile;
@@ -120,6 +121,7 @@ class QETDiagramEditor : public QETMainWindow
 		void setUpSelectionPropertiesEditor();
 		void setUpAutonumberingWidget();
 		void setUpDeviceNavigatorDock();
+		void setUpTerminalNavigatorDock();
 		void setUpActions       ();
 		void setUpToolBar       ();
 		void setUpMenu          ();
@@ -150,6 +152,14 @@ class QETDiagramEditor : public QETMainWindow
 
 	signals:
 		void syncElementsPanel();
+		/**
+			Emitted whenever the active MDI subwindow changes, so the
+			projects held by a widget of this window follow the project
+			the user is really working on -- the elements collection's
+			terminal navigator reads the strips of @p currentProject()
+			from it.
+		*/
+		void currentProjectChanged(QETProject *project);
 
 	public slots:
 		void save();
@@ -454,6 +464,8 @@ class QETDiagramEditor : public QETMainWindow
 		QUndoGroup undo_group;
 		AutoNumberingDockWidget *m_autonumbering_dock;
 		DeviceNavigatorDockWidget *m_device_navigator_dock = nullptr;
+		QDockWidget *m_terminal_navigator_dock = nullptr;
+		TerminalNavigatorWidget *m_terminal_navigator = nullptr;
 		int activeSubWindowIndex;
 		SearchAndReplaceWidget m_search_and_replace_widget;
 };
