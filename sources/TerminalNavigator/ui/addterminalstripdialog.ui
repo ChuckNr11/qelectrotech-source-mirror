@@ -154,7 +154,7 @@
    <item row="9" column="0" colspan="2">
     <widget class="QTreeWidget" name="m_preview_tree">
      <property name="toolTip">
-      <string>Terminals about to be added to the terminal strip, with the symbol each one is drawn with. Select one or several of them and pick a symbol below to give it to them; a terminal without a symbol is not drawn in any folio yet.</string>
+      <string>Terminals about to be added to the terminal strip, with the symbol each one is drawn with. Greyed out rows at the top show what the terminal strip already holds; they are display only. Select one or several of the others and pick a symbol below to give it to them; a terminal without a symbol is not drawn in any folio yet.</string>
      </property>
      <property name="columnCount">
       <number>2</number>

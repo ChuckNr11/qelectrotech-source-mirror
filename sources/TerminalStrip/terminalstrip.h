@@ -91,6 +91,15 @@ class TerminalStrip : public QObject
 		void removeTerminals (QVector<QSharedPointer<RealTerminal>> real_t_vector);
 		bool addTerminal    (Element *terminal);
 		bool removeTerminal (Element *terminal);
+			//Replace a terminal of this strip by another one at the very
+			//place it holds: the physical terminal keeps its position, the
+			//new terminal gets the level of the old one, and the bridge
+			//they were part of carries on. This is how a terminal which is
+			//drawn in no folio yet gives its place to the element drawn
+			//with its symbol, and calling it the other way round is its
+			//undo (@sa TerminalNavigator/UndoCommand/bindterminalcommand)
+		bool replaceRealTerminal(const QSharedPointer<RealTerminal> &old_terminal,
+								 const QSharedPointer<RealTerminal> &new_terminal);
 		bool addTerminal   (QSharedPointer<PhysicalTerminal> phy_t);
 		void addTerminals (QVector<QSharedPointer<PhysicalTerminal>> phy_t_vector);
 		bool removeTerminal (QSharedPointer<PhysicalTerminal> phy_t);

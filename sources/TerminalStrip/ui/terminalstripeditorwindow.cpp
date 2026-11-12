@@ -18,6 +18,7 @@
 #include "ui_terminalstripeditorwindow.h"
 
 #include <TerminalStrip/UndoCommand/addterminalstripcommand.h>
+#include <TerminalStrip/UndoCommand/terminalstripdeletion.h>
 #include "freeterminaleditor.h"
 #include <qetapp.h>
 #include <qetdiagrameditor.h>
@@ -334,6 +335,11 @@ void TerminalStripEditorWindow::on_m_add_terminal_strip_triggered()
 
 /**
  * @brief TerminalStripEditorWindow::on_m_remove_terminal_triggered
+ * The strip leaves the project with everything drawn for it -- its
+ * symbols and its plans on the folios -- the same way the terminal
+ * navigator deletes a strip, so that no way of deleting can leave the
+ * drawings of a strip behind on a folio. One undo step brings the
+ * whole of it back.
  */
 void TerminalStripEditorWindow::on_m_remove_terminal_triggered()
 {
@@ -341,7 +347,19 @@ void TerminalStripEditorWindow::on_m_remove_terminal_triggered()
 	{
 		if (auto strip_ = m_tree_dock->currentStrip())
 		{
-			m_project->undoStack()->push(new RemoveTerminalStripCommand(strip_, m_project));
+			const auto answer = QMessageBox::question(this,
+													  tr("Delete the terminal strip"),
+													  tr("Delete the terminal strip %1 with its symbols and its plans in the "
+														 "drawings?\nThis can be undone.").arg(strip_->name()),
+													  QMessageBox::Yes | QMessageBox::No,
+													  QMessageBox::No);
+			if (answer != QMessageBox::Yes) {
+				return;
+			}
+
+			if (auto *macro = TerminalStripDeletion::stripsDeletionMacro(m_project, {strip_})) {
+				m_project->undoStack()->push(macro);
+			}
 			m_tree_dock->reload();
 		}
 

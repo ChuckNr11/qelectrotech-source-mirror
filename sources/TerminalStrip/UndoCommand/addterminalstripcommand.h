@@ -19,11 +19,13 @@
 #define ADDTERMINALSTRIPCOMMAND_H
 
 #include <QUndoCommand>
+#include <QPair>
 #include <QPointer>
 #include <QSharedPointer>
 #include <QVector>
 
 class TerminalStrip;
+class TerminalStripBridge;
 class QETProject;
 class RealTerminal;
 
@@ -60,6 +62,13 @@ class RemoveTerminalStripCommand : public QUndoCommand
 		/// pointer would be a dangling one as soon as this command is the
 		/// only thing left remembering it.
 		QVector<QVector<QSharedPointer<RealTerminal>>> m_terminals;
+		/// The bridges those terminals were part of, one bridge with
+		/// the terminals of it which belong to this strip: redo() takes
+		/// every terminal out of its bridge, and undo() has to put them
+		/// back in, or a strip taken back would come with its bridges
+		/// silently gone.
+		QVector<QPair<QSharedPointer<TerminalStripBridge>,
+					  QVector<QSharedPointer<RealTerminal>>>> m_bridges;
 };
 
 #endif // ADDTERMINALSTRIPCOMMAND_H

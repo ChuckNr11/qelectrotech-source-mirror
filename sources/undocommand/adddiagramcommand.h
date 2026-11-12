@@ -21,6 +21,8 @@
 #include <QUndoCommand>
 #include <QPointer>
 
+#include "../TerminalStrip/UndoCommand/terminalstripdeletion.h"
+
 class QETProject;
 class Diagram;
 
@@ -31,6 +33,13 @@ class Diagram;
 	redo() inserts it into the project, undo() detaches it again without
 	destroying it. The diagram is only actually destroyed when this command
 	itself is destroyed while the diagram is detached (i.e. while undone).
+
+	What the folio draws of the terminals of a strip goes with it when it
+	is undone: those terminals are taken off their symbols and wait in
+	their rows (@sa TerminalStripDeletion::terminalsDrawnOn), and redo()
+	binds them back to the symbols this command keeps alive with the
+	folio -- exactly what RemoveDiagramCommand does to a folio which
+	leaves the other way round.
 */
 class AddDiagramCommand : public QUndoCommand
 {
@@ -47,6 +56,9 @@ class AddDiagramCommand : public QUndoCommand
 		int m_position;
 		/// true while the diagram is detached from the project (not currently in its diagram list)
 		bool m_owns_diagram = true;
+		/// the strip terminals the folio drew, taken off their symbols
+		/// while the folio is undone (@sa TerminalStripDeletion::terminalsDrawnOn)
+		TerminalStripDeletion::BoundTerminals m_unbound;
 };
 
 #endif // ADDDIAGRAMCOMMAND_H

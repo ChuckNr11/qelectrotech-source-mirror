@@ -100,6 +100,10 @@ class TerminalStripTreeDockWidget : public QDockWidget
 		QHash<QUuid, QSharedPointer<RealTerminal>> m_uuid_terminal_H;
 		QHash<QUuid, QPointer<TerminalStrip>> m_uuid_strip_H;
 		QVector<QMetaObject::Connection> m_strip_changed_connection;
+			/// The connections to the project's own strip signals:
+			/// dropped with the project they were made for, the way
+			/// the per-strip connections above are dropped on reload.
+		QVector<QMetaObject::Connection> m_project_strip_connection;
         bool m_current_is_free_terminal{false};
         QMetaObject::Connection m_project_destroy_connection;
 		std::function<bool()> m_drop_check;
