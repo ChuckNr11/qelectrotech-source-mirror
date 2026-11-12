@@ -117,3 +117,114 @@ project, never a customer's or an employer's drawing.
 - Say that an AI assistant helped, and who read the result. For a translation,
   say how many strings are reviewed and how many are still unfinished.
 - After a review, push new commits. Do not force-push an open pull request.
+
+## Working notes: what the guides leave out
+
+Kept for this working copy, on top of the instructions above. The guides win
+where the two disagree. These are the parts the guides assume and do not say.
+
+### Build
+
+Out-of-source builds only. Non-obvious requirements:
+
+- **Qt6 GuiPrivate headers are mandatory** — configure dies with FATAL_ERROR
+  without them. Debian/Ubuntu: `qt6-base-private-dev` (not pulled in by
+  `qt6-base-dev`); Fedora: `qt6-qtbase-private-devel`.
+- Also required: Qt6 Svg, Sql, PrintSupport, Concurrent, LinguistTools
+  (`lrelease` runs on every build) and the system SQLite3 dev package.
+- QtPdf (PDF page import) and Qt Qml (JS scripting, `--run`) are optional and
+  silently disable features when absent — read the configure output.
+- `BUILD_WITH_KF=ON` (default) fetches and *builds* ECM + kcoreaddons +
+  kwidgetsaddons from KDE Git at pinned commits. `-DBUILD_KF=OFF` uses system
+  KF6 instead; `-DBUILD_WITH_KF=OFF` drops KF entirely (bundled `sources/ui/nokde`).
+- First configure needs network: Catch2, pugixml, SingleApplication, KF6 arrive
+  via FetchContent pinned to commit hashes. Populated submodules are used as-is
+  (offline builds).
+- `build/` is NOT in `.gitignore` — never commit it.
+
+Per-distro dependency lists: INSTALL.md. Canonical CI commands:
+.github/workflows/linux-build.yml (Ubuntu 26.04 container, Qt 6.10, Ninja, Debug).
+
+### Source layout — the CMake gotcha
+
+- Entrypoint `sources/main.cpp` → `QETApp` (`sources/qetapp.cpp`); everything
+  else compiles once into the `qelectrotech_objects` OBJECT library, which the
+  executable and app-level tests both link.
+- **Nothing is globbed.** New files must be listed by hand:
+  - `.cpp`/`.h` → `QET_SRC_FILES` in `cmake/qet_compilation_vars.cmake`
+  - `.ui` → `QET_RES_FILES` in the same file (AUTOUIC search path: `sources/ui`)
+  - resources → `qelectrotech.qrc` or `ico/icon-themes.qrc`
+  - a new translation language → `TS_FILES` in `cmake/qet_compilation_vars.cmake`
+  Forgetting this builds in Qt Creator but silently omits the file from CMake builds.
+
+### Tests
+
+New QtTest tests are registered **by hand** in `tests/qttest/CMakeLists.txt`
+(also explicit, no glob). Patterns used there, in escalating cost:
+
+- header-only helper → `add_executable(tst_x tst_x.cpp)` + `Qt::Test` only
+- a small `.cpp` under test → list that source file in the test target
+- needs the app (folio, view, editor window) → `qet_add_app_test(tst_x tst_x.cpp)`;
+  links `qelectrotech_objects`, runs `QT_QPA_PLATFORM=offscreen` with its own settings
+- CLI regression → `add_dependencies(tst_x qelectrotech)` +
+  `target_compile_definitions(tst_x PRIVATE QET_TEST_BINARY_PATH="$<TARGET_FILE:qelectrotech>")`,
+  driving the real binary (`--export-*`, `--resave`, `--run`)
+- scripting tests exist only inside `if(QET_HAS_SCRIPTING)` (Qt6 Qml present)
+- the Python probe tests (`run_*.py`) are registered only with the **Ninja**
+  generator and Python3 found
+
+```sh
+ctest --test-dir build -C Debug --output-on-failure
+ctest --test-dir build -C Debug -R '^tst_qetstrings$' --output-on-failure
+xvfb-run -a ctest --test-dir build --output-on-failure   # headless Linux
+```
+
+Debug is not optional for the crash regressions: they reproduce only with the
+Debug allocator, never at `-O3`. Run Microsoft's tests in `RelWithDebInfo`, not
+`Debug`. Never build while the suite runs: an overwritten binary makes tests
+fail for no reason of theirs.
+
+Not run by CTest — execute separately:
+
+- `./build/tests/catch/C_unittests` (Catch2; new files go in `tests/catch/CMakeLists.txt`)
+- `python3 misc/qet-mcp/test_qet_mcp.py`
+- `tests/ipc-regression/run.sh --binary build/qelectrotech` — needs Xvfb,
+  openbox, xdotool; starts its own display, do **not** wrap in `xvfb-run`.
+  Exit 2 = inconclusive, which is not a pass.
+- `tests/modal-quit-regression` (CTest-registered on Linux): needs gdb with
+  Python and an unstripped Debug binary; exit 77 = skipped, not passed.
+
+CONTRIBUTING.md ("Testing") is the authoritative long version.
+
+### Verifying a change without the GUI
+
+The binary has a headless CLI (exact usage in `sources/cli_export.h`):
+`--export-pdf/-png/-svg/-dxf`, `--export-bom`, `--export-cables`, `--info`,
+`--resave` (XML round-trip), `--check-elements <file.elmt>`, `--run <script.js>`.
+Use `QT_QPA_PLATFORM=offscreen` on a displayless machine.
+
+`misc/qet-mcp/qet_mcp.py` (Python stdlib only) reads, diffs and edits `.qet`
+projects — e.g. `misc/qet-mcp/qet_mcp.py --call qet_diff '{"path": "x.qet"}'`
+shows what an edit actually changed in the model; prefer it to screenshots.
+
+### Conventions
+
+- Style: `.clang-format` at the root (tabs, width 4, Allman braces, 80 cols);
+  CONTRIBUTING.md describes the same style. Nothing enforces it in CI — never
+  reformat code you did not touch.
+- Comments here are long "why this exists" documents citing issue/PR numbers;
+  match that register and do not trim them as noise.
+- Optional features follow one pattern: probe at configure time, define
+  `QET_HAS_*` (`QET_HAS_QTPDF`, `QET_HAS_SCRIPTING`, `QET_CRASH_BACKTRACE`) and
+  guard in code.
+- Dependency pins live in `cmake/fetch_*.cmake`; their comments explain why tags
+  are not trusted and how to bump them — read before changing.
+- Commits: small, with real log messages (CONTRIBUTING.md).
+
+### Reference docs
+
+- CONTRIBUTING.md — testing on Linux/Windows/macOS, commit expectations
+- INSTALL.md — per-distro dependencies and build options
+- misc/qet-mcp/README.md — MCP server and its testing environment variables
+- tests/ipc-regression/README.md, tests/modal-quit-regression/README.md
+- cliff.toml — git-cliff changelog generation
