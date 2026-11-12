@@ -344,8 +344,13 @@ void TerminalStripEditor::apply()
 			{
 				const auto real_t = data_.real_terminal.toStrongRef();
 				auto element = data_.element_;
-					//A spare terminal (on no folio) has its own data, not the data of an element
-				if (!real_t || (!element && !data_.spare_)) {
+					//A terminal which holds no element has data of its own
+					//to store the edit in: a spare one, or one which is not
+					//drawn in any folio yet (@sa RealTerminal::isPending()).
+					//Without any of them there is nowhere to store anything,
+					//which is the case of a terminal left behind by an
+					//element deleted in an older version.
+				if (!real_t || (!element && !data_.spare_ && !data_.pending_)) {
 					continue;
 				}
 

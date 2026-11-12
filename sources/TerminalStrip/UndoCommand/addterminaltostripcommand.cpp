@@ -294,7 +294,15 @@ ChangeSpareTerminalDataCommand::ChangeSpareTerminalDataCommand(const QSharedPoin
 	m_old_data{spare_terminal->spareData()},
 	m_new_data{new_data}
 {
-	setText(QObject::tr("Modify the spare terminal %1").arg(spare_terminal->label()));
+		//Both kinds of terminal keep their data the same way -- a spare
+		//one, and one which is not drawn in any folio yet (@sa
+		//RealTerminal::isPending()) -- but the undo history names the
+		//terminal the way it is, which is what the user reads there
+	if (spare_terminal->isPending()) {
+		setText(QObject::tr("Modify the terminal %1").arg(spare_terminal->label()));
+	} else {
+		setText(QObject::tr("Modify the spare terminal %1").arg(spare_terminal->label()));
+	}
 }
 
 void ChangeSpareTerminalDataCommand::undo() {

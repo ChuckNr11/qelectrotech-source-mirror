@@ -425,17 +425,22 @@ QTreeWidgetItem* TerminalStripTreeDockWidget::addTerminalStrip(TerminalStrip *te
 		if (phy_t->realTerminalCount())
 		{
 			QString text_;
+			bool drawn_ = false;
 			for (const auto &real_t : phy_t->realTerminals())
 			{
 				if (text_.isEmpty())
 					text_ = real_t->label();
 				else
 					text_.append(QStringLiteral(", ")).append(real_t->label());
+					//A terminal which is not drawn in any folio yet holds no
+					//symbol, and the missing icon is what tells the two apart
+				drawn_ = drawn_ || real_t->isElement();
 			}
-			const auto real_t = phy_t->realTerminals().at(0);
 			auto terminal_item = new QTreeWidgetItem(strip_item, QStringList(text_), Terminal);
 			terminal_item->setData(0, UUID_USER_ROLE, phy_t->uuid());
-			terminal_item->setIcon(0, QET::Icons::ElementTerminal);
+			if (drawn_) {
+				terminal_item->setIcon(0, QET::Icons::ElementTerminal);
+			}
 		}
 	}
 

@@ -222,6 +222,34 @@ QSharedPointer<RealTerminal> RealTerminal::createSpare(const ElementData &data, 
 }
 
 /**
+ * @brief ownDataFromXml
+ * Read the data a terminal drawn on no folio keeps for itself out of the
+ * element @a xml_element those data were saved in: type, function, LED
+ * and informations, which is what RealTerminal::toXml() writes for a
+ * spare terminal and for one which is not drawn yet alike.
+ * @param xml_element : a real terminal saved by toXml()
+ * @return the data read, empty when @a xml_element holds none of them
+ */
+static ElementData ownDataFromXml(const QDomElement &xml_element)
+{
+	ElementData data_;
+		//Those data belong to a terminal, never to an element -- which is
+		//what the data of a spare terminal are set to as well
+		//(@sa createSpare())
+	data_.m_type = ElementData::Terminal;
+	data_.setTerminalType(ElementData::terminalTypeFromString(
+							  xml_element.attribute(QStringLiteral("type"))));
+	data_.setTerminalFunction(ElementData::terminalFunctionFromString(
+								  xml_element.attribute(QStringLiteral("function"))));
+	data_.setTerminalLED(QET::infoFlagIsTrue(xml_element.attribute(QStringLiteral("led"))));
+	const auto xml_info = xml_element.firstChildElement(QStringLiteral("informations"));
+	if (!xml_info.isNull()) {
+		data_.m_informations.fromXml(xml_info, QStringLiteral("information"));
+	}
+	return data_;
+}
+
+/**
  * @brief RealTerminal::spareFromXml
  * @param xml_element : a real terminal saved by toXml()
  * @return the spare terminal saved in @a xml_element,
@@ -234,16 +262,32 @@ QSharedPointer<RealTerminal> RealTerminal::spareFromXml(const QDomElement &xml_e
 		return QSharedPointer<RealTerminal>();
 	}
 
-	ElementData data_;
-	data_.setTerminalType(ElementData::terminalTypeFromString(
-							  xml_element.attribute(QStringLiteral("type"))));
-	data_.setTerminalFunction(ElementData::terminalFunctionFromString(
-								  xml_element.attribute(QStringLiteral("function"))));
-	data_.setTerminalLED(QET::infoFlagIsTrue(xml_element.attribute(QStringLiteral("led"))));
-	data_.m_informations.fromXml(xml_element.firstChildElement(QStringLiteral("informations")),
-								 QStringLiteral("information"));
+	return createSpare(ownDataFromXml(xml_element),
+					   QUuid(xml_element.attribute(QStringLiteral("spare_uuid"))));
+}
 
-	return createSpare(data_, QUuid(xml_element.attribute(QStringLiteral("spare_uuid"))));
+/**
+ * @brief RealTerminal::pendingFromXml
+ * @param xml_element : a real terminal saved by toXml()
+ * @return the terminal which is drawn in no folio yet and whose identity
+ * is saved in @a xml_element, with the data the terminal strip editor
+ * edited for it (@sa isPending()),
+ * or a null pointer if @a xml_element is not such a terminal.
+ */
+QSharedPointer<RealTerminal> RealTerminal::pendingFromXml(const QDomElement &xml_element)
+{
+	if (xml_element.tagName() != xmlTagName() ||
+		!xml_element.hasAttribute(QStringLiteral("terminal_uuid"))) {
+		return QSharedPointer<RealTerminal>();
+	}
+
+	auto real_t = createPending(
+		xml_element.attribute(QStringLiteral("label")),
+		xml_element.attribute(QStringLiteral("symbol")),
+		QUuid(xml_element.attribute(QStringLiteral("terminal_uuid"))));
+	real_t->m_spare_data = ownDataFromXml(xml_element);
+
+	return real_t;
 }
 
 /**
@@ -257,8 +301,11 @@ bool RealTerminal::isSpare() const {
 
 /**
  * @brief RealTerminal::spareData
- * @return the data of this spare terminal, an empty ElementData
- * if this terminal is not a spare terminal.
+ * @return the data this terminal keeps for itself -- those of a spare
+ * terminal, and equally those of one which is drawn in no folio yet
+ * (@sa isPending()) -- an empty ElementData if it keeps none of its own:
+ * a terminal drawn on a folio takes them from its element, and one left
+ * behind by an element deleted in an older version has none at all.
  */
 ElementData RealTerminal::spareData() const {
 	return m_spare_data;
@@ -266,13 +313,17 @@ ElementData RealTerminal::spareData() const {
 
 /**
  * @brief RealTerminal::setSpareData
- * Set the data of this spare terminal (nothing is done if this terminal
- * is not a spare terminal) and tell the strip, so that it is redrawn.
+ * Set the data this terminal holds itself -- the data of a spare
+ * terminal, and equally those of one which is drawn in no folio yet
+ * (@sa isPending()) -- and tell the strip, so that it is redrawn.
+ * Nothing is done for a terminal drawn on a folio: its data belong to
+ * its element and are set through that element
+ * (@sa ChangeElementDataCommand).
  * @param data
  */
 void RealTerminal::setSpareData(const ElementData &data)
 {
-	if (!m_spare) {
+	if (!hasOwnData()) {
 		return;
 	}
 	m_spare_data.setTerminalType(data.terminalType());
@@ -288,20 +339,22 @@ void RealTerminal::setSpareData(const ElementData &data)
 /**
  * @brief RealTerminal::hasData
  * @return true if this terminal has data : it is linked to an element,
- * or it is a spare terminal.
+ * or it holds data of its own because it is drawn nowhere -- a spare
+ * terminal, or one which is not drawn yet (@sa isPending()).
  */
 bool RealTerminal::hasData() const {
-	return m_spare || !m_element.isNull();
+	return hasOwnData() || !m_element.isNull();
 }
 
 /**
  * @brief RealTerminal::terminalData
  * @return the data of this terminal : the data of its element,
- * or its own data if it is a spare terminal.
+ * or its own data if it holds none of its own -- a spare terminal,
+ * or one which is drawn nowhere yet (@sa isPending()).
  */
 ElementData RealTerminal::terminalData() const
 {
-	if (m_spare) {
+	if (hasOwnData()) {
 		return m_spare_data;
 	}
 	if (m_element) {
@@ -315,6 +368,49 @@ RealTerminal::~RealTerminal()
 	if (m_physical_terminal) {
 		m_physical_terminal->removeTerminal(sharedRef());
 	}
+}
+
+/**
+ * @brief RealTerminal::createPending
+ * Build a terminal which holds no element, that is to say a terminal of a
+ * strip which is not drawn in any folio yet.
+ * @param label : the label of the terminal, 'strip name:ID' the way a drawn
+ * terminal gets it from its element
+ * @param symbol : location string of the element to draw it with later,
+ * may be empty when the user did not choose one
+ * @param uuid : identity of the terminal, a new one is made when null
+ * @return a shared reference on the new terminal
+ */
+QSharedPointer<RealTerminal> RealTerminal::createPending(const QString &label,
+														 const QString &symbol,
+														 const QUuid &uuid)
+{
+	auto *real_t = new RealTerminal(nullptr);
+	real_t->m_label = label;
+	real_t->m_symbol = symbol;
+	real_t->m_uuid = uuid.isNull() ? QUuid::createUuid() : uuid;
+		//Its data are its own the way a spare terminal's are, stored in
+		//the same place: the strip editor edits them before the terminal
+		//is drawn anywhere, @sa isPending()
+	real_t->m_spare_data.m_type = ElementData::Terminal;
+
+	return real_t->sharedRef();
+}
+
+/**
+ * @brief RealTerminal::isPending
+ * @return true for a terminal which is already in a strip but which is
+ * drawn in no folio yet: it holds no element and carries an identity of
+ * its own instead (@sa createPending()).
+ *
+ * Such a terminal is described like a spare one -- its data are its own
+ * (@sa hasOwnData()), edited in the terminal strip editor and saved with
+ * it -- but isSpare() stays false for it: the nomenclature of the project
+ * counts the spare terminals and the terminals drawn on folios, and a
+ * terminal which is drawn nowhere yet joins it when its symbol is drawn.
+ */
+bool RealTerminal::isPending() const {
+	return !m_spare && m_element.isNull() && !m_uuid.isNull();
 }
 
 /**
@@ -359,21 +455,53 @@ QWeakPointer<RealTerminal> RealTerminal::weakRef() {
 QDomElement RealTerminal::toXml(QDomDocument &parent_document) const
 {
 	auto root_elmt = parent_document.createElement(this->xmlTagName());
+
+		//Type, function, LED and informations of a terminal which is drawn
+		//on no folio and keeps its data for itself: a spare one, or one
+		//which is not drawn yet (@sa isPending()). Both save them the same
+		//way, so that reading one or the other is one and the same thing.
+	const auto set_own_data = [&root_elmt, &parent_document](const ElementData &data_)
+	{
+		root_elmt.setAttribute(QStringLiteral("type"), ElementData::terminalTypeToString(data_.terminalType()));
+		root_elmt.setAttribute(QStringLiteral("function"), ElementData::terminalFunctionToString(data_.terminalFunction()));
+		if (data_.terminalLed()) {
+			root_elmt.setAttribute(QStringLiteral("led"), QStringLiteral("true"));
+		}
+		auto xml_info = parent_document.createElement(QStringLiteral("informations"));
+		data_.m_informations.toXml(xml_info, QStringLiteral("information"));
+		root_elmt.appendChild(xml_info);
+	};
+
 	if (m_spare)
 	{
 			//A spare terminal is on no folio : its data are saved here
 		root_elmt.setAttribute(QStringLiteral("spare_uuid"), m_spare_uuid.toString());
-		root_elmt.setAttribute(QStringLiteral("type"), ElementData::terminalTypeToString(m_spare_data.terminalType()));
-		root_elmt.setAttribute(QStringLiteral("function"), ElementData::terminalFunctionToString(m_spare_data.terminalFunction()));
-		if (m_spare_data.terminalLed()) {
-			root_elmt.setAttribute(QStringLiteral("led"), QStringLiteral("true"));
-		}
-		auto xml_info = parent_document.createElement(QStringLiteral("informations"));
-		m_spare_data.m_informations.toXml(xml_info, QStringLiteral("information"));
-		root_elmt.appendChild(xml_info);
+		set_own_data(m_spare_data);
 	}
 	else if (m_element) {
 		root_elmt.setAttribute(QStringLiteral("element_uuid"), m_element->uuid().toString());
+	} else if (!m_uuid.isNull()) {
+		//A terminal which is not drawn in any folio yet carries its own
+		//identity, its label and the symbol it should be drawn with, so
+		//that the project round trip keeps it. A terminal which holds no
+		//element and no identity of its own -- what an element deleted in
+		//an older version left behind -- is still written empty and still
+		//dropped at reading time, @sa TerminalStrip::fromXml().
+		//A spare terminal and such a pending terminal never both describe
+		//one terminal: a spare has spare_uuid and no terminal_uuid, a
+		//pending one the other way round.
+		root_elmt.setAttribute(QStringLiteral("terminal_uuid"), m_uuid.toString());
+		const auto label_ = label();
+		if (!label_.isEmpty()) {
+			root_elmt.setAttribute(QStringLiteral("label"), label_);
+		}
+		if (!m_symbol.isEmpty()) {
+			root_elmt.setAttribute(QStringLiteral("symbol"), m_symbol);
+		}
+			//The data the terminal strip editor edited for it, before its
+			//symbol is drawn anywhere: label included, since label() reads
+			//it back from them, @sa pendingFromXml()
+		set_own_data(m_spare_data);
 	}
 
 	return root_elmt;
@@ -429,16 +557,33 @@ int RealTerminal::level() const
 
 /**
  * @brief label
- * @return the label of this real terminal
+ * @return the label of this real terminal. A terminal which is not drawn in
+ * any folio yet has no element to take a label from, and falls back on the
+ * label it was created with (@sa createPending()) -- unless the terminal
+ * strip editor edited that label, which is stored with the data of the
+ * terminal, the same way the label of a spare terminal is stored with its
+ * own data.
  */
 QString RealTerminal::label() const {
 	if (m_spare) {
 		return m_spare_data.m_informations.value(QStringLiteral("label")).toString();
 	} else if (!m_element.isNull()) {
 		return m_element->actualLabel();
+	} else if (m_spare_data.m_informations.contains(QStringLiteral("label"))) {
+		return m_spare_data.m_informations.value(QStringLiteral("label")).toString();
 	} else {
-		return QLatin1String();
+		return m_label;
 	}
+}
+
+/**
+ * @brief symbol
+ * @return the location string of the element this terminal should be drawn
+ * with, for a terminal which is not drawn yet. A drawn terminal takes its
+ * symbol from its own element and has nothing to say here.
+ */
+QString RealTerminal::symbol() const {
+	return m_symbol;
 }
 
 /**
@@ -1013,6 +1158,22 @@ QUuid RealTerminal::elementUuid() const {
 		return m_element->uuid();
 	} else {
 		return QUuid();
+	}
+}
+
+/**
+ * @brief uuid
+ * @return the identity to address this terminal with: the uuid of the
+ * element of a drawn terminal (nothing changes for the bridges and the
+ * commands of the terminal strip editor), or the uuid of the terminal
+ * itself when it is not drawn yet, since elementUuid() is a null uuid
+ * in that case.
+ */
+QUuid RealTerminal::uuid() const {
+	if (!m_element.isNull()) {
+		return m_element->uuid();
+	} else {
+		return m_uuid;
 	}
 }
 

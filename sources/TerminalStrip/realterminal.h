@@ -40,6 +40,18 @@ class TerminalStripBridge;
  * or a terminal set by user but not present
  * on any folio (for example a reserved terminal).
  *
+ * The second case is what createPending() builds: a terminal which is
+ * already in a strip -- with a label and a symbol to be drawn with later --
+ * but which holds no element, so isElement() is false and label() falls back
+ * on the label the terminal was created with.
+ *
+ * Such a terminal is not drawn anywhere, but it is described like a spare
+ * one: type, function, LED, cable, color... are its own data too, edited
+ * in the terminal strip editor and saved with it (@sa isPending()), until
+ * its symbol is drawn on a folio and the element takes over. What it is
+ * not is a spare terminal: isSpare() stays false, so the nomenclature of
+ * the project counts neither it nor its data, only the spare terminals.
+ *
  * When create a new instance of RealTerminal you must
  * call sharedRef() and only use the returned QSharedPointer
  * instead of the raw pointer
@@ -74,10 +86,51 @@ class RealTerminal
 		TerminalStrip *parentStrip() const noexcept;
 		QSharedPointer<PhysicalTerminal> physicalTerminal() const noexcept;
 
+		/**
+		 * @brief isPending
+		 * @return true for a terminal which is already in a strip but
+		 * which is drawn in no folio yet: it holds no element and carries
+		 * an identity of its own instead (@sa createPending()).
+		 *
+		 * Such a terminal has data of its own -- the ones the terminal
+		 * strip editor edits for it, stored the way a spare terminal
+		 * stores its own (@sa setSpareData()) -- but it is not a spare
+		 * terminal: isSpare() stays false, so the nomenclature of the
+		 * project, which counts the spare terminals, counts it neither.
+		 * It becomes a terminal of an element when its symbol is drawn
+		 * on a folio, and the data of that element are its data then.
+		 */
+		bool isPending() const;
+
+		/**
+		 * @brief createPending
+		 * Build a terminal which belongs to a strip but which is not drawn
+		 * in any folio yet -- the terminals the terminal navigator creates
+		 * out of the ID field of its strip creation dialog, before the user
+		 * drags their symbol onto a folio.
+		 *
+		 * Such a terminal carries its own label (@p label, the same
+		 * 'strip name:ID' a drawn terminal gets from its element) and the
+		 * location of the element it should be drawn with (@p symbol, a
+		 * location string such as 'embed://...' or 'common://...'), neither
+		 * of which any element could provide here.
+		 *
+		 * @param label : the label of the terminal, may be empty
+		 * @param symbol : location string of the symbol to draw it with, may be empty
+		 * @param uuid : identity of the terminal, a new one is made when null
+		 * @return a shared reference, which is the only usable handle on it
+		 * (@sa the class description about sharedRef())
+		 */
+		static QSharedPointer<RealTerminal> createPending(const QString &label,
+														  const QString &symbol = QString(),
+														  const QUuid &uuid = QUuid());
+		static QSharedPointer<RealTerminal> pendingFromXml(const QDomElement &xml_element);
+
 		QDomElement toXml(QDomDocument &parent_document) const;
 
 		int level() const;
 		QString label() const;
+		QString symbol() const;
 		QString Xref() const;
 		QString cable() const;
 		QString cableWire() const;
@@ -132,20 +185,46 @@ class RealTerminal
 		QSharedPointer<TerminalStripBridge> bridge() const;
 
 		Element* element() const;
+		/**
+		 * @brief elementUuid
+		 * @return the uuid of the element this terminal is drawn with, or a
+		 * null uuid when the terminal is not drawn (yet).
+		 */
 		QUuid elementUuid() const;
+		/**
+		 * @brief uuid
+		 * @return the identity to address this terminal with: the uuid of
+		 * its element for a drawn terminal -- unchanged, every bridge and
+		 * every command of the terminal strip editor keeps working -- and
+		 * the uuid of the terminal itself when it is not drawn yet, which
+		 * elementUuid() can not provide since there is no element at all.
+		 */
+		QUuid uuid() const;
 
 		static QString xmlTagName();
 
 	private :
 		bool hasData() const;
+			//A terminal which holds no element but data of its own: a spare
+			//one (@sa createSpare()) or a pending one (@sa createPending()).
+			//Both keep them in m_spare_data, which is therefore the data of
+			//a terminal drawn on no folio, whoever created it.
+		bool hasOwnData() const {return m_spare || isPending();}
 
 		QPointer<Element> m_element;
 			//A spare terminal has no element : it is on no folio, its data are its own
 		bool m_spare = false;
 		QUuid m_spare_uuid;
+			//The data of a terminal drawn on no folio: a spare one, or one
+			//which is not drawn yet (@sa hasOwnData())
 		ElementData m_spare_data;
 		QWeakPointer<RealTerminal> m_this_weak;
 		QSharedPointer<PhysicalTerminal> m_physical_terminal;
+		/// Identity of a terminal which holds no element yet, @sa uuid()
+		QUuid m_uuid;
+		/// Label and symbol of a terminal which holds no element yet,
+		/// @sa createPending()
+		QString m_label, m_symbol;
 };
 
 #endif // REALTERMINAL_H
