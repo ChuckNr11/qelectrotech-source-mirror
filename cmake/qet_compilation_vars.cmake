@@ -793,6 +793,12 @@ set(QET_SRC_FILES
   ${QET_DIR}/sources/TerminalNavigator/ui/terminalnavigatorwidget.h
   ${QET_DIR}/sources/TerminalNavigator/UndoCommand/createterminalstripcommand.cpp
   ${QET_DIR}/sources/TerminalNavigator/UndoCommand/createterminalstripcommand.h
+  ${QET_DIR}/sources/TerminalNavigator/UndoCommand/bindterminalcommand.cpp
+  ${QET_DIR}/sources/TerminalNavigator/UndoCommand/bindterminalcommand.h
+  ${QET_DIR}/sources/TerminalNavigator/diagramevent/diagrameventaddterminal.cpp
+  ${QET_DIR}/sources/TerminalNavigator/diagramevent/diagrameventaddterminal.h
+  ${QET_DIR}/sources/TerminalNavigator/ui/terminalnavigatorwidgettree.cpp
+  ${QET_DIR}/sources/TerminalNavigator/ui/terminalnavigatorwidgettree.h
 
   ${QET_DIR}/sources/TerminalStrip/physicalterminal.cpp
   ${QET_DIR}/sources/TerminalStrip/physicalterminal.h
@@ -843,8 +849,12 @@ set(QET_SRC_FILES
   ${QET_DIR}/sources/TerminalStrip/UndoCommand/changeterminalstripdata.h
   ${QET_DIR}/sources/TerminalStrip/UndoCommand/groupterminalscommand.cpp
   ${QET_DIR}/sources/TerminalStrip/UndoCommand/groupterminalscommand.h
+  ${QET_DIR}/sources/TerminalStrip/UndoCommand/removephysicalterminalscommand.cpp
+  ${QET_DIR}/sources/TerminalStrip/UndoCommand/removephysicalterminalscommand.h
   ${QET_DIR}/sources/TerminalStrip/UndoCommand/sortterminalstripcommand.cpp
   ${QET_DIR}/sources/TerminalStrip/UndoCommand/sortterminalstripcommand.h
+  ${QET_DIR}/sources/TerminalStrip/UndoCommand/terminalstripdeletion.cpp
+  ${QET_DIR}/sources/TerminalStrip/UndoCommand/terminalstripdeletion.h
   ${QET_DIR}/sources/TerminalStrip/GraphicsItem/demoterminalstrip.cpp
   ${QET_DIR}/sources/TerminalStrip/GraphicsItem/demoterminalstrip.h
   ${QET_DIR}/sources/TerminalStrip/GraphicsItem/terminalstripitem.cpp

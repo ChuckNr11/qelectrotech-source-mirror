@@ -53,6 +53,16 @@ void RemoveDiagramCommand::redo()
 	if (!m_project || !m_diagram) {
 		return;
 	}
+
+		//The terminals the folio draws go back to waiting in their
+		//rows before the folio goes with their symbols: a terminal
+		//still bound to a symbol which is off every folio keeps no
+		//identity of its own and is dropped at the next save
+		//(@sa TerminalStripDeletion::terminalsDrawnOn). The elements
+		//stay with the parked folio, and undo binds them back.
+	m_unbound = TerminalStripDeletion::terminalsDrawnOn(m_diagram);
+	TerminalStripDeletion::unbindTerminals(m_unbound);
+
 	m_project->detachDiagram(m_diagram);
 	m_owns_diagram = true;
 }
@@ -63,5 +73,6 @@ void RemoveDiagramCommand::undo()
 		return;
 	}
 	m_project->addDiagram(m_diagram, m_position);
+	TerminalStripDeletion::rebindTerminals(m_unbound);
 	m_owns_diagram = false;
 }

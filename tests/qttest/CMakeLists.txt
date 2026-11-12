@@ -2254,6 +2254,25 @@ qet_add_app_test(tst_terminalstripeditor tst_terminalstripeditor.cpp)
 target_compile_definitions(tst_terminalstripeditor PRIVATE
   "QET_TEST_PROJECT_PATH=\"${QET_DIR}/examples/industrial.qet\"")
 
+# Drawing a terminal of a strip on a folio: the drag out of the terminal
+# navigator carries the terminal which waits for its symbol, the drop
+# starts the placement of that terminal's own symbol, and the click
+# which drops it binds it to the terminal in one undo macro -- the
+# element takes the place, the level and the data of the pending one.
+qet_add_app_test(tst_bindpendingterminal tst_bindpendingterminal.cpp)
+target_compile_definitions(tst_bindpendingterminal PRIVATE
+  "QET_TEST_PROJECT_PATH=\"${QET_DIR}/examples/industrial.qet\"")
+
+# Deleting terminals and strips: a row leaves its strip with its symbols
+# off the drawings in one undo step, a whole strip goes with its plans
+# and its bridges, the free terminals are never touched and a branch of
+# the tree (project, installation, location, strip) is asked for first.
+# The strips are built from the free terminals industrial.qet has, the
+# same way tst_terminalnavigator does it.
+qet_add_app_test(tst_deleteterminalstrips tst_deleteterminalstrips.cpp)
+target_compile_definitions(tst_deleteterminalstrips PRIVATE
+  "QET_TEST_PROJECT_PATH=\"${QET_DIR}/examples/industrial.qet\"")
+
 # The working copy: the project database in a file, committed after each
 # edit; killed at random moments, it holds every edit finished, and a clean
 # exit leaves nothing. QET-SQL-FORMAT S3z2.

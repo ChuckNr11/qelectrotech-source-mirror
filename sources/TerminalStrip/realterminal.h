@@ -32,6 +32,8 @@ class Element;
 class TerminalElement;
 class PhysicalTerminal;
 class TerminalStripBridge;
+class ElementsLocation;
+class QETProject;
 
 /**
  * @brief The RealTerminal class
@@ -103,6 +105,36 @@ class RealTerminal
 		bool isPending() const;
 
 		/**
+		 * @brief unbindFromElement
+		 * Take this terminal off the element it is drawn with, leaving it in
+		 * the state of a terminal which is not drawn yet (@sa isPending()):
+		 * it keeps the label, the symbol and the data of that element as its
+		 * own, carries an identity of its own again, and can be drawn on any
+		 * folio later, like any terminal of the terminal navigator.
+		 *
+		 * This is what "delete from the drawing only" does with a terminal
+		 * of the drawing: the symbol leaves the folio, but the terminal
+		 * itself stays in its strip, waiting to be drawn again -- instead of
+		 * leaving the strip with its symbol, which is what deleting the row
+		 * does. The reverse is rebindToElement(), which the undo of this
+		 * calls.
+		 *
+		 * @return true if there was an element to unbind from, false if
+		 * this terminal was already unbound
+		 */
+		bool unbindFromElement();
+		/**
+		 * @brief rebindToElement
+		 * @param element : the element this terminal belongs to, must not be
+		 * null. Bind this terminal back to @a element, undoing
+		 * unbindFromElement(): the label, the symbol and the data of the
+		 * terminal are the ones of the element again, and the identity of
+		 * its own goes away, since a terminal drawn on a folio is told
+		 * apart by its element.
+		 */
+		void rebindToElement(Element *element);
+
+		/**
 		 * @brief createPending
 		 * Build a terminal which belongs to a strip but which is not drawn
 		 * in any folio yet -- the terminals the terminal navigator creates
@@ -116,7 +148,11 @@ class RealTerminal
 		 * of which any element could provide here.
 		 *
 		 * @param label : the label of the terminal, may be empty
-		 * @param symbol : location string of the symbol to draw it with, may be empty
+		 * @param symbol : location string of the symbol to draw it with, may be empty.
+		 * The runtime project id some projects still carry in such a string
+		 * ('project0+embed://...') is dropped here: it means nothing outside
+		 * the session which wrote it, so the terminal keeps the plain path
+		 * (@sa symbolWithoutProjectId)
 		 * @param uuid : identity of the terminal, a new one is made when null
 		 * @return a shared reference, which is the only usable handle on it
 		 * (@sa the class description about sharedRef())
@@ -131,6 +167,56 @@ class RealTerminal
 		int level() const;
 		QString label() const;
 		QString symbol() const;
+
+		/**
+		 * @brief symbolWithoutProjectId
+		 * @param symbol : a location string of a terminal symbol, the way
+		 * it was saved in a project or handed around
+		 * @return @a symbol without the runtime project id some projects
+		 * still save in it: 'project0+embed://...' becomes 'embed://...'.
+		 *
+		 * Such an id is worth nothing outside the session which wrote it.
+		 * Projects are numbered with an ever increasing counter and a
+		 * number is never reused (@sa QETApp::registerProject), so in
+		 * almost every later session 'project0' names another project, or
+		 * no project at all -- a location read out of such a string is
+		 * then empty, or points into the wrong project, and a terminal
+		 * could not be drawn with its own symbol anymore. Symbols
+		 * therefore live without that id, in memory and in the files,
+		 * and the readers bind the path back to the project it belongs
+		 * to (@sa symbolLocation).
+		 */
+		static QString symbolWithoutProjectId(const QString &symbol);
+
+		/**
+		 * @brief symbolLocation
+		 * @param symbol : location string of a terminal symbol, with or
+		 * without a runtime project id in it
+		 * @param project : the project the symbol belongs to, may be null
+		 * @return the location @a symbol names, resolved through
+		 * @p project for a symbol of that project's own collection.
+		 *
+		 * Only 'embed://...' needs the project: it names a path inside
+		 * the embedded collection of one project, which no session-wide
+		 * registry can answer for once the id is gone. 'common://...' and
+		 * the other file system collections name a file and resolve on
+		 * their own -- and the two-argument constructor would take such a
+		 * path for an embedded one and wrongly prepend 'embed://' to it
+		 * (@sa ElementsLocation::setPath), which is why the project is
+		 * only passed on for an embedded symbol.
+		 */
+		static ElementsLocation symbolLocation(const QString &symbol,
+											   QETProject *project);
+
+		/**
+		 * @brief symbolLocation
+		 * @return the location this terminal's symbol names, resolved
+		 * through the project of the strip this terminal belongs to
+		 * (@sa parentStrip()), or a location which resolves nothing when
+		 * the terminal is in no strip yet -- no project could answer for
+		 * an embedded symbol then.
+		 */
+		ElementsLocation symbolLocation() const;
 		QString Xref() const;
 		QString cable() const;
 		QString cableWire() const;

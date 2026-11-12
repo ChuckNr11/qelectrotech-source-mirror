@@ -61,6 +61,20 @@ namespace Ui {
 	one. The location string of that symbol is kept in Qt::UserRole, which is
 	where a later drag out of this tree reads it.
 
+	That tree also shows what the strip of the current node already holds,
+	as soon as its name is shown (@c setName): one greyed out row per
+	physical terminal of it, at the top of the list and ahead of the IDs
+	typed below them, so that the user reads what is there before he types
+	the ID which continues it. Such a row carries the ID alone in the first
+	column -- the root item above already says which strip they belong to --
+	and the name of the symbol the terminal is drawn with in the second one,
+	empty when it is drawn with none -- the element of a drawn terminal
+	being the one to ask for its symbol, since it keeps none of its own
+	(@c RealTerminal::symbol). It is not selectable and is marked
+	with ExistingTerminalRole -- it is the display of what exists, never
+	one of the terminals the OK button creates
+	(@sa describedTerminals).
+
 	A symbol is picked for a terminal the way a text is changed in a list:
 	the user selects the terminals it belongs to -- one, several or all of
 	them, with the mouse or the keyboard -- and picks the symbol in
@@ -80,6 +94,18 @@ class AddTerminalStripDialog : public QDialog
 
 		void setInstallation(const QString &installation);
 		void setLocation(const QString &location);
+		/**
+			@brief setName
+			Pre-selects the strip name (structure designation 'Name'),
+			to be called after setInstallation() and setLocation():
+			those two reload the names of the node they select, and
+			empty the name field with them (@sa
+			fillNamesOfTheCurrentNode).
+			A name which belongs to a strip of that node is picked
+			from the list, the same way a user picks it; the preview
+			tree then shows the terminals that strip already holds.
+		*/
+		void setName(const QString &name);
 		TerminalStrip *generatedTerminalStrip() const;
 		/// @return the terminal strip of the project whose node (plant,
 		/// location, name) is the one currently shown, or null when the
@@ -99,6 +125,9 @@ class AddTerminalStripDialog : public QDialog
 		/// ID field and in the order of the preview tree, each with the
 		/// symbol the user gave it. Nothing when that field can not be
 		/// read at all -- which the dialog refuses as an error anyway.
+		/// The rows of the terminals the strip holds already are display
+		/// only and are left out: they exist, the OK button must not
+		/// create them a second time.
 	QList<TerminalDescription> describedTerminals() const;
 
 	protected:
@@ -125,6 +154,7 @@ class AddTerminalStripDialog : public QDialog
 		void onSymbolPicked(int index);
 		void onPreviewSelectionChanged();
 		QList<QTreeWidgetItem *> selectedPreviewChildren() const;
+		void fillExistingTerminals();
 		void refreshPreviewTree(const ParsedIds &parsed);
 		void validate();
 
@@ -145,6 +175,12 @@ class AddTerminalStripDialog : public QDialog
 		QStringList checkIdsAgainstFreeTerminals(const QStringList &ids) const;
 
 	private:
+		/// Marker of the first column of a preview row which shows a
+		/// terminal the strip of the current node already holds: such a
+		/// row is greyed out and display only -- it never reaches the OK
+		/// button (@sa fillExistingTerminals, describedTerminals).
+		static constexpr int ExistingTerminalRole{Qt::UserRole + 2};
+
 		Ui::AddTerminalStripDialog *ui;
 		QETProject *m_project;
 		/// Root item of the preview tree: the strip itself, whose children

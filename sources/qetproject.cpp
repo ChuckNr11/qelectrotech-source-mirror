@@ -52,6 +52,7 @@
 #include "ui/dialogwaiting.h"
 #include "ui/importelementdialog.h"
 #include "TerminalStrip/terminalstrip.h"
+#include "TerminalStrip/UndoCommand/terminalstripdeletion.h"
 #include "qetxml.h"
 #include "qetinformation.h"
 #include "qetversion.h"
@@ -4016,6 +4017,15 @@ void QETProject::removeDiagram(Diagram *diagram)
 		return;
 	}
 
+		//The terminals the folio draws go back to waiting in their
+		//rows here, the way RemoveDiagramCommand::redo() does it:
+		//their symbols go with the folio, and unlike that command
+		//there is no undo here which could hold the symbols and bind
+		//the terminals back later (@sa
+		//TerminalStripDeletion::terminalsDrawnOn).
+	TerminalStripDeletion::unbindTerminals(
+				TerminalStripDeletion::terminalsDrawnOn(diagram));
+
 	detachDiagram(diagram);
 	diagram->deleteLater();
 }
@@ -6049,6 +6059,7 @@ bool QETProject::addTerminalStrip(TerminalStrip *strip)
 
 	m_terminal_strip_vector.append(strip);
 	watchTerminalStrip(strip);
+	emit terminalStripAdded(strip);
 	return true;
 }
 
@@ -6064,6 +6075,7 @@ bool QETProject::removeTerminalStrip(TerminalStrip *strip)
 	const bool removed_ = m_terminal_strip_vector.removeOne(strip);
 	if (removed_) {
 		watchTerminalStrip(strip, false);
+		emit terminalStripRemoved(strip);
 	}
 	return removed_;
 }
