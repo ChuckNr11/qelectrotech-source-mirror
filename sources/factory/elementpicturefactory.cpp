@@ -231,6 +231,52 @@ QPixmap ElementPictureFactory::pixmap(const ElementsLocation &location)
 	return QPixmap();
 }
 
+/**
+	@brief ElementPictureFactory::pixmap
+	@param location : the element to draw
+	@param size : the room the symbol is drawn in
+	@return the symbol of @a location painted straight into a pixmap of
+	that size. What the file says of its own size is a symbol of a few
+	dozen pixels, and a picture of those blown up to fill a preview is a
+	soft one -- while painting the very same picture again at the size
+	wanted is sharp, the primitives being lines and not pixels
+	(@sa pixmap, AddTerminalsDialog::chooseSymbol).
+*/
+QPixmap ElementPictureFactory::pixmap(const ElementsLocation &location, const QSize &size)
+{
+	const QUuid uuid = cacheKey(location);
+	if (!m_pictures_H.contains(uuid) && !build(location)) {
+		return QPixmap();
+	}
+
+	const auto doc = location.pugiXml();
+	int w = qBound(0, doc.document_element().attribute("width").as_int(), 1000000);
+	int h = qBound(0, doc.document_element().attribute("height").as_int(), 1000000);
+	while (w % 10) ++w;
+	while (h % 10) ++h;
+	const int hsx = qMin(doc.document_element().attribute("hotspot_x").as_int(), w);
+	const int hsy = qMin(doc.document_element().attribute("hotspot_y").as_int(), h);
+	if (w < 1 || h < 1 || size.isEmpty()) {
+		return QPixmap();
+	}
+
+		//The longest side of the symbol fills the room it is given, and
+		//the shorter one follows its aspect -- never more than asked
+		//for, never a stretched one.
+	const qreal scale = qMin(qreal(size.width()) / w, qreal(size.height()) / h);
+	QPixmap pix(qMax(1, qRound(w * scale)), qMax(1, qRound(h * scale)));
+	pix.fill(Qt::transparent);
+
+	QPainter painter(&pix);
+	painter.setRenderHint(QPainter::Antialiasing, true);
+	painter.setRenderHint(QPainter::SmoothPixmapTransform, true);
+	painter.scale(scale, scale);
+	painter.translate(hsx, hsy);
+	painter.drawPicture(0, 0, m_pictures_H.value(uuid));
+
+	return pix;
+}
+
 
 /**
 	@brief ElementPictureFactory::getPrimitives

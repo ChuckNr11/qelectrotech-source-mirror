@@ -26,6 +26,7 @@
       <string>toolBar</string>
      </property>
      <addaction name="m_add_strip"/>
+     <addaction name="m_edit_selection"/>
      <addaction name="m_delete_selection"/>
     </widget>
    </item>
@@ -57,6 +58,17 @@
    </property>
    <property name="toolTip">
     <string>Add a terminal strip to the project</string>
+   </property>
+  </action>
+  <action name="m_edit_selection">
+   <property name="enabled">
+    <bool>false</bool>
+   </property>
+   <property name="text">
+    <string>Terminal properties</string>
+   </property>
+   <property name="toolTip">
+    <string>Edit the properties of the selected terminals</string>
    </property>
   </action>
   <action name="m_delete_selection">

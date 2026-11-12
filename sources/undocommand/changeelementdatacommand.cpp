@@ -27,14 +27,27 @@ ChangeElementDataCommand::ChangeElementDataCommand(Element *element, ElementData
 	setText(QObject::tr("Modify the properties of an element"));
 }
 
-void ChangeElementDataCommand::undo() {
-	if (m_element) {
-		m_element.data()->setElementData(m_old_data);
+void ChangeElementDataCommand::undo()
+{
+	if (!m_element) {
+		return;
 	}
+		//The row goes back to its strip before the data do: one undo
+		//step for both (@sa TerminalStripRehome).
+	TerminalStripRehome::revert(m_plan);
+	m_plan = TerminalStripRehome::Plan();
+	m_element.data()->setElementData(m_old_data);
 }
 
-void ChangeElementDataCommand::redo() {
-	if (m_element) {
-		m_element.data()->setElementData(m_new_data);
+void ChangeElementDataCommand::redo()
+{
+	if (!m_element) {
+		return;
 	}
+		//The label before the change, so that only a name the user
+		//really changed moves the row (@sa TerminalStripRehome).
+	const auto label_before = TerminalStripRehome::labelOf(m_element.data());
+	m_element.data()->setElementData(m_new_data);
+	m_plan = TerminalStripRehome::planFor(m_element.data(), label_before);
+	TerminalStripRehome::apply(m_plan);
 }
