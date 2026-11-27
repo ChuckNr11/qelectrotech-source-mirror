@@ -19,6 +19,164 @@
 #include <qetxml.h>
 #include <QDebug>
 
+namespace {
+
+/**
+	The display mode of a PLC master and the layout of its module box
+	or rack overview, its module labels and one IO row's own layout
+	fields, travel beside the table data. They are written only when
+	they differ from the defaults, so that a symbol which uses the
+	plain table saves exactly as it did before, and a symbol written
+	by an older QElectroTech reads back as the table it always was.
+*/
+void writePlcDisplayToXml(QDomDocument &document, QDomElement &xml_plc,
+						  const ElementData::PlcMasterData &data)
+{
+	if (data.displayMode == ElementData::PlcDisplayTable
+		&& data.moduleLabels.isEmpty()) {
+		return;
+	}
+
+	if (data.displayMode != ElementData::PlcDisplayTable) {
+		auto xml_display = document.createElement(QStringLiteral("display"));
+		xml_display.setAttribute(QStringLiteral("mode"),
+			ElementData::plcDisplayModeToString(data.displayMode));
+		if (data.displayMode == ElementData::PlcDisplayBox) {
+			const auto &box = data.box_settings;
+			auto xml_box = document.createElement(QStringLiteral("boxSettings"));
+			xml_box.setAttribute(QStringLiteral("width"),
+				QString::number(box.width, 'f', 2));
+			xml_box.setAttribute(QStringLiteral("headerHeight"),
+				QString::number(box.headerHeight, 'f', 2));
+			xml_box.setAttribute(QStringLiteral("showSupplyRow"),
+				QETXML::boolToString(box.showSupplyRow));
+			xml_box.setAttribute(QStringLiteral("splitSides"),
+				QETXML::boolToString(box.splitSides));
+			xml_box.setAttribute(QStringLiteral("title"), box.titleTemplate);
+			xml_box.setAttribute(QStringLiteral("row"), box.rowTemplate);
+			xml_box.setAttribute(QStringLiteral("supply"), box.supplyLabel);
+			xml_display.appendChild(xml_box);
+		} else if (data.displayMode == ElementData::PlcDisplayRack) {
+			const auto &rack = data.rack_settings;
+			auto xml_rack = document.createElement(QStringLiteral("rackSettings"));
+			xml_rack.setAttribute(QStringLiteral("slotWidth"),
+				QString::number(rack.slotWidth, 'f', 2));
+			xml_rack.setAttribute(QStringLiteral("slotHeight"),
+				QString::number(rack.slotHeight, 'f', 2));
+			xml_rack.setAttribute(QStringLiteral("showAddressRange"),
+				QETXML::boolToString(rack.showAddressRange));
+			xml_rack.setAttribute(QStringLiteral("title"), rack.titleTemplate);
+			xml_rack.setAttribute(QStringLiteral("plate"), rack.plateTemplate);
+			xml_display.appendChild(xml_rack);
+		}
+		xml_plc.appendChild(xml_display);
+	}
+
+	if (!data.moduleLabels.isEmpty()) {
+		auto xml_labels = document.createElement(QStringLiteral("moduleLabels"));
+		for (auto it = data.moduleLabels.constBegin();
+			 it != data.moduleLabels.constEnd(); ++it) {
+			auto xml_module = document.createElement(QStringLiteral("module"));
+			xml_module.setAttribute(QStringLiteral("index"), it.key());
+			xml_module.appendChild(document.createTextNode(it.value()));
+			xml_labels.appendChild(xml_module);
+		}
+		xml_plc.appendChild(xml_labels);
+	}
+}
+
+/**
+	Read back what writePlcDisplayToXml() wrote. A missing
+	\<display\> element keeps the plain table.
+*/
+void readPlcDisplayFromXml(const QDomElement &xml_plc,
+						   ElementData::PlcMasterData &data)
+{
+	auto xml_display = xml_plc.firstChildElement(QStringLiteral("display"));
+	if (!xml_display.isNull()) {
+		data.displayMode = ElementData::plcDisplayModeFromString(
+			xml_display.attribute(QStringLiteral("mode")));
+		if (data.displayMode == ElementData::PlcDisplayBox) {
+			auto xml_box = xml_display.firstChildElement(
+				QStringLiteral("boxSettings"));
+			if (!xml_box.isNull()) {
+				auto &box = data.box_settings;
+				box.width = xml_box.attribute(QStringLiteral("width"),
+					QStringLiteral("120.0")).toDouble();
+				box.headerHeight = xml_box.attribute(QStringLiteral("headerHeight"),
+					QStringLiteral("10.0")).toDouble();
+				box.showSupplyRow = QETXML::boolFromString(
+					xml_box.attribute(QStringLiteral("showSupplyRow")), true);
+				box.splitSides = QETXML::boolFromString(
+					xml_box.attribute(QStringLiteral("splitSides")), true);
+				box.titleTemplate = xml_box.attribute(QStringLiteral("title"));
+				box.rowTemplate = xml_box.attribute(QStringLiteral("row"));
+				box.supplyLabel = xml_box.attribute(QStringLiteral("supply"));
+			}
+		} else if (data.displayMode == ElementData::PlcDisplayRack) {
+			auto xml_rack = xml_display.firstChildElement(
+				QStringLiteral("rackSettings"));
+			if (!xml_rack.isNull()) {
+				auto &rack = data.rack_settings;
+				rack.slotWidth = xml_rack.attribute(QStringLiteral("slotWidth"),
+					QStringLiteral("30.0")).toDouble();
+				rack.slotHeight = xml_rack.attribute(QStringLiteral("slotHeight"),
+					QStringLiteral("45.0")).toDouble();
+				rack.showAddressRange = QETXML::boolFromString(
+					xml_rack.attribute(QStringLiteral("showAddressRange")), true);
+				rack.titleTemplate = xml_rack.attribute(QStringLiteral("title"));
+				rack.plateTemplate = xml_rack.attribute(QStringLiteral("plate"));
+			}
+		}
+	}
+
+	auto xml_labels = xml_plc.firstChildElement(QStringLiteral("moduleLabels"));
+	for (const auto &xml_module :
+		 QETXML::findInDomElement(xml_labels, QStringLiteral("module"))) {
+		bool ok = false;
+		int index = xml_module.attribute(QStringLiteral("index")).toInt(&ok);
+		if (ok && index >= 0) {
+			data.moduleLabels.insert(index, xml_module.text());
+		}
+	}
+}
+
+/**
+	One IO row's own layout fields: the rack module it belongs to, the
+	side its terminal sits on in the module box, and whether the row is
+	an unused channel which is kept in the data but left out of the
+	drawing. Written only when they differ from the defaults.
+*/
+void writePlcIoExtraToXml(QDomElement &xml_io, const ElementData::PlcIO &io)
+{
+	if (io.moduleIndex >= 0) {
+		xml_io.setAttribute(QStringLiteral("module"), io.moduleIndex);
+	}
+	if (!io.side.isEmpty()) {
+		xml_io.setAttribute(QStringLiteral("side"), io.side);
+	}
+	if (io.hidden) {
+		xml_io.setAttribute(QStringLiteral("hidden"),
+			QETXML::boolToString(true));
+	}
+}
+
+/**
+	Read back what writePlcIoExtraToXml() wrote.
+*/
+void readPlcIoExtraFromXml(const QDomElement &xml_io, ElementData::PlcIO &io)
+{
+	bool ok = false;
+	int module = xml_io.attribute(QStringLiteral("module"), QStringLiteral("-1"))
+		.toInt(&ok);
+	io.moduleIndex = ok ? module : -1;
+	io.side = xml_io.attribute(QStringLiteral("side"));
+	io.hidden = QETXML::boolFromString(
+		xml_io.attribute(QStringLiteral("hidden")), false);
+}
+
+}
+
 void ElementData::toSettings(QSettings &settings, const QString prefix) const {
 	Q_UNUSED(settings)
 	Q_UNUSED(prefix)
@@ -254,6 +412,7 @@ QDomElement ElementData::kindInfoToXml(QDomDocument &document)
 			xml_io.setAttribute(QStringLiteral("comment"), io.comment);
 			xml_io.setAttribute(QStringLiteral("crossRef"), io.crossRef);
 			xml_io.setAttribute(QStringLiteral("terminalCount"), io.terminalCount);
+			writePlcIoExtraToXml(xml_io, io);
 			for (const auto &t : io.terminals) {
 				auto xml_term = document.createElement(QStringLiteral("terminal"));
 				xml_term.appendChild(document.createTextNode(t));
@@ -262,6 +421,10 @@ QDomElement ElementData::kindInfoToXml(QDomDocument &document)
 			xml_ios.appendChild(xml_io);
 			}
 			xml_plc.appendChild(xml_ios);
+
+			// Save the display mode and its layouts, if they differ
+			// from the plain table every symbol drew before
+			writePlcDisplayToXml(document, xml_plc, m_plc_master_data);
 
 			returned_elmt.appendChild(xml_plc);
 		}
@@ -429,6 +592,7 @@ QDomElement ElementData::plcMasterDataToXml(QDomDocument &document) const
 		xml_io.setAttribute(QStringLiteral("comment"), io.comment);
 		xml_io.setAttribute(QStringLiteral("crossRef"), io.crossRef);
 		xml_io.setAttribute(QStringLiteral("terminalCount"), io.terminalCount);
+		writePlcIoExtraToXml(xml_io, io);
 		for (const auto &t : io.terminals) {
 			auto xml_term = document.createElement(QStringLiteral("terminal"));
 			xml_term.appendChild(document.createTextNode(t));
@@ -437,6 +601,10 @@ QDomElement ElementData::plcMasterDataToXml(QDomDocument &document) const
 		xml_ios.appendChild(xml_io);
 	}
 	xml_plc.appendChild(xml_ios);
+
+	// Save the display mode and its layouts, if they differ from
+	// the plain table every symbol drew before
+	writePlcDisplayToXml(document, xml_plc, m_plc_master_data);
 
 	return xml_plc;
 }
@@ -577,11 +745,15 @@ void ElementData::plcMasterDataFromXml(const QDomElement &xml_plc)
 		io.comment = xml_io.attribute(QStringLiteral("comment"));
 		io.crossRef = xml_io.attribute(QStringLiteral("crossRef"));
 		io.terminalCount = xml_io.attribute(QStringLiteral("terminalCount")).toInt();
+		readPlcIoExtraFromXml(xml_io, io);
 		for (const auto &xml_term : QETXML::findInDomElement(xml_io, QStringLiteral("terminal"))) {
 			io.terminals.append(xml_term.text());
 		}
 		m_plc_master_data.ios.append(io);
 	}
+
+	// Load the display mode and its layouts
+	readPlcDisplayFromXml(xml_plc, m_plc_master_data);
 }
 
 /**
@@ -1414,11 +1586,15 @@ void ElementData::kindInfoFromXml(const QDomElement &xml_element)
 				io.crossRef = xml_io.attribute(QStringLiteral("crossRef"));
 				io.terminalCount = xml_io.attribute(
 					QStringLiteral("terminalCount"), QStringLiteral("0")).toInt();
+				readPlcIoExtraFromXml(xml_io, io);
 				for (const auto &xml_term : QETXML::findInDomElement(xml_io, QStringLiteral("terminal"))) {
 					io.terminals.append(xml_term.text());
 				}
 				m_plc_master_data.ios.append(io);
 			}
+
+			// Parse the display mode and its layouts
+			readPlcDisplayFromXml(xml_plc, m_plc_master_data);
 		}
 	}
 }
@@ -1545,4 +1721,36 @@ QStringList ElementData::plcIOTypeList()
 		<< translatedPlcIOType(SortieAnalogique)
 		<< translatedPlcIOType(EntreeUniverselle)
 		<< translatedPlcIOType(SortieUniverselle);
+}
+
+/**
+ * @brief ElementData::plcDisplayModeToString
+ * Convert a PlcDisplayMode to string for XML storage.
+ */
+QString ElementData::plcDisplayModeToString(PlcDisplayMode mode)
+{
+	switch (mode) {
+		case PlcDisplayTable:
+			return QStringLiteral("table");
+		case PlcDisplayBox:
+			return QStringLiteral("box");
+		case PlcDisplayRack:
+			return QStringLiteral("rack");
+	}
+	return QStringLiteral("table");
+}
+
+/**
+ * @brief ElementData::plcDisplayModeFromString
+ * Convert a string from XML to PlcDisplayMode. An unknown or empty
+ * string is the table, the display every symbol had before.
+ */
+ElementData::PlcDisplayMode ElementData::plcDisplayModeFromString(const QString &string)
+{
+	if (string == QLatin1String("box")) {
+		return ElementData::PlcDisplayBox;
+	} else if (string == QLatin1String("rack")) {
+		return ElementData::PlcDisplayRack;
+	}
+	return ElementData::PlcDisplayTable;
 }

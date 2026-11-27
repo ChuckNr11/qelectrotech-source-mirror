@@ -575,6 +575,9 @@ qet_add_app_test(tst_plcio tst_plcio.cpp)
 # qet_plc_list: the SPS list, one row per channel of a PLC master, and
 # its pages broken at the masters.
 qet_add_app_test(tst_plclist tst_plclist.cpp)
+# The PLC display modes: the IO table as always, a module box or a rack
+# overview, saved beside the IO data they draw.
+qet_add_app_test(tst_plcdisplay tst_plcdisplay.cpp)
 # Device types: parts and their ways to be drawn, kept by .qet, .qetdb and
 # the user's library of .qetdt files.
 qet_add_app_test(tst_devicetype tst_devicetype.cpp)

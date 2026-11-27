@@ -88,6 +88,20 @@ class ElementData : public PropertiesInterface
 		Q_ENUM(PlcIOType)
 
 		/**
+		 * @brief The PlcDisplayMode enum
+		 * How a PLC master's IO table is drawn on the sheet: the
+		 * well known table, a module box with the terminals on its
+		 * sides, or a one-line rack overview. Symbols written before
+		 * the choice existed are drawn as the table they always were.
+		 */
+		enum PlcDisplayMode {
+			PlcDisplayTable,
+			PlcDisplayBox,
+			PlcDisplayRack
+		};
+		Q_ENUM(PlcDisplayMode)
+
+		/**
 		 * @brief The PlcIO struct
 		 * Represents a single IO entry in a PLC master element.
 		 */
@@ -99,6 +113,9 @@ class ElementData : public PropertiesInterface
 			QString crossRef;         ///< Auto-filled: slave reference
 			int terminalCount = 1;    ///< Number of terminals for this IO (1-4)
 			QStringList terminals;    ///< Terminal values T1, T2, ... (size = terminalCount)
+			int moduleIndex = -1;     ///< Rack module this IO belongs to (-1 = none)
+			QString side;             ///< "left"/"right" terminal side in the box, empty = by type
+			bool hidden = false;      ///< Unused channel: kept in data, left out of the drawing
 
 			/**
 			 * @brief Return terminal labels, generating defaults (T1, T2...) if empty
@@ -120,9 +137,65 @@ class ElementData : public PropertiesInterface
 					&& comment == other.comment
 					&& crossRef == other.crossRef
 					&& terminalCount == other.terminalCount
-					&& terminals == other.terminals;
+					&& terminals == other.terminals
+					&& moduleIndex == other.moduleIndex
+					&& side == other.side
+					&& hidden == other.hidden;
 			}
 			bool operator!=(const PlcIO &other) const {
+				return !(*this == other);
+			}
+		};
+
+		/**
+		 * @brief The PlcBoxSettings struct
+		 * Layout of the module box display: a frame with one row per
+		 * visible IO and the terminal stubs on its sides. An empty
+		 * template falls back to the built-in one.
+		 */
+		struct PlcBoxSettings {
+			qreal width = 120.0;          ///< Box width in mm
+			qreal headerHeight = 10.0;    ///< Title band height in mm
+			bool showSupplyRow = true;    ///< A supply row (L+, M, FE) under the IO rows
+			bool splitSides = true;       ///< Inputs get their terminal left, outputs right
+			QString titleTemplate;        ///< Box title, e.g. "%module"; empty = "%module"
+			QString rowTemplate;          ///< One row's text; empty = "%label %address %function"
+			QString supplyLabel;          ///< Supply row's text; empty = the built-in one
+
+			bool operator==(const PlcBoxSettings &other) const {
+				return qFuzzyCompare(width, other.width)
+					&& qFuzzyCompare(headerHeight, other.headerHeight)
+					&& showSupplyRow == other.showSupplyRow
+					&& splitSides == other.splitSides
+					&& titleTemplate == other.titleTemplate
+					&& rowTemplate == other.rowTemplate
+					&& supplyLabel == other.supplyLabel;
+			}
+			bool operator!=(const PlcBoxSettings &other) const {
+				return !(*this == other);
+			}
+		};
+
+		/**
+		 * @brief The PlcRackSettings struct
+		 * Layout of the one-line rack overview: one plate per module,
+		 * grouped by the IO rows' moduleIndex.
+		 */
+		struct PlcRackSettings {
+			qreal slotWidth = 30.0;       ///< Width of one module plate in mm
+			qreal slotHeight = 45.0;      ///< Height of one module plate in mm
+			bool showAddressRange = true; ///< Address range under the plate's text
+			QString titleTemplate;        ///< Rack title; empty = "%module"
+			QString plateTemplate;        ///< One plate's text; empty = "%module"
+
+			bool operator==(const PlcRackSettings &other) const {
+				return qFuzzyCompare(slotWidth, other.slotWidth)
+					&& qFuzzyCompare(slotHeight, other.slotHeight)
+					&& showAddressRange == other.showAddressRange
+					&& titleTemplate == other.titleTemplate
+					&& plateTemplate == other.plateTemplate;
+			}
+			bool operator!=(const PlcRackSettings &other) const {
 				return !(*this == other);
 			}
 		};
@@ -143,6 +216,10 @@ class ElementData : public PropertiesInterface
 			QStringList columnNames;                ///< Custom column header names
 			QList<int> columnOrder;                 ///< Column display order (logical indices)
 			bool showHeaders = true;                ///< Show column headers on sheet
+			PlcDisplayMode displayMode = PlcDisplayTable; ///< How the IO table is drawn
+			PlcBoxSettings box_settings;            ///< Layout of the module box display
+			PlcRackSettings rack_settings;          ///< Layout of the rack overview display
+			QMap<int, QString> moduleLabels;        ///< Module names for box/rack (key: moduleIndex)
 
 			PlcMasterData() {
 				headerFont.setFamily(QString());
@@ -159,7 +236,11 @@ class ElementData : public PropertiesInterface
 					&& cellFont == other.cellFont
 					&& columnNames == other.columnNames
 					&& columnOrder == other.columnOrder
-					&& showHeaders == other.showHeaders;
+					&& showHeaders == other.showHeaders
+					&& displayMode == other.displayMode
+					&& box_settings == other.box_settings
+					&& rack_settings == other.rack_settings
+					&& moduleLabels == other.moduleLabels;
 			}
 			bool operator!=(const PlcMasterData &other) const {
 				return !(*this == other);
@@ -202,6 +283,9 @@ class ElementData : public PropertiesInterface
 		static PlcIOType plcIOTypeFromString(const QString &string);
 		static QString translatedPlcIOType(PlcIOType type);
 		static QStringList plcIOTypeList();
+
+		static QString plcDisplayModeToString(PlcDisplayMode mode);
+		static PlcDisplayMode plcDisplayModeFromString(const QString &string);
 
 		enum TerminalType {
 			TTGeneric,
