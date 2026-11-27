@@ -35,6 +35,8 @@ class QGroupBox;
 class QPushButton;
 class QLineEdit;
 class QScrollBar;
+class QComboBox;
+class QStackedWidget;
 class PartTerminal;
 
 namespace Ui {
@@ -107,6 +109,7 @@ class ElementPropertiesEditorWidget : public QDialog
 		void createPlcConfigWidgets();
 		void populatePlcTable();
 		void readPlcTable();
+		void plcSetupExtraColumns(int row, const ElementData::PlcIO &io);
 		void populateTerminalSizeCombos(double section, double width, const QString &catalog_entry);
 		void refreshTerminalWidthCombo();
 		void populateTerminalColorCombo(const QString &spec);
@@ -121,8 +124,11 @@ class ElementPropertiesEditorWidget : public QDialog
 		void on_max_slaves_checkbox_toggled(bool checked);
 		void plcAddRow();
 		void plcRemoveRow();
+		void plcMoveRowUp();
+		void plcMoveRowDown();
 		void plcPasteFromClipboard();
 		void plcTerminalCountChanged(int row, int count);
+		void plcDisplayModeChanged(int index);
 		void plcSelectHeaderFont();
 		void plcSelectCellFont();
 		void plcSetCellFromValue(int row, int col, const QString &val);
@@ -152,6 +158,23 @@ class ElementPropertiesEditorWidget : public QDialog
 	QList<QLineEdit *> m_plc_col_name_edits;
 	QScrollBar *m_plc_shared_scrollbar = nullptr;
 	bool m_plc_scroll_sync = false;
+		/// Display mode of the IO table and the layouts of the
+		/// module box and the rack overview
+	QComboBox *m_plc_display_cb = nullptr;
+	QStackedWidget *m_plc_display_stack = nullptr;
+	QSpinBox *m_plc_box_width_spinbox = nullptr;
+	QSpinBox *m_plc_box_header_spinbox = nullptr;
+	QCheckBox *m_plc_box_supply_cb = nullptr;
+	QCheckBox *m_plc_box_split_cb = nullptr;
+	QLineEdit *m_plc_box_title_edit = nullptr;
+	QLineEdit *m_plc_box_row_edit = nullptr;
+	QLineEdit *m_plc_box_supply_edit = nullptr;
+	QSpinBox *m_plc_rack_slot_w_spinbox = nullptr;
+	QSpinBox *m_plc_rack_slot_h_spinbox = nullptr;
+	QCheckBox *m_plc_rack_range_cb = nullptr;
+	QLineEdit *m_plc_rack_title_edit = nullptr;
+	QLineEdit *m_plc_rack_plate_edit = nullptr;
+	QTableWidget *m_plc_module_labels = nullptr;
 };
 
 #endif // ELEMENTPROPERTIESEDITORWIDGET_H

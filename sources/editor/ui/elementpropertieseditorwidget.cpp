@@ -43,6 +43,7 @@
 #include <QVBoxLayout>
 #include <QHBoxLayout>
 #include <QGridLayout>
+#include <QStackedWidget>
 #include <QIcon>
 #include <QLabel>
 #include <QLocale>
@@ -1392,11 +1393,17 @@ void ElementPropertiesEditorWidget::createPlcConfigWidgets()
 	auto *toolbar = new QHBoxLayout();
 	auto *add_btn = new QPushButton(tr("+"), m_plc_gb);
 	auto *remove_btn = new QPushButton(tr("-"), m_plc_gb);
+	auto *up_btn = new QPushButton(tr("Up"), m_plc_gb);
+	auto *down_btn = new QPushButton(tr("Down"), m_plc_gb);
 
 	add_btn->setMaximumWidth(30);
 	remove_btn->setMaximumWidth(30);
+	up_btn->setToolTip(tr("Move the selected rows up"));
+	down_btn->setToolTip(tr("Move the selected rows down"));
 
 	toolbar->addStretch();
+	toolbar->addWidget(up_btn);
+	toolbar->addWidget(down_btn);
 	toolbar->addWidget(add_btn);
 	toolbar->addWidget(remove_btn);
 	plc_layout->addLayout(toolbar);
@@ -1411,10 +1418,11 @@ void ElementPropertiesEditorWidget::createPlcConfigWidgets()
 
 	// IO Table
 	m_plc_table = new QTableWidget(splitter);
-	m_plc_table->setColumnCount(5);
+	m_plc_table->setColumnCount(8);
 	m_plc_table->setHorizontalHeaderLabels({
 		tr("Type"), tr("Address"), tr("Function"),
-		tr("Annotation"), tr("Cross-reference")
+		tr("Annotation"), tr("Cross-reference"),
+		tr("Module"), tr("Side"), tr("Show")
 	});
 	m_plc_table->horizontalHeader()->setSectionResizeMode(QHeaderView::Interactive);
 	m_plc_table->horizontalHeader()->setSectionsMovable(true);
@@ -1424,6 +1432,9 @@ void ElementPropertiesEditorWidget::createPlcConfigWidgets()
 	m_plc_table->horizontalHeader()->resizeSection(2, 150);
 	m_plc_table->horizontalHeader()->resizeSection(3, 150);
 	m_plc_table->horizontalHeader()->resizeSection(4, 100);
+	m_plc_table->horizontalHeader()->resizeSection(5, 60);
+	m_plc_table->horizontalHeader()->resizeSection(6, 70);
+	m_plc_table->horizontalHeader()->resizeSection(7, 50);
 	m_plc_table->setSelectionBehavior(QAbstractItemView::SelectRows);
 	m_plc_table->setSelectionMode(QAbstractItemView::ExtendedSelection);
 	m_plc_table->setMinimumHeight(200);
@@ -1579,6 +1590,120 @@ void ElementPropertiesEditorWidget::createPlcConfigWidgets()
 	}
 	plc_layout->addLayout(col_layout);
 
+	// Display mode: the table as always, the module box or the rack
+	// overview, with the layout settings of the chosen display
+	auto *display_layout = new QHBoxLayout();
+	display_layout->addWidget(new QLabel(tr("Display:"), m_plc_gb));
+	m_plc_display_cb = new QComboBox(m_plc_gb);
+	m_plc_display_cb->addItem(tr("Table"), ElementData::PlcDisplayTable);
+	m_plc_display_cb->addItem(tr("Module box"), ElementData::PlcDisplayBox);
+	m_plc_display_cb->addItem(tr("Rack overview"), ElementData::PlcDisplayRack);
+	m_plc_display_cb->setToolTip(tr("How the entries are drawn on the sheet"));
+	display_layout->addWidget(m_plc_display_cb);
+	display_layout->addStretch();
+	plc_layout->addLayout(display_layout);
+
+	m_plc_display_stack = new QStackedWidget(m_plc_gb);
+	m_plc_display_stack->addWidget(new QWidget(m_plc_gb));
+
+	const QString plc_placeholders = tr("Placeholders: %1")
+		.arg(QStringLiteral("%address, %function, %comment, %type, "
+						   "%label, %xref, %rang, %module, %slot, %%"));
+
+	// Module box layout
+	auto *box_page = new QWidget(m_plc_gb);
+	auto *box_layout = new QGridLayout(box_page);
+	box_layout->addWidget(new QLabel(tr("Width:"), box_page), 0, 0);
+	m_plc_box_width_spinbox = new QSpinBox(box_page);
+	m_plc_box_width_spinbox->setRange(10, 500);
+	m_plc_box_width_spinbox->setValue(120);
+	m_plc_box_width_spinbox->setSuffix(tr(" mm"));
+	box_layout->addWidget(m_plc_box_width_spinbox, 0, 1);
+	box_layout->addWidget(new QLabel(tr("Title height:"), box_page), 0, 2);
+	m_plc_box_header_spinbox = new QSpinBox(box_page);
+	m_plc_box_header_spinbox->setRange(0, 50);
+	m_plc_box_header_spinbox->setValue(10);
+	m_plc_box_header_spinbox->setSuffix(tr(" mm"));
+	box_layout->addWidget(m_plc_box_header_spinbox, 0, 3);
+
+	m_plc_box_supply_cb = new QCheckBox(tr("Supply row"), box_page);
+	m_plc_box_supply_cb->setChecked(true);
+	box_layout->addWidget(m_plc_box_supply_cb, 1, 0, 1, 2);
+	m_plc_box_split_cb = new QCheckBox(tr("Inputs left, outputs right"), box_page);
+	m_plc_box_split_cb->setChecked(true);
+	box_layout->addWidget(m_plc_box_split_cb, 1, 2, 1, 2);
+
+	box_layout->addWidget(new QLabel(tr("Title:"), box_page), 2, 0);
+	m_plc_box_title_edit = new QLineEdit(box_page);
+	m_plc_box_title_edit->setPlaceholderText(QStringLiteral("%module"));
+	m_plc_box_title_edit->setToolTip(plc_placeholders);
+	box_layout->addWidget(m_plc_box_title_edit, 2, 1, 1, 3);
+	box_layout->addWidget(new QLabel(tr("Row:"), box_page), 3, 0);
+	m_plc_box_row_edit = new QLineEdit(box_page);
+	m_plc_box_row_edit->setPlaceholderText(
+		QStringLiteral("%label  %address  %function"));
+	m_plc_box_row_edit->setToolTip(plc_placeholders);
+	box_layout->addWidget(m_plc_box_row_edit, 3, 1, 1, 3);
+	box_layout->addWidget(new QLabel(tr("Supply row text:"), box_page), 4, 0);
+	m_plc_box_supply_edit = new QLineEdit(box_page);
+	m_plc_box_supply_edit->setToolTip(
+		tr("Text of the supply row (blank = the built-in one)"));
+	box_layout->addWidget(m_plc_box_supply_edit, 4, 1, 1, 3);
+	box_layout->setColumnStretch(4, 1);
+	m_plc_display_stack->addWidget(box_page);
+
+	// Rack overview layout
+	auto *rack_page = new QWidget(m_plc_gb);
+	auto *rack_layout = new QGridLayout(rack_page);
+	rack_layout->addWidget(new QLabel(tr("Plate width:"), rack_page), 0, 0);
+	m_plc_rack_slot_w_spinbox = new QSpinBox(rack_page);
+	m_plc_rack_slot_w_spinbox->setRange(10, 200);
+	m_plc_rack_slot_w_spinbox->setValue(30);
+	m_plc_rack_slot_w_spinbox->setSuffix(tr(" mm"));
+	rack_layout->addWidget(m_plc_rack_slot_w_spinbox, 0, 1);
+	rack_layout->addWidget(new QLabel(tr("Plate height:"), rack_page), 0, 2);
+	m_plc_rack_slot_h_spinbox = new QSpinBox(rack_page);
+	m_plc_rack_slot_h_spinbox->setRange(10, 200);
+	m_plc_rack_slot_h_spinbox->setValue(45);
+	m_plc_rack_slot_h_spinbox->setSuffix(tr(" mm"));
+	rack_layout->addWidget(m_plc_rack_slot_h_spinbox, 0, 3);
+
+	m_plc_rack_range_cb = new QCheckBox(tr("Address range on the plates"), rack_page);
+	m_plc_rack_range_cb->setChecked(true);
+	rack_layout->addWidget(m_plc_rack_range_cb, 1, 0, 1, 4);
+
+	rack_layout->addWidget(new QLabel(tr("Title:"), rack_page), 2, 0);
+	m_plc_rack_title_edit = new QLineEdit(rack_page);
+	m_plc_rack_title_edit->setPlaceholderText(QStringLiteral("%module"));
+	m_plc_rack_title_edit->setToolTip(plc_placeholders);
+	rack_layout->addWidget(m_plc_rack_title_edit, 2, 1, 1, 3);
+	rack_layout->addWidget(new QLabel(tr("Plate:"), rack_page), 3, 0);
+	m_plc_rack_plate_edit = new QLineEdit(rack_page);
+	m_plc_rack_plate_edit->setPlaceholderText(QStringLiteral("%module"));
+	m_plc_rack_plate_edit->setToolTip(plc_placeholders);
+	rack_layout->addWidget(m_plc_rack_plate_edit, 3, 1, 1, 3);
+
+	rack_layout->addWidget(new QLabel(tr("Module labels:"), rack_page), 4, 0);
+	m_plc_module_labels = new QTableWidget(rack_page);
+	m_plc_module_labels->setColumnCount(2);
+	m_plc_module_labels->setHorizontalHeaderLabels({
+		tr("Module"), tr("Label")
+	});
+	m_plc_module_labels->horizontalHeader()->setSectionResizeMode(
+		QHeaderView::Stretch);
+	m_plc_module_labels->setMaximumHeight(120);
+	rack_layout->addWidget(m_plc_module_labels, 4, 1, 1, 3);
+	auto *label_add = new QPushButton(tr("+"), rack_page);
+	auto *label_remove = new QPushButton(tr("-"), rack_page);
+	label_add->setMaximumWidth(30);
+	label_remove->setMaximumWidth(30);
+	rack_layout->addWidget(label_add, 5, 1);
+	rack_layout->addWidget(label_remove, 5, 2);
+	rack_layout->setColumnStretch(4, 1);
+	m_plc_display_stack->addWidget(rack_page);
+
+	plc_layout->addWidget(m_plc_display_stack);
+
 	// Add to master group box - row 4, full width
 	auto *gl = qobject_cast<QGridLayout*>(ui->m_master_gb->layout());
 	gl->addWidget(m_plc_gb, 4, 0, 1, 2);
@@ -1586,6 +1711,18 @@ void ElementPropertiesEditorWidget::createPlcConfigWidgets()
 	// Connect signals
 	connect(add_btn, &QPushButton::clicked, this, &ElementPropertiesEditorWidget::plcAddRow);
 	connect(remove_btn, &QPushButton::clicked, this, &ElementPropertiesEditorWidget::plcRemoveRow);
+	connect(up_btn, &QPushButton::clicked, this, &ElementPropertiesEditorWidget::plcMoveRowUp);
+	connect(down_btn, &QPushButton::clicked, this, &ElementPropertiesEditorWidget::plcMoveRowDown);
+	connect(m_plc_display_cb, QOverload<int>::of(&QComboBox::currentIndexChanged),
+		this, &ElementPropertiesEditorWidget::plcDisplayModeChanged);
+	connect(label_add, &QPushButton::clicked, this, [this]() {
+		m_plc_module_labels->insertRow(m_plc_module_labels->rowCount());
+	});
+	connect(label_remove, &QPushButton::clicked, this, [this]() {
+		int row = m_plc_module_labels->currentRow();
+		if (row >= 0)
+			m_plc_module_labels->removeRow(row);
+	});
 
 	// Ctrl+V shortcut for paste
 	auto *paste_shortcut = new QShortcut(QKeySequence::Paste, m_plc_table);
@@ -1598,6 +1735,45 @@ void ElementPropertiesEditorWidget::createPlcConfigWidgets()
 		menu.addAction(tr("Paste from the clipboard"), this, &ElementPropertiesEditorWidget::plcPasteFromClipboard);
 		menu.exec(m_plc_table->mapToGlobal(pos));
 	});
+}
+
+/**
+ * @brief ElementPropertiesEditorWidget::plcSetupExtraColumns
+ * Fill the three layout columns of one IO row: the rack module the
+ * entry belongs to, the side its terminal is drawn on in the module
+ * box, and whether the entry is drawn at all -- an unused channel is
+ * kept in the data and left out of the drawing.
+ * @param row the row to set up
+ * @param io the values to show
+ */
+void ElementPropertiesEditorWidget::plcSetupExtraColumns(int row, const ElementData::PlcIO &io)
+{
+	if (!m_plc_table)
+		return;
+
+	auto *module_sb = new QSpinBox(m_plc_table);
+	module_sb->setMinimum(-1);
+	module_sb->setMaximum(64);
+	module_sb->setSpecialValueText(tr("-"));
+	module_sb->setValue(io.moduleIndex);
+	module_sb->setToolTip(tr("Rack module this entry belongs to"));
+	m_plc_table->setCellWidget(row, 5, module_sb);
+
+	auto *side_cb = new QComboBox(m_plc_table);
+	side_cb->addItem(tr("Auto"), QString());
+	side_cb->addItem(tr("Left"), QStringLiteral("left"));
+	side_cb->addItem(tr("Right"), QStringLiteral("right"));
+	int side_idx = side_cb->findData(io.side);
+	side_cb->setCurrentIndex(side_idx < 0 ? 0 : side_idx);
+	side_cb->setToolTip(tr("Side of the module box this entry's terminal is drawn on"));
+	m_plc_table->setCellWidget(row, 6, side_cb);
+
+	auto *show_item = new QTableWidgetItem();
+	show_item->setFlags((show_item->flags() | Qt::ItemIsUserCheckable)
+						& ~Qt::ItemIsEditable);
+	show_item->setCheckState(io.hidden ? Qt::Unchecked : Qt::Checked);
+	show_item->setToolTip(tr("Uncheck to keep the entry but leave it out of the drawing"));
+	m_plc_table->setItem(row, 7, show_item);
 }
 
 /**
@@ -1637,6 +1813,9 @@ void ElementPropertiesEditorWidget::populatePlcTable()
 		auto *crossref_item = new QTableWidgetItem(io.crossRef);
 		crossref_item->setFlags(crossref_item->flags() & ~Qt::ItemIsEditable);
 		m_plc_table->setItem(row, 4, crossref_item);
+
+		// Module, side and visibility of the row
+		plcSetupExtraColumns(row, io);
 
 		// --- Terminal Table ---
 		if (m_plc_terminal_table) {
@@ -1692,6 +1871,35 @@ void ElementPropertiesEditorWidget::populatePlcTable()
 	m_plc_cell_font_btn->setText(tr("Font size: %1 %2pt")
 		.arg(m_plc_cell_font.family()).arg(m_plc_cell_font.pointSize()));
 	m_plc_show_headers_cb->setChecked(plc_data.showHeaders);
+
+	// Load the display mode and its layouts
+	const int mode_idx = m_plc_display_cb->findData(plc_data.displayMode);
+	m_plc_display_cb->setCurrentIndex(mode_idx < 0 ? 0 : mode_idx);
+	m_plc_display_stack->setCurrentIndex(m_plc_display_cb->currentIndex());
+	m_plc_box_width_spinbox->setValue(static_cast<int>(plc_data.box_settings.width));
+	m_plc_box_header_spinbox->setValue(static_cast<int>(plc_data.box_settings.headerHeight));
+	m_plc_box_supply_cb->setChecked(plc_data.box_settings.showSupplyRow);
+	m_plc_box_split_cb->setChecked(plc_data.box_settings.splitSides);
+	m_plc_box_title_edit->setText(plc_data.box_settings.titleTemplate);
+	m_plc_box_row_edit->setText(plc_data.box_settings.rowTemplate);
+	m_plc_box_supply_edit->setText(plc_data.box_settings.supplyLabel);
+	m_plc_rack_slot_w_spinbox->setValue(static_cast<int>(plc_data.rack_settings.slotWidth));
+	m_plc_rack_slot_h_spinbox->setValue(static_cast<int>(plc_data.rack_settings.slotHeight));
+	m_plc_rack_range_cb->setChecked(plc_data.rack_settings.showAddressRange);
+	m_plc_rack_title_edit->setText(plc_data.rack_settings.titleTemplate);
+	m_plc_rack_plate_edit->setText(plc_data.rack_settings.plateTemplate);
+
+	m_plc_module_labels->setRowCount(plc_data.moduleLabels.size());
+	int label_row = 0;
+	for (auto it = plc_data.moduleLabels.constBegin();
+		 it != plc_data.moduleLabels.constEnd(); ++it, ++label_row) {
+		auto *module_sb = new QSpinBox(m_plc_module_labels);
+		module_sb->setMinimum(0);
+		module_sb->setMaximum(64);
+		module_sb->setValue(it.key());
+		m_plc_module_labels->setCellWidget(label_row, 0, module_sb);
+		m_plc_module_labels->setItem(label_row, 1, new QTableWidgetItem(it.value()));
+	}
 
 	// UI columns 0-4 map to data model indices 0,1,2,3,4
 	const int ui_to_data[] = {0, 1, 2, 3, 4};
@@ -1773,6 +1981,19 @@ void ElementPropertiesEditorWidget::readPlcTable()
 		if (crossref_item)
 			io.crossRef = crossref_item->text();
 
+		// Read the layout columns: module, side and visibility
+		if (m_plc_table->columnCount() > 7) {
+			auto *module_sb = qobject_cast<QSpinBox *>(m_plc_table->cellWidget(row, 5));
+			if (module_sb)
+				io.moduleIndex = module_sb->value();
+			auto *side_cb = qobject_cast<QComboBox *>(m_plc_table->cellWidget(row, 6));
+			if (side_cb)
+				io.side = side_cb->currentData().toString();
+			auto *show_item = m_plc_table->item(row, 7);
+			if (show_item)
+				io.hidden = show_item->checkState() != Qt::Checked;
+		}
+
 		// Read terminal data from terminal table
 		if (m_plc_terminal_table && row < m_plc_terminal_table->rowCount()) {
 			auto *tc_sb = qobject_cast<QSpinBox *>(m_plc_terminal_table->cellWidget(row, 0));
@@ -1825,6 +2046,32 @@ void ElementPropertiesEditorWidget::readPlcTable()
 	plc_data.cellFont = m_plc_cell_font;
 	plc_data.showHeaders = m_plc_show_headers_cb->isChecked();
 
+	// Display mode and the layouts of the module box and the rack
+	plc_data.displayMode = static_cast<ElementData::PlcDisplayMode>(
+		m_plc_display_cb->currentData().toInt());
+	plc_data.box_settings.width = m_plc_box_width_spinbox->value();
+	plc_data.box_settings.headerHeight = m_plc_box_header_spinbox->value();
+	plc_data.box_settings.showSupplyRow = m_plc_box_supply_cb->isChecked();
+	plc_data.box_settings.splitSides = m_plc_box_split_cb->isChecked();
+	plc_data.box_settings.titleTemplate = m_plc_box_title_edit->text();
+	plc_data.box_settings.rowTemplate = m_plc_box_row_edit->text();
+	plc_data.box_settings.supplyLabel = m_plc_box_supply_edit->text();
+	plc_data.rack_settings.slotWidth = m_plc_rack_slot_w_spinbox->value();
+	plc_data.rack_settings.slotHeight = m_plc_rack_slot_h_spinbox->value();
+	plc_data.rack_settings.showAddressRange = m_plc_rack_range_cb->isChecked();
+	plc_data.rack_settings.titleTemplate = m_plc_rack_title_edit->text();
+	plc_data.rack_settings.plateTemplate = m_plc_rack_plate_edit->text();
+
+	for (int row = 0; row < m_plc_module_labels->rowCount(); ++row) {
+		auto *module_sb = qobject_cast<QSpinBox *>(
+			m_plc_module_labels->cellWidget(row, 0));
+		auto *label_item = m_plc_module_labels->item(row, 1);
+		if (module_sb && module_sb->value() >= 0 && label_item
+			&& !label_item->text().isEmpty()) {
+			plc_data.moduleLabels.insert(module_sb->value(), label_item->text());
+		}
+	}
+
 	m_data.setPlcMasterData(plc_data);
 }
 
@@ -1855,6 +2102,9 @@ void ElementPropertiesEditorWidget::plcAddRow()
 	auto *crossref_item = new QTableWidgetItem();
 	crossref_item->setFlags(crossref_item->flags() & ~Qt::ItemIsEditable);
 	m_plc_table->setItem(row, 4, crossref_item);
+
+	// Module, side and visibility of the row
+	plcSetupExtraColumns(row, ElementData::PlcIO());
 
 	// Terminal table row
 	if (m_plc_terminal_table) {
@@ -1960,6 +2210,108 @@ void ElementPropertiesEditorWidget::plcRemoveRow()
 		if (m_plc_terminal_table && idx.row() < m_plc_terminal_table->rowCount())
 			m_plc_terminal_table->removeRow(idx.row());
 	}
+}
+
+/**
+ * @brief ElementPropertiesEditorWidget::plcMoveRowUp
+ * Move the selected rows one row up. The IO table and the terminal
+ * table are rebuilt from the dialog's own data, so both stay in step.
+ */
+void ElementPropertiesEditorWidget::plcMoveRowUp()
+{
+	if (!m_plc_table)
+		return;
+
+	QModelIndexList selected = m_plc_table->selectionModel()->selectedRows();
+	if (selected.isEmpty())
+		return;
+	QList<int> rows;
+	for (const QModelIndex &idx : selected)
+		rows << idx.row();
+	std::sort(rows.begin(), rows.end());
+	if (rows.first() == 0)
+		rows.removeFirst();
+	if (rows.isEmpty())
+		return;
+
+	readPlcTable();
+	auto &ios = m_data.m_plc_master_data.ios;
+	QVector<bool> moving(ios.size(), false);
+	for (int row : rows) {
+		if (row < ios.size())
+			moving[row] = true;
+	}
+	QList<int> moved;
+	for (int row : rows) {
+		if (row <= 0 || row >= ios.size() || moving.at(row - 1))
+			continue;
+		ios.swapItemsAt(row, row - 1);
+		std::swap(moving[row], moving[row - 1]);
+		moved << row - 1;
+	}
+	if (moved.isEmpty())
+		return;
+
+	populatePlcTable();
+	m_plc_table->clearSelection();
+	for (int row : moved)
+		m_plc_table->selectRow(row);
+}
+
+/**
+ * @brief ElementPropertiesEditorWidget::plcMoveRowDown
+ * Move the selected rows one row down.
+ */
+void ElementPropertiesEditorWidget::plcMoveRowDown()
+{
+	if (!m_plc_table)
+		return;
+
+	QModelIndexList selected = m_plc_table->selectionModel()->selectedRows();
+	if (selected.isEmpty())
+		return;
+	QList<int> rows;
+	for (const QModelIndex &idx : selected)
+		rows << idx.row();
+	std::sort(rows.begin(), rows.end());
+	if (rows.last() >= m_plc_table->rowCount() - 1)
+		rows.removeLast();
+	if (rows.isEmpty())
+		return;
+
+	readPlcTable();
+	auto &ios = m_data.m_plc_master_data.ios;
+	QVector<bool> moving(ios.size(), false);
+	for (int row : rows) {
+		if (row < ios.size())
+			moving[row] = true;
+	}
+	QList<int> moved;
+	for (int i = rows.size() - 1; i >= 0; --i) {
+		int row = rows.at(i);
+		if (row < 0 || row + 1 >= ios.size() || moving.at(row + 1))
+			continue;
+		ios.swapItemsAt(row, row + 1);
+		std::swap(moving[row], moving[row + 1]);
+		moved << row + 1;
+	}
+	if (moved.isEmpty())
+		return;
+
+	populatePlcTable();
+	m_plc_table->clearSelection();
+	for (int row : moved)
+		m_plc_table->selectRow(row);
+}
+
+/**
+ * @brief ElementPropertiesEditorWidget::plcDisplayModeChanged
+ * Show the layout settings of the chosen display.
+ */
+void ElementPropertiesEditorWidget::plcDisplayModeChanged(int index)
+{
+	if (m_plc_display_stack)
+		m_plc_display_stack->setCurrentIndex(index);
 }
 
 /**
