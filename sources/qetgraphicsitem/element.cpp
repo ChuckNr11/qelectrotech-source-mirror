@@ -35,6 +35,7 @@
 #include <factory/elementpicturefactory.h>
 #include <properties/terminaldata.h>
 #include <properties/xrefproperties.h>
+#include <qetgraphicsitem/plcdisplayrenderer.h>
 #include <qetinformation.h>
 #include <qetgraphicsitem/conductor.h>
 #include <qetgraphicsitem/terminal.h>
@@ -4192,6 +4193,44 @@ void Element::drawPlcTable(QPainter *painter)
 	if (positions.isEmpty())
 		positions.append(QPointF(0, 0));
 
+	// A row's cross reference: the label of the slave linked to it,
+	// or what the row carries while no slave is linked to it yet
+	auto cross_ref = [this](int io_idx, const ElementData::PlcIO &io) {
+		Element *slave = linkedSlaveForIo(io_idx);
+		if (slave && slave->diagram() && diagram()
+			&& diagram()->project())
+		{
+			XRefProperties xrp = diagram()->project()
+				->defaultXRefProperties("plc");
+			autonum::sequentialNumbers seq;
+			return autonum::AssignVariables
+				::formulaToLabel(
+					xrp.masterLabel(),
+					seq,
+					slave->diagram(),
+					slave);
+		}
+		return io.crossRef;
+	};
+
+	// The module box and the rack overview are drawn from the same
+	// data by the shared renderer
+	if (plc_data.displayMode != ElementData::PlcDisplayTable) {
+		QStringList cross_refs;
+		cross_refs.reserve(plc_data.ios.size());
+		for (int i = 0; i < plc_data.ios.size(); ++i) {
+			cross_refs << cross_ref(i, plc_data.ios.at(i));
+		}
+		for (const QPointF &pos : positions) {
+			if (plc_data.displayMode == ElementData::PlcDisplayBox) {
+				PlcDisplayRenderer::drawBox(painter, plc_data, pos, cross_refs);
+			} else {
+				PlcDisplayRenderer::drawRack(painter, plc_data, pos);
+			}
+		}
+		return;
+	}
+
 	const int COL_COUNT = 5;
 	const int COL_TYPE      = 0;
 	const int COL_ADDRESS   = 1;
@@ -4322,12 +4361,17 @@ void Element::drawPlcTable(QPainter *painter)
 			int start_idx = block_starts.at(block);
 			int end_idx = (block + 1 < block_starts.size())
 				? block_starts.at(block + 1) : total_ios;
+			int drawn_rows = 0;
 
 			for (int row = 0; row < (end_idx - start_idx); ++row) {
 				int io_idx = start_idx + row;
 				if (io_idx >= plc_data.ios.size()) break;
 				const auto &io = plc_data.ios.at(io_idx);
-				qreal ry = pos.y() + header_h + row * row_h;
+					// An unused channel is kept in the data and
+					// left out of the drawing
+				if (io.hidden) continue;
+				qreal ry = pos.y() + header_h + drawn_rows * row_h;
+				++drawn_rows;
 				cx = bx;
 
 				for (int col : visible_cols) {
@@ -4343,24 +4387,8 @@ void Element::drawPlcTable(QPainter *painter)
 						case COL_FUNCTION: cell_text = io.functionText; break;
 						case COL_COMMENT:  cell_text = io.comment; break;
 						case COL_CROSSREF:
-						{
-							cell_text = io.crossRef;
-							Element *slave = linkedSlaveForIo(io_idx);
-							if (slave && slave->diagram() && diagram()
-								&& diagram()->project())
-							{
-								XRefProperties xrp = diagram()->project()
-									->defaultXRefProperties("plc");
-								autonum::sequentialNumbers seq;
-								cell_text = autonum::AssignVariables
-									::formulaToLabel(
-										xrp.masterLabel(),
-										seq,
-										slave->diagram(),
-										slave);
-							}
+							cell_text = cross_ref(io_idx, io);
 							break;
-						}
 					}
 
 					QRectF text_rect = cr.adjusted(1, 0, -1, 0);

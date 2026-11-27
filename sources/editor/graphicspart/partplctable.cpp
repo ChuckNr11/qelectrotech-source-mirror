@@ -22,6 +22,7 @@
 #include <QetGraphicsItemModeler/qetgraphicshandleritem.h>
 #include <QetGraphicsItemModeler/qetgraphicshandlerutility.h>
 #include <properties/elementdata.h>
+#include <qetgraphicsitem/plcdisplayrenderer.h>
 #include <editor/elementscene.h>
 #include <editor/editorcommands.h>
 #include <editor/ui/qetelementeditor.h>
@@ -65,6 +66,12 @@ QSizeF PartPlcTable::calculateTableSize() const
 	const auto &plc_data = ed.plcMasterData();
 	if (plc_data.ios.isEmpty())
 		return QSizeF(100, 50);
+
+	// The module box and the rack overview size themselves
+	if (plc_data.displayMode == ElementData::PlcDisplayBox)
+		return PlcDisplayRenderer::boxSize(plc_data);
+	if (plc_data.displayMode == ElementData::PlcDisplayRack)
+		return PlcDisplayRenderer::rackSize(plc_data);
 
 	const int COL_COUNT = 5;
 
@@ -133,18 +140,28 @@ QSizeF PartPlcTable::calculateTableSize() const
 	qreal total_height;
 	int block_count = block_starts.size();
 
+	// An unused channel is kept in the data and left out of the
+	// drawing, so the height counts only the rows which are drawn
+	auto drawn_in = [&plc_data](int start, int end) {
+		int drawn = 0;
+		for (int i = start; i < end && i < plc_data.ios.size(); ++i)
+			if (!plc_data.ios.at(i).hidden)
+				++drawn;
+		return drawn;
+	};
+
 	if (block_count > 1) {
 		// Find the tallest block (most rows)
 		int max_rows = 0;
 		for (int b = 0; b < block_count; ++b) {
 			int start = block_starts.at(b);
 			int end = (b + 1 < block_starts.size()) ? block_starts.at(b + 1) : total_ios;
-			max_rows = qMax(max_rows, end - start);
+			max_rows = qMax(max_rows, drawn_in(start, end));
 		}
 		total_height = header_h + max_rows * row_h;
 		total_width = total_width * block_count + (block_count - 1) * 3;
 	} else {
-		total_height = header_h + total_ios * row_h;
+		total_height = header_h + drawn_in(0, total_ios) * row_h;
 	}
 
 	return QSizeF(total_width, total_height);
@@ -195,6 +212,20 @@ void PartPlcTable::paint(QPainter *painter, const QStyleOptionGraphicsItem *opti
 		painter->setBrush(QColor(255, 255, 200));
 		painter->drawRect(m_rect);
 		painter->drawText(m_rect, Qt::AlignCenter, QObject::tr("PLC table (empty)"));
+		return;
+	}
+
+	// The module box and the rack overview are drawn from the same
+	// data by the shared renderer, at the part's position
+	if (plc_data.displayMode != ElementData::PlcDisplayTable) {
+		QStringList cross_refs;
+		for (const auto &io : plc_data.ios)
+			cross_refs << io.crossRef;
+		if (plc_data.displayMode == ElementData::PlcDisplayBox)
+			PlcDisplayRenderer::drawBox(painter, plc_data, m_rect.topLeft(),
+									   cross_refs);
+		else
+			PlcDisplayRenderer::drawRack(painter, plc_data, m_rect.topLeft());
 		return;
 	}
 
@@ -325,11 +356,16 @@ void PartPlcTable::paint(QPainter *painter, const QStyleOptionGraphicsItem *opti
 		int end_idx = (block + 1 < block_starts.size())
 			? block_starts.at(block + 1) : total_ios;
 
+		int drawn_rows = 0;
 		for (int row = 0; row < (end_idx - start_idx); ++row) {
 			int io_idx = start_idx + row;
 			const ElementData::PlcIO &io = plc_data.ios.at(io_idx);
+				// An unused channel is kept in the data and
+				// left out of the drawing
+			if (io.hidden) continue;
 
-			qreal ry = m_rect.y() + header_h + row * row_h;
+			qreal ry = m_rect.y() + header_h + drawn_rows * row_h;
+			++drawn_rows;
 			cx = block_x;
 
 			for (int col : visible_cols) {
